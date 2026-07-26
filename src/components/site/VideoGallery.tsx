@@ -1,17 +1,9 @@
-import { Play } from "lucide-react";
-import v1 from "@/assets/video-1.jpg";
-import v2 from "@/assets/video-2.jpg";
-import v3 from "@/assets/video-3.jpg";
-import v4 from "@/assets/video-4.jpg";
-
-const videos = [
-  { img: v1, title: "Joint Pain Relief — Natural Homeopathic Treatment", duration: "06:45" },
-  { img: v2, title: "Cervical Pain: Causes, Symptoms & Treatment", duration: "09:12" },
-  { img: v3, title: "Benefits of Homeopathy in Daily Life", duration: "05:03" },
-  { img: v4, title: "Simple Exercises for Back Pain Relief", duration: "05:32" },
-];
+import { Play, Loader2 } from "lucide-react";
+import { usePublishedVideos } from "@/hooks/queries/useContent";
 
 export function VideoGallery() {
+  const { data: videos, isLoading } = usePublishedVideos();
+
   return (
     <section id="videos" className="px-4 py-16 md:px-8 md:py-20">
       <div className="mx-auto max-w-7xl rounded-3xl border border-border bg-card p-6 shadow-card md:p-8">
@@ -27,23 +19,45 @@ export function VideoGallery() {
           </div>
 
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            {videos.map((v) => (
-              <div key={v.title} className="group">
-                <div className="relative aspect-video overflow-hidden rounded-xl bg-muted">
-                  <img src={v.img} alt={v.title} loading="lazy" width={800} height={600} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-foreground/60 via-foreground/10 to-transparent" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/95 shadow-soft transition-transform group-hover:scale-110">
-                      <Play className="h-5 w-5 translate-x-0.5 fill-primary text-primary" />
-                    </div>
-                  </div>
-                  <span className="absolute bottom-2 right-2 rounded-md bg-foreground/80 px-1.5 py-0.5 text-[10px] font-medium text-background">
-                    {v.duration}
-                  </span>
-                </div>
-                <div className="mt-2.5 text-xs font-medium leading-snug text-foreground">{v.title}</div>
+            {isLoading ? (
+              <div className="col-span-full flex justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
-            ))}
+            ) : videos?.length === 0 ? (
+              <p className="col-span-full py-8 text-center text-sm text-muted-foreground">No videos yet</p>
+            ) : (
+              videos?.map((v) => (
+                <a
+                  key={v.id}
+                  href={v.video_url || "#"}
+                  target={v.video_url ? "_blank" : undefined}
+                  rel={v.video_url ? "noreferrer" : undefined}
+                  className="group"
+                >
+                  <div className="relative aspect-video overflow-hidden rounded-xl bg-muted">
+                    {v.thumbnail_url ? (
+                      <img src={v.thumbnail_url} alt={v.title} loading="lazy" width={800} height={600} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+                    ) : (
+                      <div className="flex h-full items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
+                        <Play className="h-8 w-8 text-primary/40" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-foreground/60 via-foreground/10 to-transparent" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/95 shadow-soft transition-transform group-hover:scale-110">
+                        <Play className="h-5 w-5 translate-x-0.5 fill-primary text-primary" />
+                      </div>
+                    </div>
+                    {v.duration && (
+                      <span className="absolute bottom-2 right-2 rounded-md bg-foreground/80 px-1.5 py-0.5 text-[10px] font-medium text-background">
+                        {v.duration}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2.5 text-xs font-medium leading-snug text-foreground">{v.title}</div>
+                </a>
+              ))
+            )}
           </div>
         </div>
       </div>

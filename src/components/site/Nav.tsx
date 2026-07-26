@@ -1,5 +1,15 @@
-import { Phone, Stethoscope } from "lucide-react";
+import { useState } from "react";
+import { Phone, Stethoscope, User, LogOut } from "lucide-react";
 import { PHONE, telUrl } from "@/lib/contact";
+import { useAuth } from "@/hooks/useAuth";
+import { AuthModal } from "@/components/auth/AuthModal";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const links = [
   { href: "#home", label: "Home" },
@@ -11,40 +21,73 @@ const links = [
 ];
 
 export function Nav() {
+  const { user, profile, logout } = useAuth();
+  const [authOpen, setAuthOpen] = useState(false);
+
   return (
-    <header className="sticky top-0 z-50 glass border-b border-border/60">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-8 md:py-4">
-        <a href="#home" className="flex items-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-primary text-primary-foreground shadow-card">
-            <Stethoscope className="h-5 w-5" />
-          </div>
-          <div className="leading-tight">
-            <div className="font-display text-base font-semibold text-foreground">Dr. Naseem Alam</div>
-            <div className="text-[11px] text-muted-foreground">Homeopathic & Physiotherapist</div>
-          </div>
-        </a>
+    <>
+      <header className="sticky top-0 z-50 glass border-b border-border/60">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-8 md:py-4">
+          <a href="#home" className="flex items-center gap-2.5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-primary text-primary-foreground shadow-card">
+              <Stethoscope className="h-5 w-5" />
+            </div>
+            <div className="leading-tight">
+              <div className="font-display text-base font-semibold text-foreground">Dr. Naseem Alam</div>
+              <div className="text-[11px] text-muted-foreground">Homeopathic & Physiotherapist</div>
+            </div>
+          </a>
 
-        <nav className="hidden items-center gap-7 lg:flex">
-          {links.map((l) => (
+          <nav className="hidden items-center gap-7 lg:flex">
+            {links.map((l) => (
+              <a
+                key={l.href}
+                href={l.href}
+                className="text-sm font-medium text-foreground/75 transition-colors hover:text-primary"
+              >
+                {l.label}
+              </a>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-3">
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20">
+                    <User className="h-5 w-5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <div className="px-2 py-1.5 text-sm font-medium text-foreground">
+                    {profile?.full_name || user.email}
+                  </div>
+                  <div className="px-2 pb-1.5 text-xs text-muted-foreground capitalize">
+                    {profile?.role || "patient"}
+                  </div>
+                  <DropdownMenuItem onClick={logout}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => setAuthOpen(true)}>
+                Sign in
+              </Button>
+            )}
             <a
-              key={l.href}
-              href={l.href}
-              className="text-sm font-medium text-foreground/75 transition-colors hover:text-primary"
+              href={telUrl}
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-card transition-transform hover:scale-[1.02]"
             >
-              {l.label}
+              <Phone className="h-4 w-4" />
+              <span className="hidden sm:inline">{PHONE}</span>
+              <span className="sm:hidden">Call</span>
             </a>
-          ))}
-        </nav>
-
-        <a
-          href={telUrl}
-          className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-card transition-transform hover:scale-[1.02]"
-        >
-          <Phone className="h-4 w-4" />
-          <span className="hidden sm:inline">{PHONE}</span>
-          <span className="sm:hidden">Call</span>
-        </a>
-      </div>
-    </header>
+          </div>
+        </div>
+      </header>
+      <AuthModal open={authOpen} onOpenChange={setAuthOpen} />
+    </>
   );
 }

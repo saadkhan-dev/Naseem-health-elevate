@@ -1,21 +1,14 @@
-import { Check, Video, ShoppingCart, ChevronLeft, ChevronRight } from "lucide-react";
+import { Check, Video, ShoppingCart, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import consultationImg from "@/assets/consultation.jpg";
-import p1 from "@/assets/product-1.jpg";
-import p2 from "@/assets/product-2.jpg";
-import p3 from "@/assets/product-3.jpg";
 import { whatsappUrl } from "@/lib/contact";
-
-const products = [
-  { img: p1, name: "Arnica Montana", sub: "30 CH (Globules)", price: "PKR 450" },
-  { img: p2, name: "Rhus Toxicodendron", sub: "30 CH (Drops)", price: "PKR 450" },
-  { img: p3, name: "Natural Pain Relief Oil", sub: "100ml", price: "PKR 850" },
-];
+import { usePublishedProducts } from "@/hooks/queries/useContent";
 
 export function ConsultationProducts() {
+  const { data: products, isLoading } = usePublishedProducts();
+
   return (
     <section id="services" className="px-4 py-16 md:px-8 md:py-20">
       <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-2">
-        {/* Consultation */}
         <div className="rounded-3xl border border-border bg-card p-6 shadow-card md:p-8">
           <div className="grid items-center gap-5 sm:grid-cols-2">
             <div>
@@ -51,7 +44,6 @@ export function ConsultationProducts() {
           </div>
         </div>
 
-        {/* Products */}
         <div id="products" className="rounded-3xl border border-border bg-card p-6 shadow-card md:p-8">
           <div className="mb-5 flex items-end justify-between gap-3">
             <div>
@@ -67,28 +59,40 @@ export function ConsultationProducts() {
               </button>
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            {products.map((p) => (
-              <div key={p.name} className="group rounded-2xl border border-border bg-background p-3 transition-shadow hover:shadow-card">
-                <div className="aspect-square overflow-hidden rounded-xl bg-muted">
-                  <img src={p.img} alt={p.name} loading="lazy" width={800} height={800} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : products?.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">No products available</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {products?.map((p) => (
+                <div key={p.id} className="group rounded-2xl border border-border bg-background p-3 transition-shadow hover:shadow-card">
+                  <div className="aspect-square overflow-hidden rounded-xl bg-muted">
+                    {p.image_url ? (
+                      <img src={p.image_url} alt={p.name} loading="lazy" width={800} height={800} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-muted-foreground text-sm">No image</div>
+                    )}
+                  </div>
+                  <div className="mt-3">
+                    <div className="text-sm font-semibold text-foreground">{p.name}</div>
+                    {p.description && <div className="text-xs text-muted-foreground">{p.description}</div>}
+                    <div className="mt-1 text-sm font-bold text-primary">Rs. {p.price}</div>
+                    <a
+                      href={whatsappUrl(`Hi, I'd like to order: ${p.name} — Rs. ${p.price}`)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary-soft py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+                    >
+                      <ShoppingCart className="h-3.5 w-3.5" /> Add to Cart
+                    </a>
+                  </div>
                 </div>
-                <div className="mt-3">
-                  <div className="text-sm font-semibold text-foreground">{p.name}</div>
-                  <div className="text-xs text-muted-foreground">{p.sub}</div>
-                  <div className="mt-1 text-sm font-bold text-primary">{p.price}</div>
-                  <a
-                    href={whatsappUrl(`Hi, I'd like to order: ${p.name} (${p.sub}) — ${p.price}`)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary-soft py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
-                  >
-                    <ShoppingCart className="h-3.5 w-3.5" /> Add to Cart
-                  </a>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </section>

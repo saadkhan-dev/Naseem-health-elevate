@@ -1,0 +1,71 @@
+Now proceed with the first-time setup:
+Open http://localhost:8081
+Register — Click "Sign in" → "Sign up"
+Confirm email — Check your inbox for the Supabase confirmation link
+Promote to doctor — Run this in Supabase SQL Editor:
+UPDATE profiles SET role = 'doctor'
+WHERE id = (SELECT id FROM auth.users WHERE email = 'YOUR_EMAIL_HERE');
+Log out, log back in
+Visit /admin
+
+video call process flow------------
+Doctor starts the call:
+1. Login → go to /admin → Appointments
+2. Find a Confirmed appointment
+3. Click "Video Call" button
+4. A dialog pops up with:
+- Patient join link — copy this link (e.g., http://localhost:8081/video/abc-123)
+- "Join as Doctor" — click this to enter the video room
+5. Doctor enters the Jitsi Meet room and waits
+Patient joins:
+- Doctor sends them the link (via WhatsApp: +92 315 2968384)
+- Patient opens the link in Chrome/Firefox browser
+- Enters their name → clicks "Join Video Call"
+- Grants camera/microphone permissions
+- Both are now in the same video room
+Video room features (Jitsi Meet):
+- Two-way video + audio
+- Mute/unmute, camera on/off
+- Screen sharing
+- Chat
+No app install needed — works entirely in the browser on phone, tablet, or computer.
+Want me to enhance the admin panel to also show a "Send WhatsApp link" button that auto-sends the video l
+
+RLS Policy:
+Patient Data Safety: Currently not fully secure — we disabled RLS during development. All tables are open to anyone with the anon key. Before deployment, I need to re-enable RLS with proper policies so patients can only see their own data.
+Call Duration: Unlimited. Jitsi Meet (free) has no time limit per call. But we don't track call duration yet — I can add that if needed.
+Reliability:
+Jitsi: Runs on public servers (meet.jit.si) — no SLA, but works reliably for most use
+Supabase free tier: 500 MB database, 5 GB bandwidth — fine for small clinic
+Overall: Good for a clinic with moderate traffic. For enterprise grade, you'd use Daily.co (paid) and Supabase pro ($25/mo)
+Deployment checklist before going live:
+Required	Status
+Doctor account created	❌ Not yet
+RLS policies enabled	❌ Disabled
+Custom domain	Optional
+Supabase project on Pro plan	Optional
+You CAN deploy right now without the doctor profile, but:
+You won't be able to access /admin (only doctor role can)
+Anyone could access patient data via API
+Recommended order:
+Create your doctor profile (register → promote to doctor via SQL)
+I'll re-enable RLS with proper security policies
+Then deploy
+chatbot deploymeny
+Step 1 — Deploy Backend (Render)
+Go to https://render.com → sign in with GitHub → New Web Service
+Connect your repo, set root to backend
+Build: pip install -r requirements.txt
+Start: uvicorn main:app --host 0.0.0.0 --port $PORT
+Add env vars: GEMINI_API_KEY, CORS_ORIGINS (set to your Vercel URL)
+Deploy → copy the URL (e.g. https://xxx.onrender.com)
+Step 2 — Deploy Frontend (Vercel)
+Go to https://vercel.com → sign in with GitHub → Add New Project
+Import your repo, set root to frontend
+Add env var: NEXT_PUBLIC_API_URL = your Render URL from step 1
+Deploy
+Step 3 — Embed on Dr. Naseem's site
+Add this iframe to their website HTML:
+<iframe src="https://your-vercel-url.vercel.app"
+  style="position:fixed;bottom:20px;right:20px;width:380px;height:600px;border:none;border-radius:16px;z-index:9999;">
+</iframe>
