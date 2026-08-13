@@ -1,6 +1,19 @@
 import { supabase } from "@/lib/supabase";
 import type { Service, AvailabilitySlot } from "./bookings";
 
+interface AppointmentRow {
+  id: string;
+  patient_id: string;
+  service_id: string;
+  date: string;
+  time: string;
+  status: "pending" | "confirmed" | "completed" | "cancelled";
+  notes: string | null;
+  created_at: string;
+  profiles?: { full_name: string | null; phone: string | null } | null;
+  services?: { name: string | null } | null;
+}
+
 export interface AppointmentWithDetails {
   id: string;
   patient_id: string;
@@ -21,15 +34,17 @@ export interface AppointmentWithDetails {
 export async function getAllAppointments(): Promise<AppointmentWithDetails[]> {
   const { data } = await supabase
     .from("appointments")
-    .select(`
+    .select(
+      `
       *,
       profiles:patient_id (full_name, phone),
       services:service_id (name)
-    `)
+    `,
+    )
     .order("date", { ascending: false })
     .order("time", { ascending: false });
 
-  return (data ?? []).map((a: any) => ({
+  return (data ?? []).map((a: AppointmentRow) => ({
     id: a.id,
     patient_id: a.patient_id,
     service_id: a.service_id,
@@ -68,7 +83,7 @@ export async function updateAvailability(
 export async function createService(data: {
   name: string;
   description: string;
-  duration_minutes: number;
+  duration_minutes: number | null;
   price: number;
 }) {
   const { error } = await supabase.from("services").insert(data);
@@ -77,7 +92,13 @@ export async function createService(data: {
 
 export async function updateService(
   id: string,
-  data: { name?: string; description?: string; duration_minutes?: number; price?: number; is_active?: boolean },
+  data: {
+    name?: string;
+    description?: string;
+    duration_minutes?: number | null;
+    price?: number;
+    is_active?: boolean;
+  },
 ) {
   const { error } = await supabase.from("services").update(data).eq("id", id);
   return { error: error?.message ?? null };
@@ -117,7 +138,13 @@ export async function createProduct(data: {
 
 export async function updateProduct(
   id: string,
-  data: { name?: string; description?: string; price?: number; image_url?: string; in_stock?: boolean },
+  data: {
+    name?: string;
+    description?: string;
+    price?: number;
+    image_url?: string;
+    in_stock?: boolean;
+  },
 ) {
   const { error } = await supabase.from("products").update(data).eq("id", id);
   return { error: error?.message ?? null };
@@ -142,7 +169,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
   const [total, pending, todayAppts, patients] = await Promise.all([
     supabase.from("appointments").select("id", { count: "exact", head: true }),
-    supabase.from("appointments").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    supabase
+      .from("appointments")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending"),
     supabase.from("appointments").select("id", { count: "exact", head: true }).eq("date", today),
     supabase.from("profiles").select("id", { count: "exact", head: true }),
   ]);

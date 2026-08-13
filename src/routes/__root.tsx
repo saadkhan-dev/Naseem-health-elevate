@@ -3,12 +3,14 @@ import {
   Outlet,
   Link,
   createRootRouteWithContext,
+  useLocation,
   useRouter,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
 
 import { AuthProvider } from "@/hooks/useAuth";
+import { AssistantChat } from "@/components/chat/AssistantChat";
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -73,18 +75,38 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Naseem Health Hub offers expert homeopathic and physiotherapy care online and in Karachi." },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Naseem Health Hub offers expert homeopathic and physiotherapy care online and in Karachi." },
+      { title: "Naseem Health Elevate | Dr. Naseem Ahmed" },
+      {
+        name: "description",
+        content:
+          "Naseem Health Elevate by Dr. Naseem Ahmed provides expert homeopathic and physiotherapy care, online appointments, video consultations, and personalized healthcare services in Karachi.",
+      },
+      { name: "author", content: "Dr. Naseem Ahmed" },
+      { property: "og:title", content: "Naseem Health Elevate | Dr. Naseem Ahmed" },
+      {
+        property: "og:description",
+        content:
+          "Naseem Health Elevate by Dr. Naseem Ahmed provides expert homeopathic and physiotherapy care, online appointments, video consultations, and personalized healthcare services in Karachi.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
-      { name: "twitter:title", content: "Lovable App" },
-      { name: "twitter:description", content: "Naseem Health Hub offers expert homeopathic and physiotherapy care online and in Karachi." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/da57ff1a-e539-427e-b4c0-c2a330af8d82/id-preview-d10c1851--1d6cbc0f-23d1-4b78-a45c-0fb08f64101c.lovable.app-1779360429763.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/da57ff1a-e539-427e-b4c0-c2a330af8d82/id-preview-d10c1851--1d6cbc0f-23d1-4b78-a45c-0fb08f64101c.lovable.app-1779360429763.png" },
+      { name: "twitter:title", content: "Naseem Health Elevate" },
+      {
+        name: "twitter:description",
+        content:
+          "Naseem Health Elevate by Dr. Naseem Ahmed provides expert homeopathic and physiotherapy care, online appointments, video consultations, and personalized healthcare services in Karachi.",
+      },
+      {
+        property: "og:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/da57ff1a-e539-427e-b4c0-c2a330af8d82/id-preview-d10c1851--1d6cbc0f-23d1-4b78-a45c-0fb08f64101c.lovable.app-1779360429763.png",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/da57ff1a-e539-427e-b4c0-c2a330af8d82/id-preview-d10c1851--1d6cbc0f-23d1-4b78-a45c-0fb08f64101c.lovable.app-1779360429763.png",
+      },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -118,11 +140,14 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const location = useLocation();
+  const isAdminRoute = location.pathname.startsWith("/admin");
 
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <Outlet />
+        {!isAdminRoute && <AssistantChat />}
       </AuthProvider>
     </QueryClientProvider>
   );

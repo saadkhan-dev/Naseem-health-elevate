@@ -9,24 +9,47 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AppointmentStatusRouteImport } from './routes/appointment-status'
+import { Route as BookingRouteImport } from './routes/booking'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
-import { Route as VideoAppointmentIdRouteImport } from './routes/video.$appointmentId'
-import { Route as AdminVideosRouteImport } from './routes/admin.videos'
-import { Route as AdminServicesRouteImport } from './routes/admin.services'
-import { Route as AdminProductsRouteImport } from './routes/admin.products'
-import { Route as AdminAvailabilityRouteImport } from './routes/admin.availability'
 import { Route as AdminAppointmentsRouteImport } from './routes/admin.appointments'
+import { Route as AdminAvailabilityRouteImport } from './routes/admin.availability'
+import { Route as AdminConditionsRouteImport } from './routes/admin.conditions'
+import { Route as AdminLoginRouteImport } from './routes/admin.login'
+import { Route as AdminOffersRouteImport } from './routes/admin.offers'
+import { Route as AdminPaymentsRouteImport } from './routes/admin.payments'
+import { Route as AdminProductsRouteImport } from './routes/admin.products'
+import { Route as AdminReviewsRouteImport } from './routes/admin.reviews'
+import { Route as AdminServicesRouteImport } from './routes/admin.services'
+import { Route as AdminVideosRouteImport } from './routes/admin.videos'
+import { Route as VideoVcNoRouteImport } from './routes/video.$vcNo'
 
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AppointmentStatusRoute = AppointmentStatusRouteImport.update({
+  id: '/appointment-status',
+  path: '/appointment-status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BookingRoute = BookingRouteImport.update({
+  id: '/booking',
+  path: '/booking',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
@@ -34,24 +57,9 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
-const VideoAppointmentIdRoute = VideoAppointmentIdRouteImport.update({
-  id: '/video/$appointmentId',
-  path: '/video/$appointmentId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminVideosRoute = AdminVideosRouteImport.update({
-  id: '/videos',
-  path: '/videos',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminServicesRoute = AdminServicesRouteImport.update({
-  id: '/services',
-  path: '/services',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminProductsRoute = AdminProductsRouteImport.update({
-  id: '/products',
-  path: '/products',
+const AdminAppointmentsRoute = AdminAppointmentsRouteImport.update({
+  id: '/appointments',
+  path: '/appointments',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminAvailabilityRoute = AdminAvailabilityRouteImport.update({
@@ -59,43 +67,107 @@ const AdminAvailabilityRoute = AdminAvailabilityRouteImport.update({
   path: '/availability',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminAppointmentsRoute = AdminAppointmentsRouteImport.update({
-  id: '/appointments',
-  path: '/appointments',
+const AdminConditionsRoute = AdminConditionsRouteImport.update({
+  id: '/conditions',
+  path: '/conditions',
   getParentRoute: () => AdminRoute,
+} as any)
+const AdminLoginRoute = AdminLoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminOffersRoute = AdminOffersRouteImport.update({
+  id: '/offers',
+  path: '/offers',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPaymentsRoute = AdminPaymentsRouteImport.update({
+  id: '/payments',
+  path: '/payments',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminProductsRoute = AdminProductsRouteImport.update({
+  id: '/products',
+  path: '/products',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminReviewsRoute = AdminReviewsRouteImport.update({
+  id: '/reviews',
+  path: '/reviews',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminServicesRoute = AdminServicesRouteImport.update({
+  id: '/services',
+  path: '/services',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminVideosRoute = AdminVideosRouteImport.update({
+  id: '/videos',
+  path: '/videos',
+  getParentRoute: () => AdminRoute,
+} as any)
+const VideoVcNoRoute = VideoVcNoRouteImport.update({
+  id: '/video/$vcNo',
+  path: '/video/$vcNo',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/appointment-status': typeof AppointmentStatusRoute
+  '/booking': typeof BookingRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/availability': typeof AdminAvailabilityRoute
+  '/admin/conditions': typeof AdminConditionsRoute
+  '/admin/login': typeof AdminLoginRoute
+  '/admin/offers': typeof AdminOffersRoute
+  '/admin/payments': typeof AdminPaymentsRoute
   '/admin/products': typeof AdminProductsRoute
+  '/admin/reviews': typeof AdminReviewsRoute
   '/admin/services': typeof AdminServicesRoute
   '/admin/videos': typeof AdminVideosRoute
-  '/video/$appointmentId': typeof VideoAppointmentIdRoute
+  '/video/$vcNo': typeof VideoVcNoRoute
   '/admin/': typeof AdminIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/appointment-status': typeof AppointmentStatusRoute
+  '/booking': typeof BookingRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/availability': typeof AdminAvailabilityRoute
+  '/admin/conditions': typeof AdminConditionsRoute
+  '/admin/login': typeof AdminLoginRoute
+  '/admin/offers': typeof AdminOffersRoute
+  '/admin/payments': typeof AdminPaymentsRoute
   '/admin/products': typeof AdminProductsRoute
+  '/admin/reviews': typeof AdminReviewsRoute
   '/admin/services': typeof AdminServicesRoute
   '/admin/videos': typeof AdminVideosRoute
-  '/video/$appointmentId': typeof VideoAppointmentIdRoute
+  '/video/$vcNo': typeof VideoVcNoRoute
   '/admin': typeof AdminIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/appointment-status': typeof AppointmentStatusRoute
+  '/booking': typeof BookingRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/availability': typeof AdminAvailabilityRoute
+  '/admin/conditions': typeof AdminConditionsRoute
+  '/admin/login': typeof AdminLoginRoute
+  '/admin/offers': typeof AdminOffersRoute
+  '/admin/payments': typeof AdminPaymentsRoute
   '/admin/products': typeof AdminProductsRoute
+  '/admin/reviews': typeof AdminReviewsRoute
   '/admin/services': typeof AdminServicesRoute
   '/admin/videos': typeof AdminVideosRoute
-  '/video/$appointmentId': typeof VideoAppointmentIdRoute
+  '/video/$vcNo': typeof VideoVcNoRoute
   '/admin/': typeof AdminIndexRoute
 }
 export interface FileRouteTypes {
@@ -103,44 +175,78 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/appointment-status'
+    | '/booking'
+    | '/reset-password'
     | '/admin/appointments'
     | '/admin/availability'
+    | '/admin/conditions'
+    | '/admin/login'
+    | '/admin/offers'
+    | '/admin/payments'
     | '/admin/products'
+    | '/admin/reviews'
     | '/admin/services'
     | '/admin/videos'
-    | '/video/$appointmentId'
+    | '/video/$vcNo'
     | '/admin/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/appointment-status'
+    | '/booking'
+    | '/reset-password'
     | '/admin/appointments'
     | '/admin/availability'
+    | '/admin/conditions'
+    | '/admin/login'
+    | '/admin/offers'
+    | '/admin/payments'
     | '/admin/products'
+    | '/admin/reviews'
     | '/admin/services'
     | '/admin/videos'
-    | '/video/$appointmentId'
+    | '/video/$vcNo'
     | '/admin'
   id:
     | '__root__'
     | '/'
     | '/admin'
+    | '/appointment-status'
+    | '/booking'
+    | '/reset-password'
     | '/admin/appointments'
     | '/admin/availability'
+    | '/admin/conditions'
+    | '/admin/login'
+    | '/admin/offers'
+    | '/admin/payments'
     | '/admin/products'
+    | '/admin/reviews'
     | '/admin/services'
     | '/admin/videos'
-    | '/video/$appointmentId'
+    | '/video/$vcNo'
     | '/admin/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
-  VideoAppointmentIdRoute: typeof VideoAppointmentIdRoute
+  AppointmentStatusRoute: typeof AppointmentStatusRoute
+  BookingRoute: typeof BookingRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
+  VideoVcNoRoute: typeof VideoVcNoRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin': {
       id: '/admin'
       path: '/admin'
@@ -148,11 +254,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/appointment-status': {
+      id: '/appointment-status'
+      path: '/appointment-status'
+      fullPath: '/appointment-status'
+      preLoaderRoute: typeof AppointmentStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/booking': {
+      id: '/booking'
+      path: '/booking'
+      fullPath: '/booking'
+      preLoaderRoute: typeof BookingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/': {
@@ -162,32 +282,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/video/$appointmentId': {
-      id: '/video/$appointmentId'
-      path: '/video/$appointmentId'
-      fullPath: '/video/$appointmentId'
-      preLoaderRoute: typeof VideoAppointmentIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/videos': {
-      id: '/admin/videos'
-      path: '/videos'
-      fullPath: '/admin/videos'
-      preLoaderRoute: typeof AdminVideosRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/services': {
-      id: '/admin/services'
-      path: '/services'
-      fullPath: '/admin/services'
-      preLoaderRoute: typeof AdminServicesRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/products': {
-      id: '/admin/products'
-      path: '/products'
-      fullPath: '/admin/products'
-      preLoaderRoute: typeof AdminProductsRouteImport
+    '/admin/appointments': {
+      id: '/admin/appointments'
+      path: '/appointments'
+      fullPath: '/admin/appointments'
+      preLoaderRoute: typeof AdminAppointmentsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/availability': {
@@ -197,12 +296,68 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAvailabilityRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/appointments': {
-      id: '/admin/appointments'
-      path: '/appointments'
-      fullPath: '/admin/appointments'
-      preLoaderRoute: typeof AdminAppointmentsRouteImport
+    '/admin/conditions': {
+      id: '/admin/conditions'
+      path: '/conditions'
+      fullPath: '/admin/conditions'
+      preLoaderRoute: typeof AdminConditionsRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/admin/login': {
+      id: '/admin/login'
+      path: '/login'
+      fullPath: '/admin/login'
+      preLoaderRoute: typeof AdminLoginRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/offers': {
+      id: '/admin/offers'
+      path: '/offers'
+      fullPath: '/admin/offers'
+      preLoaderRoute: typeof AdminOffersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/payments': {
+      id: '/admin/payments'
+      path: '/payments'
+      fullPath: '/admin/payments'
+      preLoaderRoute: typeof AdminPaymentsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/products': {
+      id: '/admin/products'
+      path: '/products'
+      fullPath: '/admin/products'
+      preLoaderRoute: typeof AdminProductsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/reviews': {
+      id: '/admin/reviews'
+      path: '/reviews'
+      fullPath: '/admin/reviews'
+      preLoaderRoute: typeof AdminReviewsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/services': {
+      id: '/admin/services'
+      path: '/services'
+      fullPath: '/admin/services'
+      preLoaderRoute: typeof AdminServicesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/videos': {
+      id: '/admin/videos'
+      path: '/videos'
+      fullPath: '/admin/videos'
+      preLoaderRoute: typeof AdminVideosRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/video/$vcNo': {
+      id: '/video/$vcNo'
+      path: '/video/$vcNo'
+      fullPath: '/video/$vcNo'
+      preLoaderRoute: typeof VideoVcNoRouteImport
+      parentRoute: typeof rootRouteImport
     }
   }
 }
@@ -210,7 +365,12 @@ declare module '@tanstack/react-router' {
 interface AdminRouteChildren {
   AdminAppointmentsRoute: typeof AdminAppointmentsRoute
   AdminAvailabilityRoute: typeof AdminAvailabilityRoute
+  AdminConditionsRoute: typeof AdminConditionsRoute
+  AdminLoginRoute: typeof AdminLoginRoute
+  AdminOffersRoute: typeof AdminOffersRoute
+  AdminPaymentsRoute: typeof AdminPaymentsRoute
   AdminProductsRoute: typeof AdminProductsRoute
+  AdminReviewsRoute: typeof AdminReviewsRoute
   AdminServicesRoute: typeof AdminServicesRoute
   AdminVideosRoute: typeof AdminVideosRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -219,7 +379,12 @@ interface AdminRouteChildren {
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAppointmentsRoute: AdminAppointmentsRoute,
   AdminAvailabilityRoute: AdminAvailabilityRoute,
+  AdminConditionsRoute: AdminConditionsRoute,
+  AdminLoginRoute: AdminLoginRoute,
+  AdminOffersRoute: AdminOffersRoute,
+  AdminPaymentsRoute: AdminPaymentsRoute,
   AdminProductsRoute: AdminProductsRoute,
+  AdminReviewsRoute: AdminReviewsRoute,
   AdminServicesRoute: AdminServicesRoute,
   AdminVideosRoute: AdminVideosRoute,
   AdminIndexRoute: AdminIndexRoute,
@@ -230,7 +395,10 @@ const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
-  VideoAppointmentIdRoute: VideoAppointmentIdRoute,
+  AppointmentStatusRoute: AppointmentStatusRoute,
+  BookingRoute: BookingRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
+  VideoVcNoRoute: VideoVcNoRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,5 +1,4 @@
-
-# Dr. Naseem Alam — Clinic Landing Page
+# Dr. Naseem Ahmed Khan — Clinic Landing Page
 
 A single high-conversion landing page on `/` matching the uploaded mockup: clean white + soft teal/blue aesthetic, premium healthcare feel, fully responsive.
 
@@ -10,7 +9,7 @@ A single high-conversion landing page on `/` matching the uploaded mockup: clean
 3. **Booking Panel** — Card with Service dropdown, Date picker, Time picker, "Check Availability" button. Below: 4 mini feature pills (Easy Booking, Flexible Timing, Secure, Doctor-managed). Frontend-only; submit opens WhatsApp prefilled with selections.
 4. **Video Consultation + Products** — Two-column row. Left: consultation card with phone mockup illustration, bullet list, "Consult Now" button → WhatsApp video call link. Right: product carousel (3 sample homeopathic products: name, strength, PKR price, Add to Cart — visual only).
 5. **Health Awareness Videos** — 4 thumbnail cards with play icon overlays (YouTube-style placeholders).
-6. **Location + About** — Two-column. Left: clinic address card, embedded Google Maps iframe (Clifton, Karachi), WhatsApp + Call Now buttons. Right: About Dr. Naseem Alam — bio, qualifications list (DHMS, Physiotherapy Specialist, Pain Management, Holistic Care), portrait.
+6. **Location + About** — Two-column. Left: clinic address card, embedded Google Maps iframe (Clifton, Karachi), WhatsApp + Call Now buttons. Right: About Dr. Naseem Ahmed Khan — bio, qualifications list (DHMS, Physiotherapy Specialist, Pain Management, Holistic Care), portrait.
 7. **Footer (dark teal)** — Brand blurb, Quick Links, Services, Clinic Timings (Mon-Sat 10am-8pm, Sun 10am-2pm, Fri closed), Contact (phone, WhatsApp, email, address), social icons.
 
 ## Functional behavior
@@ -30,6 +29,7 @@ A single high-conversion landing page on `/` matching the uploaded mockup: clean
 ## Images
 
 Generate via imagegen, save to `src/assets/`:
+
 - `doctor-portrait.jpg` — South Asian male doctor, 40s, glasses, beard, white coat, arms crossed, clinic background (hero).
 - `doctor-about.jpg` — same doctor, different pose for About section.
 - `product-1/2/3.jpg` — homeopathic medicine bottles on white.

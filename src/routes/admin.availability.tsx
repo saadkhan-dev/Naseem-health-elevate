@@ -5,6 +5,7 @@ import { useAdminAvailability, useUpdateAvailability } from "@/hooks/queries/use
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
+import { QueryError } from "@/components/admin/QueryError";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -13,9 +14,11 @@ export const Route = createFileRoute("/admin/availability")({
 });
 
 function AdminAvailability() {
-  const { data: slots, isLoading } = useAdminAvailability();
+  const { data: slots, isLoading, isError, error } = useAdminAvailability();
   const updateAvail = useUpdateAvailability();
-  const [editState, setEditState] = useState<Record<string, { start_time: string; end_time: string }>>({});
+  const [editState, setEditState] = useState<
+    Record<string, { start_time: string; end_time: string }>
+  >({});
 
   if (isLoading) {
     return (
@@ -50,21 +53,32 @@ function AdminAvailability() {
   return (
     <div>
       <h1 className="text-2xl font-semibold text-foreground">Weekly Availability</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Set your clinic hours for each day of the week</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Set your clinic hours for each day of the week
+      </p>
+
+      {isError && (
+        <div className="mt-4">
+          <QueryError error={error} />
+        </div>
+      )}
 
       <div className="mt-6 space-y-3">
         {DAY_NAMES.map((dayName, day) => {
           const slot = weekSlots[day];
           return (
-            <div key={day} className="flex items-center gap-4 rounded-xl border bg-card px-5 py-4">
+            <div
+              key={day}
+              className="flex flex-wrap items-center gap-3 rounded-xl border bg-card px-5 py-4 sm:gap-4"
+            >
               <Switch
                 checked={slot?.is_available ?? false}
                 onCheckedChange={() => handleToggle(day, slot?.is_available ?? false)}
                 disabled={updateAvail.isPending}
               />
-              <div className="w-28 text-sm font-medium text-foreground">{dayName}</div>
+              <div className="w-20 text-sm font-medium text-foreground sm:w-28">{dayName}</div>
               {slot?.is_available ? (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Input
                     type="time"
                     defaultValue={slot.start_time}
@@ -95,7 +109,7 @@ function AdminAvailability() {
                       disabled={updateAvail.isPending}
                       className="h-9"
                     >
-                      <Save className="mr-1 h-3 w-3" />
+                      <Save className="h-3 w-3" />
                       Save
                     </Button>
                   )}

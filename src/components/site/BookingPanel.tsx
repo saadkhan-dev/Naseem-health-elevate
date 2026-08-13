@@ -1,49 +1,100 @@
 import * as React from "react";
 import { format } from "date-fns";
-import { CalendarIcon, Clock, ShieldCheck, CalendarCheck, UserCog, ArrowRight, Loader2 } from "lucide-react";
+import {
+  CalendarIcon,
+  Clock,
+  ShieldCheck,
+  CalendarCheck,
+  UserCog,
+  ArrowRight,
+  Loader2,
+} from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/hooks/useAuth";
-import { useServices, useTimeSlots, useCreateAppointment } from "@/hooks/queries/useBookings";
-import { formatTimeDisplay } from "@/lib/bookings";
+import {
+  useServices,
+  useTimeSlots,
+  useAvailability,
+  useCreateAppointment,
+} from "@/hooks/queries/useBookings";
+import {
+  formatTimeDisplay,
+  isHomeVisitService,
+  isVideoConsultationService,
+  HOME_VISIT_FEE_LABEL,
+} from "@/lib/bookings";
+import { isDateBeforeTodayClinic } from "@/lib/clinic";
+import type { NotificationResult } from "@/lib/notifications";
 import { BookingConfirmation } from "./BookingConfirmation";
-import { AuthModal } from "@/components/auth/AuthModal";
 
 export function BookingPanel() {
-  const { user, loading: authLoading } = useAuth();
   const [serviceId, setServiceId] = React.useState<string>();
   const [date, setDate] = React.useState<Date>();
   const [time, setTime] = React.useState<string>();
-  const [authOpen, setAuthOpen] = React.useState(false);
+  const [name, setName] = React.useState("");
+  const [phone, setPhone] = React.useState("");
+  const [email, setEmail] = React.useState("");
+  const [formError, setFormError] = React.useState("");
   const [confirmed, setConfirmed] = React.useState(false);
+  const [appointmentId, setAppointmentId] = React.useState<string | null>(null);
+  const [notifications, setNotifications] = React.useState<NotificationResult[]>([]);
 
   const { data: services, isLoading: servicesLoading } = useServices();
+  const { data: availability } = useAvailability();
   const { slots, isLoading: slotsLoading } = useTimeSlots(date, serviceId, services);
   const createAppointment = useCreateAppointment();
 
+  const bookingServices = services?.filter((s) => !isVideoConsultationService(s));
   const selectedService = services?.find((s) => s.id === serviceId);
+  const isHomeVisit = selectedService ? isHomeVisitService(selectedService) : false;
+
+  const openDays = React.useMemo(
+    () => new Set(availability?.map((a) => a.day_of_week) ?? []),
+    [availability],
+  );
 
   async function handleSubmit() {
-    if (!user) {
-      setAuthOpen(true);
+    setFormError("");
+    if (!serviceId || !date) return;
+    if (!isHomeVisit && !time) return;
+    if (!name.trim()) {
+      setFormError("Please enter your name.");
       return;
     }
-    if (!serviceId || !date || !time) return;
+    if (!phone.trim() && !email.trim()) {
+      setFormError("Please enter your phone number or email so we can send your Appointment ID.");
+      return;
+    }
 
-    const result = await createAppointment.mutateAsync({
-      patientId: user.id,
-      serviceId,
-      date: format(date, "yyyy-MM-dd"),
-      time,
-    });
+    try {
+      const result = await createAppointment.mutateAsync({
+        name: name.trim(),
+        phone: phone.trim(),
+        email: email.trim(),
+        serviceId,
+        date: format(date, "yyyy-MM-dd"),
+        time: isHomeVisit ? undefined : time,
+      });
 
-    if (result.error) {
-      alert(result.error);
-    } else {
-      setConfirmed(true);
+      if (result.error) {
+        setFormError(result.error);
+      } else {
+        setAppointmentId(result.appointmentNo);
+        setNotifications(result.notifications);
+        setConfirmed(true);
+      }
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : "Booking failed. Please try again.");
     }
   }
 
@@ -55,12 +106,19 @@ export function BookingPanel() {
             <BookingConfirmation
               serviceName={selectedService.name}
               date={date}
-              time={time!}
+              time={isHomeVisit ? null : (time ?? null)}
+              appointmentNo={appointmentId}
+              notifications={notifications}
               onClose={() => {
                 setConfirmed(false);
                 setServiceId(undefined);
                 setDate(undefined);
                 setTime(undefined);
+                setName("");
+                setPhone("");
+                setEmail("");
+                setAppointmentId(null);
+                setNotifications([]);
               }}
             />
           </div>
@@ -70,69 +128,85 @@ export function BookingPanel() {
   }
 
   return (
-    <>
-      <section id="booking" className="relative -mt-6 px-4 md:-mt-12 md:px-8">
-        <div className="mx-auto max-w-7xl">
-          <div className="rounded-3xl border border-border bg-card p-5 shadow-soft md:p-8">
-            <div className="grid items-end gap-5 lg:grid-cols-[1.1fr_1fr_1fr_1fr_auto]">
-              <div>
-                <h2 className="font-display text-2xl font-semibold text-foreground">Book Your Appointment</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {user
-                    ? `Welcome, ${user.email} — choose your preferred service, date and time.`
-                    : "Sign in to book. Choose your preferred service, date and time."}
-                </p>
-              </div>
+    <section id="booking" className="relative -mt-6 px-4 md:-mt-12 md:px-8">
+      <div className="mx-auto max-w-7xl">
+        <div className="rounded-3xl border border-border bg-card p-5 shadow-soft md:p-8">
+          <div className="text-center">
+            <h2 className="font-display text-3xl font-bold text-red-600 sm:text-4xl">
+              Book Your Appointment
+            </h2>
+            <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
+              No account needed — enter your name and either your phone number or email to book
+              instantly.
+            </p>
+          </div>
 
-              <Field label="Select Service">
-                <Select value={serviceId} onValueChange={setServiceId} disabled={servicesLoading}>
-                  <SelectTrigger className="h-11 w-full rounded-xl">
-                    <SelectValue placeholder={servicesLoading ? "Loading..." : "Select Service"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {services?.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          <div className="mt-6 grid items-end gap-5 lg:grid-cols-[1fr_1fr_1fr_auto]">
+            <Field label="Select Service">
+              <Select
+                value={serviceId}
+                onValueChange={(v) => {
+                  setServiceId(v);
+                  setTime(undefined);
+                }}
+                disabled={servicesLoading}
+              >
+                <SelectTrigger className="h-11 w-full rounded-xl transition-all duration-300 hover:border-primary/40">
+                  <SelectValue placeholder={servicesLoading ? "Loading..." : "Select Service"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {bookingServices?.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                      {isHomeVisitService(s) ? ` — ${HOME_VISIT_FEE_LABEL}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+
+            <Field label="Select Date">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex h-11 w-full items-center justify-between rounded-xl border border-input bg-background px-3 text-sm transition-all duration-300 hover:border-primary/40 active:scale-[0.99]",
+                      !date && "text-muted-foreground",
+                    )}
+                  >
+                    {date ? format(date, "PPP") : "Select Date"}
+                    <CalendarIcon className="ml-2 h-4 w-4 text-primary" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={date}
+                    onSelect={(d) => {
+                      setDate(d);
+                      setTime(undefined);
+                    }}
+                    disabled={(d) =>
+                      isDateBeforeTodayClinic(d) || (!isHomeVisit && !openDays.has(d.getDay()))
+                    }
+                    initialFocus
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+            </Field>
+
+            {isHomeVisit ? (
+              <Field label="Visit Time">
+                <div className="flex h-11 items-center rounded-xl border border-input bg-background px-3 text-sm text-muted-foreground">
+                  Flexible — doctor confirms the time
+                </div>
               </Field>
-
-              <Field label="Select Date">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className={cn(
-                        "flex h-11 w-full items-center justify-between rounded-xl border border-input bg-background px-3 text-sm",
-                        !date && "text-muted-foreground"
-                      )}
-                    >
-                      {date ? format(date, "PPP") : "Select Date"}
-                      <CalendarIcon className="ml-2 h-4 w-4 text-primary" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={date}
-                      onSelect={setDate}
-                      disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))}
-                      initialFocus
-                      className="p-3 pointer-events-auto"
-                    />
-                  </PopoverContent>
-                </Popover>
-              </Field>
-
+            ) : (
               <Field label="Select Time">
-                <Select
-                  value={time}
-                  onValueChange={setTime}
-                  disabled={!date || slotsLoading}
-                >
-                  <SelectTrigger className="h-11 w-full rounded-xl">
+                <Select value={time} onValueChange={setTime} disabled={!date || slotsLoading}>
+                  <SelectTrigger className="h-11 w-full rounded-xl transition-all duration-300 hover:border-primary/40">
                     <SelectValue
                       placeholder={
                         !date
@@ -154,49 +228,86 @@ export function BookingPanel() {
                   </SelectContent>
                 </Select>
               </Field>
+            )}
 
-              <Button
-                onClick={handleSubmit}
-                disabled={!serviceId || !date || !time || createAppointment.isPending}
-                className="h-11 rounded-xl px-6"
-              >
-                {createAppointment.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : !user ? (
-                  <>
-                    Sign in to Book <ArrowRight className="h-4 w-4" />
-                  </>
-                ) : (
-                  <>
-                    {authLoading ? "Loading..." : "Book Appointment"} <ArrowRight className="h-4 w-4" />
-                  </>
-                )}
-              </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={
+                !serviceId || !date || (!isHomeVisit && !time) || createAppointment.isPending
+              }
+              className="h-11 rounded-xl px-6 hover:brightness-[1.05]"
+            >
+              {createAppointment.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  Book Appointment <ArrowRight className="h-4 w-4" />
+                </>
+              )}
+            </Button>
+          </div>
+
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div>
+              <div className="mb-1.5 text-xs font-medium text-foreground">Your Name</div>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Full name"
+                className="h-11 rounded-xl transition-all duration-300 hover:border-primary/40"
+              />
             </div>
+            <div>
+              <div className="mb-1.5 text-xs font-medium text-foreground">
+                Phone Number <span className="text-muted-foreground">(optional)</span>
+              </div>
+              <Input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+92 3XX XXXXXXX"
+                className="h-11 rounded-xl transition-all duration-300 hover:border-primary/40"
+              />
+            </div>
+            <div>
+              <div className="mb-1.5 text-xs font-medium text-foreground">
+                Email Address <span className="text-muted-foreground">(optional)</span>
+              </div>
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="h-11 rounded-xl transition-all duration-300 hover:border-primary/40"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground sm:col-span-2">
+              Provide at least one — we'll send your Appointment ID there.
+            </p>
+          </div>
 
-            <div className="mt-7 grid gap-4 border-t border-border pt-6 sm:grid-cols-2 lg:grid-cols-4">
-              {[
-                { Icon: CalendarCheck, t: "Easy Booking", s: "Simple 3 step booking" },
-                { Icon: Clock, t: "Flexible Timing", s: "As per your convenience" },
-                { Icon: ShieldCheck, t: "Secure & Reliable", s: "Your data is safe with us" },
-                { Icon: UserCog, t: "Doctor-Managed", s: "Schedules updated anytime" },
-              ].map(({ Icon, t, s }) => (
-                <div key={t} className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft text-primary">
-                    <Icon className="h-4 w-4" />
-                  </div>
-                  <div className="leading-tight">
-                    <div className="text-sm font-semibold text-foreground">{t}</div>
-                    <div className="text-xs text-muted-foreground">{s}</div>
-                  </div>
+          {formError && <p className="mt-3 text-sm font-medium text-destructive">{formError}</p>}
+
+          <div className="mt-7 grid gap-4 border-t border-border pt-6 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { Icon: CalendarCheck, t: "Easy Booking", s: "Simple 3 step booking" },
+              { Icon: Clock, t: "Flexible Timing", s: "As per your convenience" },
+              { Icon: ShieldCheck, t: "Secure & Reliable", s: "Your data is safe with us" },
+              { Icon: UserCog, t: "Doctor-Managed", s: "Schedules updated anytime" },
+            ].map(({ Icon, t, s }) => (
+              <div key={t} className="group flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft text-primary transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110">
+                  <Icon className="h-4 w-4" />
                 </div>
-              ))}
-            </div>
+                <div className="leading-tight">
+                  <div className="text-sm font-semibold text-foreground">{t}</div>
+                  <div className="text-xs text-muted-foreground">{s}</div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-      </section>
-      <AuthModal open={authOpen} onOpenChange={setAuthOpen} />
-    </>
+      </div>
+    </section>
   );
 }
 

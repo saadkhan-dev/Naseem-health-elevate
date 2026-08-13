@@ -29,11 +29,7 @@ export interface Appointment {
 }
 
 export async function getServices(): Promise<Service[]> {
-  const { data } = await supabase
-    .from("services")
-    .select("*")
-    .eq("is_active", true)
-    .order("name");
+  const { data } = await supabase.from("services").select("*").eq("is_active", true).order("name");
   return data ?? [];
 }
 

@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { LoginForm } from "./LoginForm";
 import { RegisterForm } from "./RegisterForm";
 
@@ -19,7 +25,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
           <DialogDescription>
             {mode === "login"
               ? "Sign in to book appointments and manage your health journey."
-              : "Register to start booking appointments with Dr. Naseem Alam."}
+              : "Register to start booking appointments with Dr. Naseem Ahmed Kahn."}
           </DialogDescription>
         </DialogHeader>
         {mode === "login" ? (
@@ -31,14 +37,20 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
           {mode === "login" ? (
             <>
               Don't have an account?{" "}
-              <button onClick={() => setMode("register")} className="font-medium text-primary hover:underline">
+              <button
+                onClick={() => setMode("register")}
+                className="font-medium text-primary hover:underline"
+              >
                 Sign up
               </button>
             </>
           ) : (
             <>
               Already have an account?{" "}
-              <button onClick={() => setMode("login")} className="font-medium text-primary hover:underline">
+              <button
+                onClick={() => setMode("login")}
+                className="font-medium text-primary hover:underline"
+              >
                 Sign in
               </button>
             </>

@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus, Loader2, Pencil, Trash2 } from "lucide-react";
-import { useAdminProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from "@/hooks/queries/useAdmin";
+import {
+  useAdminProducts,
+  useCreateProduct,
+  useUpdateProduct,
+  useDeleteProduct,
+} from "@/hooks/queries/useAdmin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,17 +17,20 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
+  DialogClose,
 } from "@/components/ui/dialog";
 import type { Product } from "@/lib/admin-data";
+import { QueryError } from "@/components/admin/QueryError";
 
 export const Route = createFileRoute("/admin/products")({
   component: AdminProducts,
 });
 
-const emptyForm = { name: "", description: "", price: 0, image_url: "" };
+const emptyForm = { name: "", description: "", price: 0, image_url: "", in_stock: true };
 
 function AdminProducts() {
-  const { data: products, isLoading } = useAdminProducts();
+  const { data: products, isLoading, isError, error } = useAdminProducts();
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
@@ -44,6 +52,7 @@ function AdminProducts() {
       description: p.description ?? "",
       price: p.price,
       image_url: p.image_url ?? "",
+      in_stock: p.in_stock,
     });
     setDialogOpen(true);
   }
@@ -59,24 +68,35 @@ function AdminProducts() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Products</h1>
           <p className="mt-1 text-sm text-muted-foreground">Manage your product inventory</p>
         </div>
         <Button onClick={openCreate}>
-          <Plus className="mr-1 h-4 w-4" /> Add Product
+          <Plus className="h-4 w-4" /> Add Product
         </Button>
       </div>
 
+      {isError && (
+        <div className="mt-4">
+          <QueryError error={error} />
+        </div>
+      )}
+
       <div className="mt-6 space-y-3">
         {isLoading ? (
-          <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+          <div className="flex justify-center p-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
         ) : products?.length === 0 ? (
           <p className="p-8 text-center text-sm text-muted-foreground">No products yet</p>
         ) : (
           products?.map((p) => (
-            <div key={p.id} className="flex items-center justify-between rounded-xl border bg-card px-5 py-4">
+            <div
+              key={p.id}
+              className="flex items-center justify-between rounded-xl border bg-card px-5 py-4"
+            >
               <div className="flex items-center gap-4">
                 {p.image_url && (
                   <img src={p.image_url} alt="" className="h-12 w-12 rounded-lg object-cover" />
@@ -92,7 +112,12 @@ function AdminProducts() {
                 <Button size="sm" variant="ghost" onClick={() => openEdit(p)}>
                   <Pencil className="h-4 w-4" />
                 </Button>
-                <Button size="sm" variant="ghost" className="text-red-600" onClick={() => deleteProduct.mutate(p.id)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-red-600"
+                  onClick={() => deleteProduct.mutate(p.id)}
+                >
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
@@ -110,26 +135,61 @@ function AdminProducts() {
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium text-foreground">Name</label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
             </div>
             <div>
               <label className="text-sm font-medium text-foreground">Description</label>
-              <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+              <Textarea
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+              />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-foreground">Price (Rs.)</label>
-                <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: +e.target.value })} />
+                <Input
+                  type="number"
+                  value={form.price}
+                  onChange={(e) => setForm({ ...form, price: +e.target.value })}
+                />
               </div>
               <div>
                 <label className="text-sm font-medium text-foreground">Image URL</label>
-                <Input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} />
+                <Input
+                  value={form.image_url}
+                  onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+                />
               </div>
             </div>
-            <Button onClick={handleSave} className="w-full" disabled={createProduct.isPending || updateProduct.isPending}>
+            <div className="flex items-center justify-between rounded-xl border border-border px-4 py-3">
+              <div>
+                <div className="text-sm font-medium text-foreground">In stock</div>
+                <div className="text-xs text-muted-foreground">
+                  Allow customers to order this product
+                </div>
+              </div>
+              <Switch
+                checked={form.in_stock}
+                onCheckedChange={(v) => setForm({ ...form, in_stock: v })}
+              />
+            </div>
+          </div>
+          <DialogFooter className="shrink-0 -mx-6 -mb-6 gap-2 border-t bg-background px-6 py-4 sm:space-x-0">
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button
+              onClick={handleSave}
+              disabled={createProduct.isPending || updateProduct.isPending}
+            >
               {editing ? "Update" : "Create"}
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -11,17 +11,18 @@ export interface Profile {
 }
 
 export async function signUp(email: string, password: string, fullName: string, phone: string) {
-  const { data, error } = await supabase.auth.signUp({ email, password });
-  if (error) return { error: error.message };
-
-  if (data.user) {
-    const { error: profileError } = await supabase.from("profiles").insert({
-      id: data.user.id,
-      full_name: fullName,
-      phone,
-      role: "patient",
-    });
-    if (profileError) return { error: profileError.message };
+  const { error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: fullName,
+        phone: phone,
+      },
+    },
+  });
+  if (error) {
+    return { error: error.message };
   }
 
   return { error: null };
@@ -29,8 +30,8 @@ export async function signUp(email: string, password: string, fullName: string, 
 
 export async function signIn(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { error: error.message };
-  return { error: null };
+  if (error) return { error: error.message, user: null };
+  return { error: null, user: data.user };
 }
 
 export async function signOut() {

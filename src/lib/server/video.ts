@@ -30,7 +30,9 @@ export async function createVideoSession(appointmentId: string): Promise<{
   return { error: null, session: data };
 }
 
-export async function getVideoSessionByAppointment(appointmentId: string): Promise<VideoSession | null> {
+export async function getVideoSessionByAppointment(
+  appointmentId: string,
+): Promise<VideoSession | null> {
   const { data } = await supabase
     .from("video_sessions")
     .select("*")
@@ -55,5 +57,5 @@ export async function updateVideoSessionStatus(
 }
 
 export function getJitsiUrl(roomName: string, userName: string): string {
-  return `https://meet.jit.si/${encodeURIComponent(roomName)}#config.subject=${encodeURIComponent("Dr. Naseem Alam - Video Consultation")}&userInfo.displayName=${encodeURIComponent(userName)}`;
+  return `https://meet.jit.si/${encodeURIComponent(roomName)}#config.subject=${encodeURIComponent("Dr. Naseem Ahmed Khan - Video Consultation")}&userInfo.displayName=${encodeURIComponent(userName)}`;
 }

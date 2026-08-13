@@ -43,34 +43,39 @@
 :root {
   --radius: 0.875rem;
   --background: oklch(0.995 0.003 220);
-  --foreground: oklch(0.22 0.04 220);
+  --foreground: oklch(62.237% 0.25009 29.284);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.04 220);
+  --card-foreground: oklch(73.146% 0.23749 143.641);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.22 0.04 220);
-  --primary: oklch(0.62 0.10 195);
+  --primary: oklch(45.99% 0.30793 264.177);
   --primary-foreground: oklch(0.99 0.005 200);
   --primary-soft: oklch(0.95 0.03 195);
   --secondary: oklch(0.96 0.02 220);
-  --secondary-foreground: oklch(0.30 0.05 220);
+  --secondary-foreground: oklch(0.3 0.05 220);
   --muted: oklch(0.97 0.012 220);
-  --muted-foreground: oklch(0.50 0.03 220);
+  --muted-foreground: oklch(0.5 0.03 220);
   --accent: oklch(0.93 0.04 215);
-  --accent-foreground: oklch(0.30 0.06 220);
-  --destructive: oklch(0.60 0.22 27);
+  --accent-foreground: oklch(0.3 0.06 220);
+  --destructive: oklch(0.6 0.22 27);
   --destructive-foreground: oklch(0.99 0 0);
   --border: oklch(0.92 0.012 220);
   --input: oklch(0.94 0.012 220);
-  --ring: oklch(0.62 0.10 195);
+  --ring: oklch(0.62 0.1 195);
   --footer: oklch(0.28 0.05 200);
   --footer-foreground: oklch(0.96 0.01 200);
   --whatsapp: oklch(0.68 0.16 145);
 
-  --gradient-hero: linear-gradient(135deg, oklch(0.98 0.02 200) 0%, oklch(0.95 0.04 210) 60%, oklch(0.97 0.03 195) 100%);
-  --gradient-primary: linear-gradient(135deg, oklch(0.62 0.10 195), oklch(0.55 0.11 205));
-  --shadow-soft: 0 10px 40px -12px oklch(0.55 0.10 200 / 0.18);
-  --shadow-card: 0 4px 20px -8px oklch(0.55 0.10 200 / 0.15);
-  --shadow-glass: 0 8px 32px -8px oklch(0.55 0.10 200 / 0.22);
+  --gradient-hero: linear-gradient(
+    135deg,
+    oklch(0.98 0.02 200) 0%,
+    oklch(0.95 0.04 210) 60%,
+    oklch(0.97 0.03 195) 100%
+  );
+  --gradient-primary: linear-gradient(135deg, oklch(0.62 0.1 195), oklch(0.55 0.11 205));
+  --shadow-soft: 0 10px 40px -12px oklch(0.55 0.1 200 / 0.18);
+  --shadow-card: 0 4px 20px -8px oklch(0.55 0.1 200 / 0.15);
+  --shadow-glass: 0 8px 32px -8px oklch(0.55 0.1 200 / 0.22);
 }
 
 @layer base {
@@ -80,6 +85,40 @@
 
   html {
     scroll-behavior: smooth;
+    scroll-padding-top: 5rem;
+  }
+
+  #home {
+    scroll-margin-top: -1rem;
+  }
+
+  @media (min-width: 768px) {
+    #home {
+      scroll-margin-top: -0.5rem;
+    }
+  }
+
+  #services,
+  #contact {
+    scroll-margin-top: -3.75rem;
+  }
+
+  #diseases {
+    scroll-margin-top: -4rem;
+  }
+
+  #reviews {
+    scroll-margin-top: -3.5rem;
+  }
+
+  @media (min-width: 640px) {
+    #diseases {
+      scroll-margin-top: -5rem;
+    }
+
+    #reviews {
+      scroll-margin-top: -4.5rem;
+    }
   }
 
   body {
@@ -89,22 +128,105 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  h1, h2, h3, h4 {
+  h1,
+  h2,
+  h3,
+  h4 {
     font-family: var(--font-display);
     letter-spacing: -0.02em;
+  }
+
+  :where(a, button, input, select, textarea, summary, [tabindex], [role="button"]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
 @layer utilities {
-  .bg-gradient-hero { background: var(--gradient-hero); }
-  .bg-gradient-primary { background: var(--gradient-primary); }
-  .shadow-soft { box-shadow: var(--shadow-soft); }
-  .shadow-card { box-shadow: var(--shadow-card); }
-  .shadow-glass { box-shadow: var(--shadow-glass); }
+  .bg-gradient-hero {
+    background: var(--gradient-hero);
+  }
+  .bg-gradient-primary {
+    background: var(--gradient-primary);
+  }
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+  .shadow-glass {
+    box-shadow: var(--shadow-glass);
+  }
   .glass {
     background: oklch(1 0 0 / 0.75);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
   }
-  .font-display { font-family: var(--font-display); }
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  /* Chat: message entrance */
+  @keyframes chat-msg-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  .chat-msg-in {
+    animation: chat-msg-in 0.28s ease-out both;
+  }
+
+  /* Chat: typing dots */
+  @keyframes chat-typing-bounce {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    30% {
+      transform: translateY(-4px);
+      opacity: 1;
+    }
+  }
+  .chat-typing-dot {
+    animation: chat-typing-bounce 1.2s ease-in-out infinite;
+  }
+
+  /* Chat: thin scrollbar for the quick-help list */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(0.75 0.06 230) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: oklch(0.75 0.06 230);
+    border-radius: 9999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
 }

@@ -1,39 +1,39 @@
-# Naseem Health Elevate — Dr. Naseem Alam
+# Naseem Health Elevate — Dr. Naseem Ahmed Khan
 
-A full-featured healthcare website for Dr. Naseem Alam's clinic, built with **TanStack Start**, **React**, **Tailwind CSS v4**, and **Supabase**.
+A full-featured healthcare website for Dr. Naseem Ahmed Khan's clinic, built with **TanStack Start**, **React**, **Tailwind CSS v4**, and **Supabase**.
 
 ## Project Review
 
 ### What's Built ✅
 
-| Feature | Status | Details |
-|---|---|---|
-| Landing Page (Hero, About, Services, Products, Videos, Contact) | **Complete** | Fully responsive, modern UI with gradients, glassmorphism, floating cards |
-| Online Booking System | **Complete** | Service selection, date picker, real-time slot availability, booking confirmation |
-| User Authentication | **Complete** | Sign up, sign in, logout via Supabase Auth with email confirmation |
-| Role-Based Access | **Complete** | Patient & Doctor roles; admin panel restricted to `doctor` role |
-| Admin Dashboard | **Complete** | Stats cards, today's appointments list |
-| Admin — Appointments Management | **Complete** | View all, filter by status, confirm/cancel/complete appointments |
-| Admin — Availability Management | **Complete** | Set working hours per day of week |
-| Admin — Services CRUD | **Complete** | Add, edit, delete services with duration & price |
-| Admin — Products CRUD | **Complete** | Add, edit, delete products with image & price |
-| Admin — Videos CRUD | **Complete** | Add, edit, delete videos with thumbnail & YouTube URL |
-| Video Consultation | **Complete** | Jitsi Meet integration for doctor-patient video calls |
-| WhatsApp Integration | **Complete** | Floating WhatsApp button, product order via WhatsApp, consultation via WhatsApp |
-| Google Maps Embed | **Complete** | Clinic location with interactive map |
+| Feature                                                         | Status       | Details                                                                           |
+| --------------------------------------------------------------- | ------------ | --------------------------------------------------------------------------------- |
+| Landing Page (Hero, About, Services, Products, Videos, Contact) | **Complete** | Fully responsive, modern UI with gradients, glassmorphism, floating cards         |
+| Online Booking System                                           | **Complete** | Service selection, date picker, real-time slot availability, booking confirmation |
+| User Authentication                                             | **Complete** | Sign up, sign in, logout via Supabase Auth with email confirmation                |
+| Role-Based Access                                               | **Complete** | Patient & Doctor roles; admin panel restricted to `doctor` role                   |
+| Admin Dashboard                                                 | **Complete** | Stats cards, today's appointments list                                            |
+| Admin — Appointments Management                                 | **Complete** | View all, filter by status, confirm/cancel/complete appointments                  |
+| Admin — Availability Management                                 | **Complete** | Set working hours per day of week                                                 |
+| Admin — Services CRUD                                           | **Complete** | Add, edit, delete services with duration & price                                  |
+| Admin — Products CRUD                                           | **Complete** | Add, edit, delete products with image & price                                     |
+| Admin — Videos CRUD                                             | **Complete** | Add, edit, delete videos with thumbnail & YouTube URL                             |
+| Video Consultation                                              | **Complete** | Jitsi Meet integration for doctor-patient video calls                             |
+| WhatsApp Integration                                            | **Complete** | Floating WhatsApp button, product order via WhatsApp, consultation via WhatsApp   |
+| Google Maps Embed                                               | **Complete** | Clinic location with interactive map                                              |
 
 ### Issues & Improvements Needed 🔧
 
-| Priority | Issue | Location |
-|---|---|---|
-| **HIGH** | **RLS (Row Level Security) is disabled** — anyone with the anon key can read/write all data. Must be enabled with proper policies before going live. | Supabase dashboard |
-| **MEDIUM** | Meta tags still reference "Lovable App" and "@Lovable" — should be updated to Dr. Naseem Alam branding | `src/routes/__root.tsx` |
-| **MEDIUM** | Social media links in footer (Facebook, Instagram, YouTube, WhatsApp) all point to `#` — no actual URLs set | `src/components/site/SiteFooter.tsx` |
-| **MEDIUM** | Quick Links & Our Services footer columns also point to `#` instead of proper anchor links | `src/components/site/SiteFooter.tsx` |
-| **LOW** | Product carousel left/right arrow buttons have no onClick handler (visual only) | `src/components/site/ConsultationProducts.tsx` |
-| **LOW** | No responsive hamburger menu for mobile nav | `src/components/site/Nav.tsx` |
-| **LOW** | No dedicated "Services" section on the homepage (only Video Consultation + Products) | `src/components/site/ConsultationProducts.tsx` |
-| **LOW** | Profile setup guide notes are mixed with chatbot deployment instructions — should be cleaned up | `profile setup guide.txt` |
+| Priority   | Issue                                                                                                                                                | Location                                       |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| **HIGH**   | **RLS (Row Level Security) is disabled** — anyone with the anon key can read/write all data. Must be enabled with proper policies before going live. | Supabase dashboard                             |
+| **MEDIUM** | Meta tags still reference "Lovable App" and "@Lovable" — should be updated to Dr. Naseem Ahmed Khan branding                                         | `src/routes/__root.tsx`                        |
+| **MEDIUM** | Social media links in footer (Facebook, Instagram, YouTube, WhatsApp) all point to `#` — no actual URLs set                                          | `src/components/site/SiteFooter.tsx`           |
+| **MEDIUM** | Quick Links & Our Services footer columns also point to `#` instead of proper anchor links                                                           | `src/components/site/SiteFooter.tsx`           |
+| **LOW**    | Product carousel left/right arrow buttons have no onClick handler (visual only)                                                                      | `src/components/site/ConsultationProducts.tsx` |
+| **LOW**    | No responsive hamburger menu for mobile nav                                                                                                          | `src/components/site/Nav.tsx`                  |
+| **LOW**    | No dedicated "Services" section on the homepage (only Video Consultation + Products)                                                                 | `src/components/site/ConsultationProducts.tsx` |
+| **LOW**    | Profile setup guide notes are mixed with chatbot deployment instructions — should be cleaned up                                                      | `profile setup guide.txt`                      |
 
 ## Tech Stack
 
@@ -71,7 +71,57 @@ VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-### 3. Create Database Tables
+#### Server-only variable (required for admin/booking writes)
+
+All write operations (admin CRUD, appointment status changes, guest bookings, video
+sessions) run through **TanStack Start server functions** (`src/lib/actions.functions.ts`)
+using a **service-role** Supabase client (`src/lib/server/supabase-admin.ts`). The
+service-role key bypasses RLS, so every server function authorizes the caller itself by
+validating their JWT and checking the profile role.
+
+Set `SUPABASE_SERVICE_ROLE_KEY` in your **server** environment only — never expose it to
+the browser (it is not `VITE_`-prefixed and never bundled client-side):
+
+- **Local dev / Node**: add `SUPABASE_SERVICE_ROLE_KEY=your_service_role_key` to your
+  `.env` file (or export it in your shell).
+- **Cloudflare Workers**: add it as a secret binding:
+  ```bash
+  npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+  ```
+  For local `wrangler dev`, put it in `wrangler.jsonc` `vars` or `--var`.
+
+> ⚠️ Guard this key like a password — it grants full access to your database.
+> Find it in Supabase Dashboard → Settings → API → `service_role` secret.
+
+### 3. Sending the Appointment ID (email + SMS/WhatsApp)
+
+After a guest books, the server sends the Appointment ID to the contact the
+patient provided (email, phone, or both). Delivery is a **real provider call**
+(`src/lib/server/notifications.ts`) — it is never faked. Configure one or more
+of the following server-only env vars to enable a channel; until then the app
+still books and shows the ID, and reports the channel as "not configured".
+
+| Channel  | Provider | Env vars required                                                         |
+| -------- | -------- | ------------------------------------------------------------------------- |
+| Email    | Resend   | `RESEND_API_KEY`, `NOTIFICATION_FROM_EMAIL` (a verified sender on Resend) |
+| SMS      | Twilio   | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_SMS_FROM`              |
+| WhatsApp | Twilio   | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`         |
+
+- Phone bookings prefer WhatsApp when `TWILIO_WHATSAPP_FROM` is set, otherwise
+  they fall back to SMS.
+- `TWILIO_WHATSAPP_FROM` must be a `whatsapp:+…` number (e.g.
+  `whatsapp:+14155238886`) that is verified/approved for the destination country.
+- Add `SITE_URL=https://your-domain.com` so message links point at the real
+  status page (e.g. `/appointment-status`). The same URL is the base for the
+  online video consultation patient join link
+  (`https://your-domain.com/video/VC-XXXXXX`) that is used by both the
+  "video ready" notification and the admin "Copy Link" button — WhatsApp/SMS
+  links are only clickable when `SITE_URL` is set to an absolute public URL.
+
+Set them like `SUPABASE_SERVICE_ROLE_KEY` (`.env` locally, Wrangler secret on
+Cloudflare) — none are `VITE_`-prefixed, so they never reach the browser.
+
+### 4. Create Database Tables
 
 Run the following SQL in your Supabase dashboard → **SQL Editor** to create all required tables:
 
@@ -189,6 +239,36 @@ CREATE POLICY "Doctors can manage availability" ON availability
   FOR ALL USING (auth.jwt() ->> 'role' IN ('doctor', 'admin'));
 ```
 
+### AI Chatbot (floating "Naseem AI Assistant")
+
+The chatbot is a TanStack Start **server function** (`src/lib/chat.functions.ts`)
+that proxies to Google Gemini. It needs two things:
+
+1. **Gemini API key — server-only.** Get one from <https://aistudio.google.com>
+   and add it to your `.env` (Node) or Wrangler secret (Cloudflare) — never to a
+   `VITE_` variable:
+
+   ```env
+   GEMINI_API_KEY=your_gemini_api_key
+   CHATBOT_MODEL=gemini-2.5-flash   # optional override (defaults to a flash model)
+   ```
+
+   The key is read only inside the server handler and is never shipped to the browser.
+
+2. **Usage-tracking table.** Run [`supabase/chat-usage.sql`](./supabase/chat-usage.sql)
+   in the Supabase SQL Editor. It creates the `chat_usage` table (one row per
+   request: success / failed / rate_limited / spam), the `is_admin()` helper,
+   indexes, and an RLS policy so only admins can read the rows.
+
+**Rate limits are enforced server-side** in `src/lib/server/chat-usage.ts`:
+
+- Guests: **10 messages/hour, 50/day**
+- Logged-in users: **20 messages/hour, 100/day**
+
+Every request is recorded in `chat_usage` and surfaced in the admin dashboard
+(**Admin → AI Chatbot Usage**), which shows today/7d/30d/all-time stats, a daily
+breakdown, recent activity, and auto-refreshes every 30 s.
+
 ### 5. Run Locally
 
 ```bash
@@ -200,6 +280,7 @@ Open [http://localhost:5173](http://localhost:5173)
 ### 6. Set Up Your Doctor Account
 
 Follow the detailed instructions in [`USER_GUIDE.md`](./USER_GUIDE.md) (Section 1) to:
+
 1. Sign up as a patient
 2. Run a SQL query in Supabase to promote your account to `doctor`
 3. Log in and access the admin panel at `/admin`
@@ -225,7 +306,7 @@ Or serve the `dist/` folder from any static host (Netlify, Vercel, etc.).
 - [ ] **Set up Supabase tables** — Run the SQL from section 3 above
 - [ ] **Enable RLS** — Run the security policies from section 4
 - [ ] **Create doctor account** — Register and promote to `doctor` role via SQL
-- [ ] **Update branding** — Replace "Lovable" references in `src/routes/__root.tsx` with Dr. Naseem Alam
+- [ ] **Update branding** — Replace "Lovable" references in `src/routes/__root.tsx` with Dr. Naseem Ahmed Khan
 - [ ] **Set up social links** — Add real Facebook, Instagram, YouTube URLs in `src/components/site/SiteFooter.tsx`
 - [ ] **Fix footer anchor links** — Point Quick Links & Services columns to proper section IDs
 - [ ] **Add services section** — Create a dedicated services display on the homepage
@@ -233,6 +314,7 @@ Or serve the `dist/` folder from any static host (Netlify, Vercel, etc.).
 - [ ] **Configure availability** — Set working hours in Admin → Availability
 - [ ] **Add products & videos** — Populate content via admin dashboard
 - [ ] **Clean up** — Remove/ignore `profile setup guide.txt` (developer notes)
+- [ ] **AI Chatbot** — Add `GEMINI_API_KEY` to your server env and run `supabase/chat-usage.sql` (see the AI Chatbot section above)
 - [ ] **Deploy** — Run `npm run build` and deploy to preferred host
 
 ## Full User Guide

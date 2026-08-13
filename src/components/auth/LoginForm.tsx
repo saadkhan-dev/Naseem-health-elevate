@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ interface LoginFormProps {
 
 export function LoginForm({ onSuccess }: LoginFormProps) {
   const { login } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -20,12 +22,15 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const err = await login(email, password);
-    if (err) {
-      setError(err);
+    const result = await login(email, password);
+    if (result.error) {
+      setError(result.error);
       setLoading(false);
     } else {
       onSuccess();
+      if (result.role === "admin" || result.role === "doctor") {
+        navigate({ to: "/admin" });
+      }
     }
   }
 
@@ -33,11 +38,25 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
-        <Input id="email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <Input
+          id="email"
+          type="email"
+          placeholder="you@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">Password</Label>
-        <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <Input
+          id="password"
+          type="password"
+          placeholder="••••••••"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <Button type="submit" className="w-full" disabled={loading}>

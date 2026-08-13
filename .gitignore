@@ -31,3 +31,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.vite
+*.tsbuildinfo
+src_backup/

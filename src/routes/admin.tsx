@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Outlet, Link, useLocation, useRouter, createFileRoute, redirect } from "@tanstack/react-router";
+import { Outlet, Link, useLocation, useRouter, createFileRoute } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   CalendarCheck,
@@ -7,6 +7,10 @@ import {
   Stethoscope,
   Package,
   Video,
+  HeartPulse,
+  Star,
+  Wallet,
+  BadgePercent,
   LogOut,
   ChevronRight,
 } from "lucide-react";
@@ -22,6 +26,10 @@ const navItems = [
   { href: "/admin/appointments", label: "Appointments", Icon: CalendarCheck, exact: false },
   { href: "/admin/availability", label: "Availability", Icon: Clock, exact: false },
   { href: "/admin/services", label: "Services", Icon: Stethoscope, exact: false },
+  { href: "/admin/conditions", label: "Diseases", Icon: HeartPulse, exact: false },
+  { href: "/admin/reviews", label: "Reviews", Icon: Star, exact: false },
+  { href: "/admin/payments", label: "Payments", Icon: Wallet, exact: false },
+  { href: "/admin/offers", label: "Offers", Icon: BadgePercent, exact: false },
   { href: "/admin/products", label: "Products", Icon: Package, exact: false },
   { href: "/admin/videos", label: "Videos", Icon: Video, exact: false },
 ];
@@ -31,13 +39,26 @@ function AdminLayout() {
   const router = useRouter();
   const location = useLocation();
 
-  useEffect(() => {
-    if (!loading && (!user || (profile?.role !== "doctor" && profile?.role !== "admin"))) {
-      router.navigate({ to: "/" });
-    }
-  }, [user, profile, loading, router]);
+  const isAdmin = profile?.role === "admin" || profile?.role === "doctor";
+  const isLoginPage = location.pathname === "/admin/login";
 
-  if (loading || !user || (profile?.role !== "doctor" && profile?.role !== "admin")) {
+  useEffect(() => {
+    if (isLoginPage) {
+      if (!loading && isAdmin) {
+        router.navigate({ to: "/admin" });
+      }
+      return;
+    }
+    if (!loading && !isAdmin) {
+      router.navigate({ to: "/admin/login" });
+    }
+  }, [user, profile, loading, router, isAdmin, isLoginPage]);
+
+  if (isLoginPage) {
+    return <Outlet />;
+  }
+
+  if (loading || !user || !isAdmin) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -53,7 +74,7 @@ function AdminLayout() {
             NA
           </div>
           <div className="leading-tight">
-            <div className="text-sm font-semibold text-foreground">Dr. Naseem Alam</div>
+            <div className="text-sm font-semibold text-foreground">Dr. Naseem Ahmed Khan</div>
             <div className="text-[11px] text-muted-foreground capitalize">{profile.role}</div>
           </div>
         </div>

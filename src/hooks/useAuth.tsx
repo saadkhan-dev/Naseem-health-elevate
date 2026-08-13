@@ -1,15 +1,20 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
-import { signUp, signIn, signOut, getProfile, type Profile } from "@/lib/auth";
+import { signUp, signIn, signOut, getProfile, type Profile, type Role } from "@/lib/auth";
 
 interface AuthState {
   user: User | null;
   profile: Profile | null;
   session: Session | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<string | null>;
-  register: (email: string, password: string, name: string, phone: string) => Promise<string | null>;
+  login: (email: string, password: string) => Promise<{ error: string | null; role: Role | null }>;
+  register: (
+    email: string,
+    password: string,
+    name: string,
+    phone: string,
+  ) => Promise<string | null>;
   logout: () => Promise<void>;
 }
 
@@ -18,7 +23,7 @@ const AuthContext = createContext<AuthState>({
   profile: null,
   session: null,
   loading: true,
-  login: async () => null,
+  login: async () => ({ error: null, role: null }),
   register: async () => null,
   logout: async () => {},
 });
@@ -39,7 +44,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
@@ -54,13 +61,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const result = await signIn(email, password);
-    return result.error;
+    if (result.error || !result.user) {
+      return { error: result.error, role: null };
+    }
+    const p = await getProfile(result.user.id);
+    setProfile(p);
+    return { error: null, role: p?.role ?? "patient" };
   }, []);
 
-  const register = useCallback(async (email: string, password: string, name: string, phone: string) => {
-    const result = await signUp(email, password, name, phone);
-    return result.error;
-  }, []);
+  const register = useCallback(
+    async (email: string, password: string, name: string, phone: string) => {
+      const result = await signUp(email, password, name, phone);
+      return result.error;
+    },
+    [],
+  );
 
   const logout = useCallback(async () => {
     await signOut();

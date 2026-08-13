@@ -1,15 +1,5 @@
-import { useState } from "react";
-import { Phone, Stethoscope, User, LogOut } from "lucide-react";
-import { PHONE, telUrl } from "@/lib/contact";
-import { useAuth } from "@/hooks/useAuth";
-import { AuthModal } from "@/components/auth/AuthModal";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Stethoscope, CalendarCheck, Star } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 
 const links = [
   { href: "#home", label: "Home" },
@@ -21,73 +11,54 @@ const links = [
 ];
 
 export function Nav() {
-  const { user, profile, logout } = useAuth();
-  const [authOpen, setAuthOpen] = useState(false);
-
   return (
-    <>
-      <header className="sticky top-0 z-50 glass border-b border-border/60">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-8 md:py-4">
-          <a href="#home" className="flex items-center gap-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-primary text-primary-foreground shadow-card">
-              <Stethoscope className="h-5 w-5" />
-            </div>
-            <div className="leading-tight">
-              <div className="font-display text-base font-semibold text-foreground">Dr. Naseem Alam</div>
-              <div className="text-[11px] text-muted-foreground">Homeopathic & Physiotherapist</div>
-            </div>
-          </a>
-
-          <nav className="hidden items-center gap-7 lg:flex">
-            {links.map((l) => (
-              <a
-                key={l.href}
-                href={l.href}
-                className="text-sm font-medium text-foreground/75 transition-colors hover:text-primary"
-              >
-                {l.label}
-              </a>
-            ))}
-          </nav>
-
-          <div className="flex items-center gap-3">
-            {user ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20">
-                    <User className="h-5 w-5" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <div className="px-2 py-1.5 text-sm font-medium text-foreground">
-                    {profile?.full_name || user.email}
-                  </div>
-                  <div className="px-2 pb-1.5 text-xs text-muted-foreground capitalize">
-                    {profile?.role || "patient"}
-                  </div>
-                  <DropdownMenuItem onClick={logout}>
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Sign out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : (
-              <Button variant="outline" size="sm" onClick={() => setAuthOpen(true)}>
-                Sign in
-              </Button>
-            )}
-            <a
-              href={telUrl}
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-card transition-transform hover:scale-[1.02]"
-            >
-              <Phone className="h-4 w-4" />
-              <span className="hidden sm:inline">{PHONE}</span>
-              <span className="sm:hidden">Call</span>
-            </a>
+    <header className="sticky top-0 z-50 glass border-b border-border/60">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-8 md:py-4">
+        <a
+          href="#home"
+          className="group flex items-center gap-2.5 transition-transform duration-300 hover:scale-[1.02] active:scale-[0.98]"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-primary text-primary-foreground shadow-card transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105">
+            <Stethoscope className="h-5 w-5" />
           </div>
+          <div className="leading-tight">
+            <div className="font-display text-base font-semibold text-foreground">
+              Dr. Naseem Ahmed Khan
+            </div>
+            <div className="text-[11px] text-muted-foreground">Homeopath & Physiotherapist</div>
+          </div>
+        </a>
+
+        <nav className="hidden items-center gap-7 lg:flex">
+          {links.map((l) => (
+            <a
+              key={l.href}
+              href={l.href}
+              className="relative text-sm font-medium text-foreground/75 transition-all duration-300 after:absolute after:-bottom-1.5 after:left-0 after:h-0.5 after:w-full after:origin-left after:scale-x-0 after:rounded-full after:bg-primary after:transition-transform after:duration-300 hover:text-primary hover:after:scale-x-100 active:scale-[0.97]"
+            >
+              {l.label}
+            </a>
+          ))}
+          <a
+            href="#reviews"
+            className="relative inline-flex items-center gap-1.5 text-sm font-medium text-foreground/75 transition-all duration-300 after:absolute after:-bottom-1.5 after:left-0 after:h-0.5 after:w-full after:origin-left after:scale-x-0 after:rounded-full after:bg-primary after:transition-transform after:duration-300 hover:text-primary hover:after:scale-x-100 active:scale-[0.97]"
+          >
+            <Star className="h-4 w-4" />
+            Reviews
+          </a>
+        </nav>
+
+        <div className="flex items-center">
+          <Link
+            to="/appointment-status"
+            className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:brightness-[1.05] hover:shadow-soft active:scale-95"
+            aria-label="Appointment status"
+          >
+            <CalendarCheck className="h-4 w-4" />
+            <span className="hidden sm:inline">Appointment Status</span>
+          </Link>
         </div>
-      </header>
-      <AuthModal open={authOpen} onOpenChange={setAuthOpen} />
-    </>
+      </div>
+    </header>
   );
 }

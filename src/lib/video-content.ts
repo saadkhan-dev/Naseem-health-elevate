@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { adminCreateVideo, adminUpdateVideo, adminDeleteVideo } from "@/lib/actions.functions";
 
 export interface Video {
   id: string;
@@ -34,9 +35,9 @@ export async function createVideo(data: {
   thumbnail_url?: string;
   video_url?: string;
   duration?: string;
+  is_published?: boolean;
 }) {
-  const { error } = await supabase.from("videos").insert(data);
-  return { error: error?.message ?? null };
+  return adminCreateVideo({ data });
 }
 
 export async function updateVideo(
@@ -50,11 +51,9 @@ export async function updateVideo(
     is_published?: boolean;
   },
 ) {
-  const { error } = await supabase.from("videos").update(data).eq("id", id);
-  return { error: error?.message ?? null };
+  return adminUpdateVideo({ data: { id, data } });
 }
 
 export async function deleteVideo(id: string) {
-  const { error } = await supabase.from("videos").delete().eq("id", id);
-  return { error: error?.message ?? null };
+  return adminDeleteVideo({ data: { id } });
 }
