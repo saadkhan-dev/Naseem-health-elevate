@@ -79,15 +79,25 @@ export function VideoCallRoom({
   const leftReportedRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [connectError, setConnectError] = useState(false);
   const [timeLeft, setTimeLeft] = useState(durationMinutes * 60);
   const [ended, setEnded] = useState(false);
   const [captions, setCaptions] = useState(captionsEnabled);
   const captionsEnabledRef = useRef(captionsEnabled);
   const startTimeRef = useRef(Date.now());
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let disposed = false;
     let fallback: number | undefined;
+    let connectTimeout: number | undefined;
+
+    setLoading(true);
+    setLoadError(false);
+    setConnectError(false);
+    joinedReportedRef.current = false;
+    leftReportedRef.current = false;
+    startTimeRef.current = Date.now();
 
     loadJitsiScript(domain)
       .then(() => {
@@ -152,14 +162,27 @@ export function VideoCallRoom({
 
         api.addListener("videoConferenceJoined", () => {
           setLoading(false);
+          setConnectError(false);
+          if (connectTimeout) window.clearTimeout(connectTimeout);
           if (!joinedReportedRef.current && onConferenceJoined) {
             joinedReportedRef.current = true;
             onConferenceJoined();
           }
         });
 
+        // Jitsi surfaces connection failures through these events — surface them
+        // instead of leaving the user staring at a black room forever.
+        const handleError = () => {
+          setLoading(false);
+          setConnectError(true);
+        };
+        api.addListener("errorOccurred", handleError);
+        api.addListener("conferenceFailed", handleError);
+        api.addListener("connectionFailed", handleError);
+
         const handleLeft = () => {
           setLoading(false);
+          if (connectTimeout) window.clearTimeout(connectTimeout);
           if (!leftReportedRef.current && onConferenceLeft) {
             leftReportedRef.current = true;
             onConferenceLeft();
@@ -170,6 +193,15 @@ export function VideoCallRoom({
 
         // Fallback so the spinner never hangs if no conference event fires.
         fallback = window.setTimeout(() => setLoading(false), 8000);
+
+        // Give the meeting time to establish; if nothing joins within 45s show a
+        // visible error + Retry instead of a silent black room.
+        connectTimeout = window.setTimeout(() => {
+          if (!joinedReportedRef.current) {
+            setLoading(false);
+            setConnectError(true);
+          }
+        }, 45000);
       })
       .catch(() => {
         if (!disposed) setLoadError(true);
@@ -178,10 +210,11 @@ export function VideoCallRoom({
     return () => {
       disposed = true;
       if (fallback) window.clearTimeout(fallback);
+      if (connectTimeout) window.clearTimeout(connectTimeout);
       apiRef.current?.dispose();
       apiRef.current = null;
     };
-  }, [domain, roomName, userName, onConferenceJoined, onConferenceLeft]);
+  }, [domain, roomName, userName, onConferenceJoined, onConferenceLeft, retryKey]);
 
   useEffect(() => {
     if (ended) return;
@@ -234,7 +267,7 @@ export function VideoCallRoom({
 
   return (
     <div className="relative flex h-full flex-col">
-      {loading && !loadError && (
+      {loading && !loadError && !connectError && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-background">
           <div className="text-center">
             <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
@@ -254,9 +287,35 @@ export function VideoCallRoom({
               The video call provider could not be loaded. Please check your internet connection and
               try again.
             </p>
-            <Button className="mt-6" onClick={handleLeave}>
-              Go Back
-            </Button>
+            <div className="mt-6 flex justify-center gap-3">
+              <Button onClick={() => setRetryKey((k) => k + 1)} className="gap-1.5">
+                <Loader2 className="h-4 w-4" /> Try Again
+              </Button>
+              <Button variant="outline" onClick={handleLeave}>
+                Go Back
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {connectError && !loadError && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background p-8 text-center">
+          <div className="max-w-sm">
+            <AlertTriangle className="mx-auto h-8 w-8 text-red-600" />
+            <h2 className="mt-4 text-xl font-semibold text-foreground">Connection issue</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              We could not connect you to the video call. Your internet connection or the video
+              provider may be having problems.
+            </p>
+            <div className="mt-6 flex justify-center gap-3">
+              <Button onClick={() => setRetryKey((k) => k + 1)} className="gap-1.5">
+                <Loader2 className="h-4 w-4" /> Try Again
+              </Button>
+              <Button variant="outline" onClick={handleLeave}>
+                Go Back
+              </Button>
+            </div>
           </div>
         </div>
       )}

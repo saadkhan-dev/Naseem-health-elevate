@@ -10,7 +10,10 @@ import {
   updateMyProfile,
   getMyDocuments,
   deleteMyDocument,
+  shareMyDocument,
   getMyOrders,
+  getMyOrderDetail,
+  submitOrderRequest,
   type PatientAppointment,
   type PatientNotification,
   type PatientDocument,
@@ -121,6 +124,14 @@ export function useDeleteMyDocument() {
   });
 }
 
+export function useShareMyDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => shareMyDocument(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["patient", "documents"] }),
+  });
+}
+
 // --- Orders ---
 
 export function useMyOrders(enabled = true) {
@@ -128,5 +139,25 @@ export function useMyOrders(enabled = true) {
     queryKey: ["patient", "orders"],
     queryFn: getMyOrders,
     enabled,
+  });
+}
+
+export function useMyOrderDetail(orderId: string | null) {
+  return useQuery<{ error: string | null; order: PatientOrder | null }>({
+    queryKey: ["patient", "order", orderId],
+    queryFn: () => getMyOrderDetail(orderId!),
+    enabled: !!orderId,
+  });
+}
+
+export function useSubmitOrderRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { orderId: string; kind: "query" | "cancel" | "return"; message: string }) =>
+      submitOrderRequest(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["patient", "orders"] });
+      qc.invalidateQueries({ queryKey: ["patient", "order"] });
+    },
   });
 }

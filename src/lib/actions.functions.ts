@@ -1800,6 +1800,36 @@ export const patientDeleteDocument = createServerFn({ method: "POST" })
     return { error: error?.message ?? null };
   });
 
+/**
+ * Send a document to the doctor for review. Guarded so an already-sent
+ * document cannot be sent a second time (prevents accidental duplicate sends).
+ */
+export const patientShareDocument = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator(z.object({ id: uuidSchema }))
+  .handler(async ({ data, context }) => {
+    const admin = getSupabaseAdmin();
+    const { data: doc } = await admin
+      .from("documents")
+      .select("id, patient_id, shared_with_doctor, status")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!doc) return { error: "Document not found." };
+    if (doc.patient_id !== context.patientId) return { error: "Forbidden" };
+    if (doc.shared_with_doctor === true) {
+      return { error: "This document has already been sent to the doctor." };
+    }
+    const { error } = await admin
+      .from("documents")
+      .update({
+        shared_with_doctor: true,
+        shared_at: new Date().toISOString(),
+        status: "sent_to_doctor",
+      })
+      .eq("id", data.id);
+    return { error: error?.message ?? null };
+  });
+
 // ---------------------------------------------------------------------------
 // Public — reviews (moderated submission)
 // ---------------------------------------------------------------------------
@@ -1954,10 +1984,87 @@ export const patientGetMyOrders = createServerFn({ method: "POST" })
     const admin = getSupabaseAdmin();
     const { data, error } = await admin
       .from("orders")
-      .select("*, order_items:order_items (product_name, price, quantity)")
+      .select(
+        "*, order_items:order_items (product_id, product_name, price, quantity), status_history:order_status_history (id, status, note, created_at), requests:order_requests (id, kind, message, status, admin_notes, created_at, resolved_at)",
+      )
       .eq("patient_id", context.patientId)
       .order("created_at", { ascending: false });
     return { error: error?.message ?? null, orders: data ?? [] };
+  });
+
+/**
+ * Order detail for the patient — the order plus its items, status timeline and
+ * any requests the patient already raised. Ownership is enforced server-side.
+ */
+export const patientGetOrderDetail = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator(z.object({ id: uuidSchema }))
+  .handler(async ({ data, context }) => {
+    const admin = getSupabaseAdmin();
+    const { data: order, error } = await admin
+      .from("orders")
+      .select(
+        "*, order_items:order_items (product_id, product_name, price, quantity), status_history:order_status_history (id, status, note, created_at), requests:order_requests (id, kind, message, status, admin_notes, created_at, resolved_at)",
+      )
+      .eq("id", data.id)
+      .maybeSingle();
+    if (error) return { error: error.message, order: null };
+    if (!order) return { error: "Order not found.", order: null };
+    if (order.patient_id !== context.patientId) return { error: "Forbidden", order: null };
+    return { error: null, order };
+  });
+
+/**
+ * Patient raises a query, cancellation or return request against one of their
+ * orders. Cancellation/return is a REQUEST — the order is never deleted and its
+ * current status is respected (no cancel after shipping, no return before
+ * delivery).
+ */
+export const patientSubmitOrderRequest = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator(
+    z.object({
+      orderId: uuidSchema,
+      kind: z.enum(["query", "cancel", "return"]),
+      message: z
+        .string()
+        .trim()
+        .min(5, "Please describe your request (at least 5 characters)")
+        .max(2000),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const admin = getSupabaseAdmin();
+    const { data: order } = await admin
+      .from("orders")
+      .select("patient_id, status")
+      .eq("id", data.orderId)
+      .maybeSingle();
+    if (!order) return { error: "Order not found." };
+    if (order.patient_id !== context.patientId) return { error: "Forbidden" };
+
+    if (data.kind === "cancel") {
+      if (order.status !== "placed" && order.status !== "processing") {
+        return {
+          error:
+            "This order can no longer be cancelled online (it is already shipped or delivered). Please contact the clinic.",
+        };
+      }
+    }
+    if (data.kind === "return") {
+      if (order.status !== "delivered") {
+        return { error: "A return can only be requested after the order is delivered." };
+      }
+    }
+
+    const { error } = await admin.from("order_requests").insert({
+      order_id: data.orderId,
+      patient_id: context.patientId,
+      kind: data.kind,
+      message: data.message,
+      status: "new",
+    });
+    return { error: error?.message ?? null };
   });
 
 // ---------------------------------------------------------------------------
@@ -2177,6 +2284,27 @@ export const adminGetDocuments = createServerFn({ method: "GET" })
     return { error: error?.message ?? null, documents: data ?? [] };
   });
 
+/** Mark a shared document as received after the doctor opens/downloads it. */
+export const adminMarkDocumentReceived = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(z.object({ id: uuidSchema }))
+  .handler(async ({ data }) => {
+    const admin = getSupabaseAdmin();
+    const { data: doc } = await admin
+      .from("documents")
+      .select("id, shared_with_doctor")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!doc) return { error: "Document not found." };
+    if (doc.shared_with_doctor !== true)
+      return { error: "This document was not shared with the doctor." };
+    const { error } = await admin
+      .from("documents")
+      .update({ status: "received" })
+      .eq("id", data.id);
+    return { error: error?.message ?? null };
+  });
+
 // ---------------------------------------------------------------------------
 // Admin — orders
 // ---------------------------------------------------------------------------
@@ -2200,14 +2328,103 @@ export const adminUpdateOrderStatus = createServerFn({ method: "POST" })
     z.object({
       id: uuidSchema,
       status: z.enum(["placed", "processing", "shipped", "delivered", "cancelled"]),
+      note: z.string().trim().max(1000).optional().default(""),
     }),
   )
   .handler(async ({ data }) => {
-    const { error } = await getSupabaseAdmin()
+    const admin = getSupabaseAdmin();
+    const { data: order } = await admin
       .from("orders")
-      .update({ status: data.status })
+      .select("id, patient_id, status")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!order) return { error: "Order not found." };
+    if (order.status === data.status) {
+      return { error: `Order is already ${data.status}.` };
+    }
+
+    const { error } = await admin.from("orders").update({ status: data.status }).eq("id", data.id);
+    if (error) return { error: error.message };
+
+    // Immutable timeline entry for the patient's "My Orders" detail view.
+    await admin.from("order_status_history").insert({
+      order_id: data.id,
+      status: data.status,
+      note: data.note || null,
+    });
+
+    // Notify the patient (best-effort; the notification helper never throws).
+    if (order.patient_id) {
+      const statusLabel = data.status.charAt(0).toUpperCase() + data.status.slice(1);
+      await createPatientNotification(admin, {
+        userId: order.patient_id,
+        type: "order",
+        title: `Order ${data.status}`,
+        body: `Your order status changed to ${statusLabel}.`,
+        link: "/patient/orders",
+      });
+    }
+    return { error: null };
+  });
+
+/** Admin/doctor — list patient order requests (queries, cancels, returns). */
+export const adminGetOrderRequests = createServerFn({ method: "GET" })
+  .middleware([adminMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async () => {
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin
+      .from("order_requests")
+      .select(
+        "*, order:orders!inner (order_no, status, total_amount, created_at), patient:profiles!patient_id (full_name, phone)",
+      )
+      .order("created_at", { ascending: false })
+      .limit(500);
+    return { error: error?.message ?? null, requests: data ?? [] };
+  });
+
+/** Admin/doctor — respond to a patient order request. */
+export const adminUpdateOrderRequest = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(
+    z.object({
+      id: uuidSchema,
+      status: z.enum(["new", "in_progress", "resolved", "closed"]),
+      adminNotes: z.string().trim().max(1000).optional().default(""),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const admin = getSupabaseAdmin();
+    const { data: req } = await admin
+      .from("order_requests")
+      .select("id, patient_id, kind")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!req) return { error: "Request not found." };
+
+    const { error } = await admin
+      .from("order_requests")
+      .update({
+        status: data.status,
+        admin_notes: data.adminNotes || null,
+        resolved_at:
+          data.status === "resolved" || data.status === "closed" ? new Date().toISOString() : null,
+      })
       .eq("id", data.id);
-    return { error: error?.message ?? null };
+    if (error) return { error: error.message };
+
+    if (req.patient_id) {
+      const kindLabel =
+        req.kind === "query" ? "Query" : req.kind === "cancel" ? "Cancellation" : "Return";
+      await createPatientNotification(admin, {
+        userId: req.patient_id,
+        type: "order",
+        title: `${kindLabel} request ${data.status}`,
+        body: data.adminNotes || `Your ${kindLabel.toLowerCase()} request is now ${data.status}.`,
+        link: "/patient/orders",
+      });
+    }
+    return { error: null };
   });
 
 // ---------------------------------------------------------------------------

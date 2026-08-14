@@ -9,6 +9,8 @@ import {
   ArrowRight,
   Upload,
   ImageIcon,
+  Camera,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,8 +82,10 @@ export function VideoPaymentStep({
   const [upPhone, setUpPhone] = React.useState(phone ?? "");
   const [upEmail, setUpEmail] = React.useState(email ?? "");
   const [upFile, setUpFile] = React.useState<File>();
+  const [upPreview, setUpPreview] = React.useState<string>();
   const [upError, setUpError] = React.useState("");
   const fileRef = React.useRef<HTMLInputElement>(null);
+  const cameraRef = React.useRef<HTMLInputElement>(null);
 
   const selectedMethod = methods?.find((m) => m.id === methodId);
 
@@ -128,7 +132,17 @@ export function VideoPaymentStep({
       return;
     }
     setUpFile(f);
+    setUpPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(f);
+    });
   }
+
+  React.useEffect(() => {
+    return () => {
+      if (upPreview) URL.revokeObjectURL(upPreview);
+    };
+  }, [upPreview]);
 
   function readFileAsBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -541,25 +555,83 @@ export function VideoPaymentStep({
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) pickReceiptFile(f);
+                  e.target.value = "";
                 }}
               />
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="flex w-full items-center gap-3 rounded-xl border border-dashed border-border bg-background px-4 py-4 text-left transition-colors hover:border-primary/40"
-              >
-                {upFile ? (
-                  <ImageIcon className="h-5 w-5 shrink-0 text-primary" />
-                ) : (
-                  <Upload className="h-5 w-5 shrink-0 text-muted-foreground" />
-                )}
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-foreground">
-                    {upFile ? upFile.name : "Choose a receipt screenshot"}
+              <input
+                ref={cameraRef}
+                type="file"
+                accept="image/jpeg,image/jpg,image/png"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) pickReceiptFile(f);
+                  e.target.value = "";
+                }}
+              />
+
+              {upPreview ? (
+                <div className="overflow-hidden rounded-xl border border-border bg-background">
+                  <div className="relative">
+                    <img
+                      src={upPreview}
+                      alt="Receipt preview"
+                      className="max-h-56 w-full object-contain"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUpFile(undefined);
+                        setUpPreview(undefined);
+                        setUpError("");
+                      }}
+                      aria-label="Remove receipt"
+                      className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-background/90 text-muted-foreground shadow-sm transition hover:text-destructive"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
-                  <div className="text-xs text-muted-foreground">JPG / JPEG / PNG · max 5 MB</div>
+                  <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-2.5">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-foreground">
+                        {upFile?.name}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {upFile ? `${(upFile.size / (1024 * 1024)).toFixed(1)} MB` : ""}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => fileRef.current?.click()}
+                      className="text-sm font-medium text-primary hover:underline"
+                    >
+                      Change
+                    </button>
+                  </div>
                 </div>
-              </button>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => cameraRef.current?.click()}
+                    className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-border bg-background px-4 py-4 text-left transition-colors hover:border-primary/40"
+                  >
+                    <Camera className="h-5 w-5 shrink-0 text-muted-foreground" />
+                    <span className="text-sm font-medium text-foreground">Take Photo</span>
+                    <span className="text-[11px] text-muted-foreground">Use the camera</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-border bg-background px-4 py-4 text-left transition-colors hover:border-primary/40"
+                  >
+                    <ImageIcon className="h-5 w-5 shrink-0 text-muted-foreground" />
+                    <span className="text-sm font-medium text-foreground">Choose from Gallery</span>
+                    <span className="text-[11px] text-muted-foreground">JPG / PNG · max 5 MB</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {upError && <p className="text-sm font-medium text-destructive">{upError}</p>}
@@ -579,6 +651,12 @@ export function VideoPaymentStep({
                 </>
               )}
             </Button>
+
+            {submitReceipt.isPending && (
+              <p className="text-center text-xs text-muted-foreground">
+                Uploading your receipt, please keep this screen open…
+              </p>
+            )}
 
             <button
               type="button"

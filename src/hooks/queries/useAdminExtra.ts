@@ -9,8 +9,11 @@ import {
   getDoctorProfileAdmin,
   updateDoctorProfileAdmin,
   getDocumentsAdmin,
+  markDocumentReceivedAdmin,
   getOrdersAdmin,
   updateOrderStatusAdmin,
+  getOrderRequestsAdmin,
+  updateOrderRequestAdmin,
   getRemindersAdmin,
   createReminderAdmin,
   cancelReminderAdmin,
@@ -21,6 +24,7 @@ import {
   type SupportMessage,
   type AdminDocument,
   type AdminOrder,
+  type AdminOrderRequest,
   type AdminReminder,
   type AnalyticsStats,
 } from "@/lib/admin-extra";
@@ -121,6 +125,14 @@ export function useAdminDocuments() {
   });
 }
 
+export function useMarkDocumentReceived() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => markDocumentReceivedAdmin(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "documents"] }),
+  });
+}
+
 // --- Orders ---
 
 export function useAdminOrders() {
@@ -136,6 +148,34 @@ export function useUpdateOrderStatus() {
     mutationFn: ({ id, status }: { id: string; status: AdminOrder["status"] }) =>
       updateOrderStatusAdmin(id, status),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "orders"] }),
+  });
+}
+
+// --- Order requests (patient queries / cancels / returns) ---
+
+export function useAdminOrderRequests() {
+  return useQuery<AdminOrderRequest[]>({
+    queryKey: ["admin", "orderRequests"],
+    queryFn: getOrderRequestsAdmin,
+  });
+}
+
+export function useUpdateOrderRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      status,
+      adminNotes,
+    }: {
+      id: string;
+      status: AdminOrderRequest["status"];
+      adminNotes?: string;
+    }) => updateOrderRequestAdmin(id, { status, adminNotes }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "orderRequests"] });
+      qc.invalidateQueries({ queryKey: ["admin", "orders"] });
+    },
   });
 }
 

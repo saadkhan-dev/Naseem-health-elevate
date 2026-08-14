@@ -9,7 +9,10 @@ import {
   patientUpdateProfile,
   patientGetMyDocuments,
   patientDeleteDocument,
+  patientShareDocument,
   patientGetMyOrders,
+  patientGetOrderDetail,
+  patientSubmitOrderRequest,
   type PatientAppointment,
 } from "@/lib/actions.functions";
 
@@ -26,6 +29,8 @@ export interface PatientNotification {
   created_at: string;
 }
 
+export type PatientDocumentStatus = "available" | "sent_to_doctor" | "received";
+
 export interface PatientDocument {
   id: string;
   patient_id: string;
@@ -35,12 +40,33 @@ export interface PatientDocument {
   file_type: string;
   file_size: number;
   created_at: string;
+  shared_with_doctor: boolean;
+  shared_at: string | null;
+  status: PatientDocumentStatus;
 }
 
 export interface PatientOrderItem {
+  product_id?: string | null;
   product_name: string;
   price: number;
   quantity: number;
+}
+
+export interface PatientOrderStatusHistory {
+  id: string;
+  status: string;
+  note: string | null;
+  created_at: string;
+}
+
+export interface PatientOrderRequest {
+  id: string;
+  kind: "query" | "cancel" | "return";
+  message: string;
+  status: "new" | "in_progress" | "resolved" | "closed";
+  admin_notes: string | null;
+  created_at: string;
+  resolved_at: string | null;
 }
 
 export interface PatientOrder {
@@ -55,6 +81,8 @@ export interface PatientOrder {
   notes: string | null;
   created_at: string;
   order_items: PatientOrderItem[];
+  status_history?: PatientOrderStatusHistory[];
+  requests?: PatientOrderRequest[];
 }
 
 export async function getMyAppointments(): Promise<PatientAppointment[]> {
@@ -116,7 +144,25 @@ export async function deleteMyDocument(id: string): Promise<{ error: string | nu
   return patientDeleteDocument({ data: { id } });
 }
 
+export async function shareMyDocument(id: string): Promise<{ error: string | null }> {
+  return patientShareDocument({ data: { id } });
+}
+
 export async function getMyOrders(): Promise<PatientOrder[]> {
   const result = await patientGetMyOrders({ data: undefined });
   return (result.orders ?? []) as PatientOrder[];
+}
+
+export async function getMyOrderDetail(
+  id: string,
+): Promise<{ error: string | null; order: PatientOrder | null }> {
+  return patientGetOrderDetail({ data: { id } });
+}
+
+export async function submitOrderRequest(data: {
+  orderId: string;
+  kind: "query" | "cancel" | "return";
+  message: string;
+}): Promise<{ error: string | null }> {
+  return patientSubmitOrderRequest({ data });
 }

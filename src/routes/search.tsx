@@ -9,11 +9,10 @@ import { useSearch } from "@/hooks/queries/useSiteExtra";
 export const Route = createFileRoute("/search")({
   head: () => ({
     meta: [
-      { title: "Search — Dr. Naseem Ahmed Khan" },
+      { title: "Search Products — Dr. Naseem Ahmed Khan" },
       {
         name: "description",
-        content:
-          "Search services, conditions, videos, products and FAQs on Dr. Naseem Ahmed Khan's website.",
+        content: "Search the products available at Dr. Naseem Ahmed Khan's clinic.",
       },
     ],
   }),
@@ -31,9 +30,9 @@ function SearchPage() {
       <Nav />
       <main className="px-4 py-12 md:px-8">
         <div className="mx-auto max-w-3xl">
-          <h1 className="font-display text-3xl font-bold text-foreground">Search</h1>
+          <h1 className="font-display text-3xl font-bold text-foreground">Search our products</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Find services, conditions, videos, products and answers
+            Find a product available at the clinic
           </p>
 
           <div className="relative mt-6">
@@ -42,7 +41,7 @@ function SearchPage() {
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search… e.g. back pain, homeopathy, video consultation"
+              placeholder="Search our products… e.g. medicine, supplement"
               className="h-12 rounded-2xl pl-12 pr-10"
             />
             {isFetching && searching && (
@@ -53,7 +52,7 @@ function SearchPage() {
           <div className="mt-8 space-y-6">
             {!searching ? (
               <p className="p-8 text-center text-sm text-muted-foreground">
-                Type at least 2 characters to search the site.
+                Type at least 2 characters to search our products.
               </p>
             ) : isFetching && !groups ? (
               <div className="flex justify-center p-10">
@@ -71,7 +70,7 @@ function SearchPage() {
               <div className="flex flex-col items-center gap-3 p-12 text-center">
                 <SearchX className="h-10 w-10 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
-                  No results for "{query}". Try different keywords.
+                  No products found for "{query}". Try different keywords.
                 </p>
               </div>
             ) : (

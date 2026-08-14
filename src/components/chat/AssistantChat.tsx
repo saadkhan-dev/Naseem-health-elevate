@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Bot, Loader2, Send, Sparkles, X } from "lucide-react";
 import { chatWithAssistant, type ChatTurn } from "@/lib/chat.functions";
 import { cn } from "@/lib/utils";
+import { useFooterClearance } from "@/hooks/useFooterClearance";
 
 const WELCOME_MESSAGE =
   "Hello! I'm the Naseem AI Assistant. I can help you book an appointment, explore our services, or answer questions about the clinic. How can I help today?";
@@ -44,6 +45,10 @@ function getGuestId(): string {
 export function AssistantChat() {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const { clearance, hidden } = useFooterClearance();
+  const buttonBottom = `calc(${clearance}px + 6rem)`;
+  const chatBottom = `calc(${clearance}px + 6rem)`;
+  const chatMaxHeight = `max(280px, calc(100dvh - ${11}rem - ${clearance}px))`;
   const [messages, setMessages] = useState<ChatTurn[]>([
     { role: "assistant", content: WELCOME_MESSAGE },
   ]);
@@ -142,10 +147,13 @@ export function AssistantChat() {
         type="button"
         onClick={openChat}
         aria-label="Chat with Naseem AI Assistant"
+        data-floating-control="true"
         className={cn(
-          "group fixed bottom-24 right-5 z-50 flex items-center gap-3 rounded-full bg-gradient-primary py-2 pl-2 pr-5 text-primary-foreground shadow-soft transition-all duration-300 hover:-translate-y-1 hover:shadow-glass active:scale-95",
+          "group fixed right-5 z-50 flex items-center gap-3 rounded-full bg-gradient-primary py-2 pl-2 pr-5 text-primary-foreground shadow-soft transition-[transform,box-shadow,opacity] duration-300 hover:-translate-y-1 hover:shadow-glass active:scale-95",
           mounted && "pointer-events-none opacity-0",
+          hidden && "pointer-events-none opacity-0",
         )}
+        style={{ bottom: buttonBottom }}
       >
         <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20 shadow-inner transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105">
           <Bot className="h-5 w-5" />
@@ -163,11 +171,13 @@ export function AssistantChat() {
           role="dialog"
           aria-label="Naseem AI Assistant"
           className={cn(
-            "fixed bottom-24 right-4 left-4 z-50 flex h-[min(80dvh,680px)] max-h-[calc(100dvh_-_11rem)] flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-soft transition-all duration-300 ease-out sm:right-5 sm:left-auto sm:w-[450px] sm:max-w-[calc(100vw_-_2.5rem)] lg:w-[480px]",
+            "fixed right-4 left-4 z-50 flex h-[min(80dvh,680px)] flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-soft transition-[transform,opacity] duration-300 ease-out sm:right-5 sm:left-auto sm:w-[450px] sm:max-w-[calc(100vw_-_2.5rem)] lg:w-[480px]",
             open
               ? "translate-y-0 scale-100 opacity-100"
               : "pointer-events-none translate-y-4 scale-[0.97] opacity-0",
           )}
+          style={{ bottom: chatBottom, maxHeight: chatMaxHeight }}
+          data-floating-control="true"
         >
           {/* Header */}
           <div className="flex items-center gap-3 bg-gradient-primary px-4 py-3.5 text-primary-foreground">

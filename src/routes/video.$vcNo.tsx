@@ -1,12 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { useVideoJoin, useUpdateVideoStatus } from "@/hooks/queries/useVideo";
 import { VideoCallRoom } from "@/components/video/VideoCallRoom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Video, Clock, ShieldAlert } from "lucide-react";
+import { Loader2, Video, Clock, ShieldAlert, AlertTriangle } from "lucide-react";
 import { formatTimeDisplay } from "@/lib/bookings";
+
+/** If the join lookup hangs for this long, stop the spinner and offer a retry. */
+const JOIN_TIMEOUT_MS = 20000;
 
 export const Route = createFileRoute("/video/$vcNo")({
   validateSearch: z.object({
@@ -20,10 +23,18 @@ function VideoCallPage() {
   const { vcNo } = Route.useParams();
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const { data: join, isLoading } = useVideoJoin(vcNo);
+  const { data: join, isLoading, refetch } = useVideoJoin(vcNo);
   const updateStatus = useUpdateVideoStatus();
   const [userName, setUserName] = useState("");
   const [joined, setJoined] = useState(false);
+  const [joinTimedOut, setJoinTimedOut] = useState(false);
+
+  useEffect(() => {
+    if (!isLoading || joinTimedOut) return;
+    setJoinTimedOut(false);
+    const t = window.setTimeout(() => setJoinTimedOut(true), JOIN_TIMEOUT_MS);
+    return () => window.clearTimeout(t);
+  }, [isLoading, joinTimedOut]);
 
   const isDoctor = search.as === "doctor";
   const session = join?.session;
@@ -55,8 +66,35 @@ function VideoCallPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex min-h-screen items-center justify-center px-4">
+        {joinTimedOut ? (
+          <div className="max-w-md text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
+              <AlertTriangle className="h-8 w-8 text-red-600" />
+            </div>
+            <h2 className="mt-4 text-xl font-semibold text-foreground">Still connecting</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              The video session is taking longer than expected to load. Please check your internet
+              connection and try again.
+            </p>
+            <div className="mt-6 flex justify-center gap-3">
+              <Button
+                onClick={() => {
+                  setJoinTimedOut(false);
+                  refetch();
+                }}
+                className="gap-1.5"
+              >
+                <Loader2 className="h-4 w-4" /> Try Again
+              </Button>
+              <Button variant="outline" onClick={goHome}>
+                Go Home
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        )}
       </div>
     );
   }

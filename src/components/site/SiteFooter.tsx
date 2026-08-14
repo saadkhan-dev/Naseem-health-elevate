@@ -2,8 +2,11 @@ import { Facebook, Instagram, MessageCircle, Phone, Mail, MapPin, Stethoscope } 
 import { Link } from "@tanstack/react-router";
 import { PHONE, EMAIL, telUrl, whatsappUrl } from "@/lib/contact";
 import { SectionLink } from "@/components/site/SectionLink";
+import { useFooterClearance } from "@/hooks/useFooterClearance";
 
 export function SiteFooter() {
+  const { clearance, hidden } = useFooterClearance();
+  const whatsappBottom = `calc(${clearance}px + 1.25rem)`;
   return (
     <footer className="bg-[color:var(--footer)] text-[color:var(--footer-foreground)]">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 md:grid-cols-2 md:px-8 lg:grid-cols-5">
@@ -130,7 +133,11 @@ export function SiteFooter() {
         target="_blank"
         rel="noreferrer"
         aria-label="Chat on WhatsApp"
-        className="group fixed bottom-5 right-5 z-50 flex items-center gap-3 rounded-full bg-[color:var(--whatsapp)] py-2 pl-2 pr-5 text-white shadow-soft transition-all duration-300 hover:-translate-y-1 hover:shadow-glass active:scale-95"
+        data-floating-control="true"
+        className={`group fixed right-5 z-50 flex items-center gap-3 rounded-full bg-[color:var(--whatsapp)] py-2 pl-2 pr-5 text-white shadow-soft transition-[transform,box-shadow,opacity] duration-300 hover:-translate-y-1 hover:shadow-glass active:scale-95 ${
+          hidden ? "pointer-events-none opacity-0" : ""
+        }`}
+        style={{ bottom: whatsappBottom }}
       >
         <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20 shadow-inner transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105">
           <MessageCircle className="h-5 w-5" />

@@ -1,11 +1,26 @@
 import { useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, Upload, FileText, Trash2, Download, FolderOpen } from "lucide-react";
+import {
+  Loader2,
+  Upload,
+  FileText,
+  Trash2,
+  Download,
+  FolderOpen,
+  Send,
+  CheckCircle2,
+  Clock,
+} from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useMyDocuments, useDeleteMyDocument } from "@/hooks/queries/usePatient";
+import {
+  useMyDocuments,
+  useDeleteMyDocument,
+  useShareMyDocument,
+} from "@/hooks/queries/usePatient";
+import type { PatientDocumentStatus } from "@/lib/patient-data";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { QueryError } from "@/components/admin/QueryError";
@@ -19,6 +34,7 @@ function PatientDocuments() {
   const qc = useQueryClient();
   const { data: documents, isLoading, isError, error } = useMyDocuments();
   const deleteDoc = useDeleteMyDocument();
+  const shareDoc = useShareMyDocument();
   const fileRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -87,6 +103,16 @@ function PatientDocuments() {
     const result = await deleteDoc.mutateAsync(docId);
     if (result?.error) {
       setMessage({ text: result.error, kind: "error" });
+    }
+  }
+
+  async function handleShare(docId: string) {
+    setMessage(null);
+    const result = await shareDoc.mutateAsync(docId);
+    if (result?.error) {
+      setMessage({ text: result.error, kind: "error" });
+    } else {
+      setMessage({ text: "Document sent to Dr. Naseem for review.", kind: "success" });
     }
   }
 
@@ -167,14 +193,36 @@ function PatientDocuments() {
                   <FileText className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-foreground">{doc.title}</div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-sm font-semibold text-foreground">
+                      {doc.title}
+                    </span>
+                    <DocumentStatusBadge status={doc.status} />
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     {doc.file_name} · {(doc.file_size / 1024).toFixed(0)} KB ·{" "}
                     {format(new Date(doc.created_at), "MMM d, yyyy")}
+                    {doc.shared_at && ` · Sent ${format(new Date(doc.shared_at), "MMM d, yyyy")}`}
                   </div>
                 </div>
               </div>
-              <div className="flex gap-1">
+              <div className="flex flex-wrap gap-1">
+                {doc.status === "available" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 text-primary"
+                    disabled={shareDoc.isPending}
+                    onClick={() => handleShare(doc.id)}
+                  >
+                    {shareDoc.isPending ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Send className="h-3.5 w-3.5" />
+                    )}
+                    Send to Doctor
+                  </Button>
+                )}
                 <Button size="sm" variant="outline" onClick={() => handleDownload(doc)}>
                   <Download className="h-3.5 w-3.5" /> Download
                 </Button>
@@ -182,7 +230,7 @@ function PatientDocuments() {
                   size="sm"
                   variant="outline"
                   className="text-red-600"
-                  disabled={deleteDoc.isPending}
+                  disabled={deleteDoc.isPending || doc.status !== "available"}
                   onClick={() => handleDelete(doc.id)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -193,5 +241,34 @@ function PatientDocuments() {
         )}
       </div>
     </div>
+  );
+}
+
+function DocumentStatusBadge({ status }: { status: PatientDocumentStatus }) {
+  const config: Record<
+    PatientDocumentStatus,
+    { label: string; className: string; icon: "check" | "clock" | "send" }
+  > = {
+    available: { label: "Not sent", className: "bg-muted text-muted-foreground", icon: "clock" },
+    sent_to_doctor: {
+      label: "Sent to Doctor",
+      className: "bg-primary/10 text-primary",
+      icon: "send",
+    },
+    received: {
+      label: "Received",
+      className: "bg-emerald-100 text-emerald-700",
+      icon: "check",
+    },
+  };
+  const c = config[status] ?? config.available;
+  const Icon = c.icon === "check" ? CheckCircle2 : c.icon === "send" ? Send : Clock;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${c.className}`}
+    >
+      <Icon className="h-3 w-3" />
+      {c.label}
+    </span>
   );
 }

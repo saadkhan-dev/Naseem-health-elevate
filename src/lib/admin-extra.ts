@@ -8,8 +8,11 @@ import {
   adminGetDoctorProfile,
   adminUpdateDoctorProfile,
   adminGetDocuments,
+  adminMarkDocumentReceived,
   adminGetOrders,
   adminUpdateOrderStatus,
+  adminGetOrderRequests,
+  adminUpdateOrderRequest,
   adminGetReminders,
   adminCreateReminder,
   adminCancelReminder,
@@ -43,6 +46,9 @@ export interface AdminDocument {
   file_type: string;
   file_size: number;
   created_at: string;
+  shared_with_doctor: boolean;
+  shared_at: string | null;
+  status: "available" | "sent_to_doctor" | "received";
   profiles?: { full_name: string | null } | null;
 }
 
@@ -58,7 +64,31 @@ export interface AdminOrder {
   status: "placed" | "processing" | "shipped" | "delivered" | "cancelled";
   notes: string | null;
   created_at: string;
-  order_items: Array<{ product_name: string; price: number; quantity: number }>;
+  order_items: Array<{
+    product_id?: string | null;
+    product_name: string;
+    price: number;
+    quantity: number;
+  }>;
+}
+
+export interface AdminOrderRequest {
+  id: string;
+  order_id: string;
+  patient_id: string | null;
+  kind: "query" | "cancel" | "return";
+  message: string;
+  status: "new" | "in_progress" | "resolved" | "closed";
+  admin_notes: string | null;
+  created_at: string;
+  resolved_at: string | null;
+  order?: {
+    order_no: string | null;
+    status: AdminOrder["status"];
+    total: number;
+    created_at: string;
+  } | null;
+  patient?: { full_name: string | null; phone: string | null } | null;
 }
 
 export interface AdminReminder {
@@ -139,6 +169,10 @@ export async function getDocumentsAdmin(): Promise<AdminDocument[]> {
   return (result.documents ?? []) as AdminDocument[];
 }
 
+export async function markDocumentReceivedAdmin(id: string): Promise<{ error: string | null }> {
+  return adminMarkDocumentReceived({ data: { id } });
+}
+
 export async function getOrdersAdmin(): Promise<AdminOrder[]> {
   const result = await adminGetOrders({ data: undefined });
   return (result.orders ?? []) as AdminOrder[];
@@ -147,8 +181,24 @@ export async function getOrdersAdmin(): Promise<AdminOrder[]> {
 export async function updateOrderStatusAdmin(
   id: string,
   status: AdminOrder["status"],
+  note?: string,
 ): Promise<{ error: string | null }> {
-  return adminUpdateOrderStatus({ data: { id, status } });
+  return adminUpdateOrderStatus({ data: { id, status, note } });
+}
+
+export async function getOrderRequestsAdmin(): Promise<AdminOrderRequest[]> {
+  const result = await adminGetOrderRequests({ data: undefined });
+  return (result.requests ?? []) as AdminOrderRequest[];
+}
+
+export async function updateOrderRequestAdmin(
+  id: string,
+  data: {
+    status: AdminOrderRequest["status"];
+    adminNotes?: string;
+  },
+): Promise<{ error: string | null }> {
+  return adminUpdateOrderRequest({ data: { id, ...data } });
 }
 
 export async function getRemindersAdmin(): Promise<AdminReminder[]> {

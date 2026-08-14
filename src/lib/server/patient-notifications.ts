@@ -15,6 +15,7 @@ export type PatientNotificationType =
   | "payment"
   | "review"
   | "support_reply"
+  | "order"
   | "general";
 
 export async function createPatientNotification(
