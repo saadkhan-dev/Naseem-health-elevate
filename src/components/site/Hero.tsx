@@ -1,8 +1,6 @@
 import {
   Calendar,
   Video,
-  Leaf,
-  Activity,
   ShieldCheck,
   UserRound,
   HeartPulse,
@@ -10,6 +8,7 @@ import {
   Stethoscope,
 } from "lucide-react";
 import homeSectionImg from "@/assets/home-section.jpg";
+import { SectionLink } from "@/components/site/SectionLink";
 
 export function Hero() {
   return (
@@ -26,30 +25,30 @@ export function Hero() {
             Now accepting new patients in Karachi
           </div>
           <h1 className="font-display text-4xl font-semibold leading-[1.05] text-[#0015ff] md:text-5xl lg:text-6xl">
-  Rahat Homeopathic & <span className="text-primary">Physiotherapy Clinic</span>{" "}
-</h1>
+            Rahat Homeopathic & <span className="text-primary">Physiotherapy Clinic</span>{" "}
+          </h1>
 
-<h3 className="mt-2 text-3xl font-bold text-[#ff0000] italic">
-  Healing Naturally, Living Better.
-</h3>
+          <h3 className="mt-2 text-3xl font-bold text-[#ff0000] italic">
+            Healing Naturally, Living Better.
+          </h3>
           <p className="mt-4 max-w-xl text-base text-muted-foreground md:text-lg">
             Natural healing. Pain relief. Better health. Personalized, patient-first care from Dr.
             Naseem Ahmed Khan — for you and your family.
           </p>
 
           <div className="mt-5 flex flex-wrap items-center gap-2.5 xl:flex-nowrap">
-            <a
-              href="#booking"
+            <SectionLink
+              hash="booking"
               className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-soft transition-all duration-300 hover:-translate-y-0.5 hover:brightness-[1.05] hover:shadow-glass active:scale-[0.97]"
             >
               <Calendar className="h-4 w-4" /> Book Appointment
-            </a>
-            <a
-              href="#video-consultation"
+            </SectionLink>
+            <SectionLink
+              hash="video-consultation"
               className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-6 py-3.5 text-sm font-semibold text-foreground shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-muted hover:shadow-soft active:scale-[0.97]"
             >
               <Video className="h-4 w-4 text-primary" /> Video Consultation
-            </a>
+            </SectionLink>
             <a
               href="#diseases"
               className="inline-flex items-center gap-2 rounded-full border-2 border-primary bg-card px-4 py-3.5 text-sm font-semibold text-primary shadow-soft transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary hover:text-primary-foreground hover:shadow-glass active:scale-[0.97]"
@@ -91,21 +90,9 @@ export function Hero() {
             />
           </div>
 
-          {/* Floating glass cards */}
+          {/* Floating glass card */}
           <FloatCard
-            className="absolute -left-2 top-8 md:-left-6"
-            Icon={Leaf}
-            title="Homeopathy"
-            text="Natural healing for acute & chronic conditions."
-          />
-          <FloatCard
-            className="absolute -right-2 top-1/2 -translate-y-1/2 md:-right-6"
-            Icon={Activity}
-            title="Physiotherapy"
-            text="Pain relief & rehab with advanced techniques."
-          />
-          <FloatCard
-            className="absolute -right-2 bottom-8 md:-right-6"
+            className="absolute -right-2 top-8 md:-right-6"
             Icon={Award}
             title="First Time Free Assessment"
             text="New patients enjoy a complimentary initial checkup."

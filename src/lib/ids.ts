@@ -33,3 +33,8 @@ export function generateAppointmentNo(): string {
 export function generateVideoConsultationNo(): string {
   return `VC-${randomCode()}`;
 }
+
+/** Patient-facing order number, e.g. "ORD-2T7H4J". */
+export function generateOrderNo(): string {
+  return `ORD-${randomCode()}`;
+}

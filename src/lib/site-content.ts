@@ -26,6 +26,8 @@ export interface Review {
   rating: number;
   text: string;
   is_active: boolean;
+  status?: "pending" | "approved" | "rejected";
+  patient_id?: string | null;
   created_at: string;
 }
 
@@ -46,6 +48,7 @@ export async function getReviews(): Promise<Review[]> {
     .from("reviews")
     .select("*")
     .eq("is_active", true)
+    .eq("status", "approved")
     .order("created_at", { ascending: false });
   return data ?? [];
 }
@@ -114,6 +117,7 @@ export async function updateReview(
     rating?: number;
     text?: string;
     is_active?: boolean;
+    status?: "pending" | "approved" | "rejected";
   },
 ) {
   return adminUpdateReview({ data: { id, data } });

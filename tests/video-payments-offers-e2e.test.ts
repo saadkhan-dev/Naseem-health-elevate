@@ -5,6 +5,7 @@ import {
   recordOfferUsage,
   releaseOfferUsage,
   hasUsedAnyOffer,
+  getVisibleVideoOffers,
 } from "../src/lib/server/video-offers";
 import { computeOfferAmount } from "../src/lib/video-offer-types";
 import {
@@ -434,6 +435,48 @@ describe("resolveVideoOffer (live DB)", () => {
       patientName: "E2E Released",
     });
     expect(again.offer_id).toBe(offer.id);
+  });
+});
+
+describe("getVisibleVideoOffers — DISPLAY vs PRICE (live DB)", () => {
+  it("returns an upcoming offer (future start date) for public display", async () => {
+    const upcoming = await createOffer({
+      offer_type: "percent",
+      discount_percent: 25,
+      start_date: "2099-01-01",
+      end_date: "2099-12-31",
+    });
+
+    const visible = await getVisibleVideoOffers(admin);
+    const shown = visible.find((o) => o.id === upcoming.id);
+
+    // A) DISPLAY: an upcoming offer is visible before its start date...
+    expect(shown).toBeDefined();
+    expect(shown?.start_date).toBe("2099-01-01");
+
+    // ...but B) PRICE: it must NOT discount the fee yet (the full price stays).
+    const decision = await resolveVideoOffer(admin, {
+      servicePrice: 500,
+      phone: `+9200000000${Math.floor(Math.random() * 9)}`,
+      email: `${marker()}@test.com`,
+      patientName: "E2E Upcoming Display",
+    });
+    expect(decision.amount).toBe(500);
+    expect(decision.offer_id).toBeNull();
+  });
+
+  it("hides an already-expired offer from public display (end date exclusive after the day ends)", async () => {
+    const expired = await createOffer({ offer_type: "waive", end_date: yesterdayStr() });
+
+    const visible = await getVisibleVideoOffers(admin);
+    expect(visible.find((o) => o.id === expired.id)).toBeUndefined();
+  });
+
+  it("hides an offer the admin deactivated", async () => {
+    const inactive = await createOffer({ offer_type: "waive", is_active: false });
+
+    const visible = await getVisibleVideoOffers(admin);
+    expect(visible.find((o) => o.id === inactive.id)).toBeUndefined();
   });
 });
 

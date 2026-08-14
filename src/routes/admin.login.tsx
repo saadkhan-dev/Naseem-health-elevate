@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { Stethoscope, ArrowLeft, Loader2, Mail, Lock, KeyRound } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/lib/supabase";
+import { useStaffAuth } from "@/hooks/useStaffAuth";
+import { staffSupabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +12,7 @@ export const Route = createFileRoute("/admin/login")({
 });
 
 function AdminLogin() {
-  const { login, logout } = useAuth();
+  const { loginStaff, logout } = useStaffAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,7 +29,7 @@ function AdminLogin() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const result = await login(email, password);
+    const result = await loginStaff(email, password);
     if (result.error || !result.role) {
       setError(result.error ?? "Sign in failed. Please try again.");
       setLoading(false);
@@ -48,7 +48,7 @@ function AdminLogin() {
     e.preventDefault();
     setForgotError("");
     setForgotLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+    const { error } = await staffSupabase.auth.resetPasswordForEmail(forgotEmail, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
     setForgotLoading(false);

@@ -7,7 +7,7 @@ interface AppointmentRow {
   service_id: string;
   date: string;
   time: string;
-  status: "pending" | "confirmed" | "completed" | "cancelled";
+  status: "pending" | "confirmed" | "completed" | "cancelled" | "rejected" | "arrived" | "no_show";
   notes: string | null;
   created_at: string;
   profiles?: { full_name: string | null; phone: string | null } | null;
@@ -20,7 +20,7 @@ export interface AppointmentWithDetails {
   service_id: string;
   date: string;
   time: string;
-  status: "pending" | "confirmed" | "completed" | "cancelled";
+  status: "pending" | "confirmed" | "completed" | "cancelled" | "rejected" | "arrived" | "no_show";
   notes: string | null;
   created_at: string;
   patient_name: string | null;
@@ -62,7 +62,7 @@ export async function getAllAppointments(): Promise<AppointmentWithDetails[]> {
 
 export async function updateAppointmentStatus(
   id: string,
-  status: "pending" | "confirmed" | "completed" | "cancelled",
+  status: "pending" | "confirmed" | "completed" | "cancelled" | "rejected" | "arrived" | "no_show",
 ) {
   const { error } = await supabase.from("appointments").update({ status }).eq("id", id);
   return { error: error?.message ?? null };

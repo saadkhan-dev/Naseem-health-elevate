@@ -19,6 +19,7 @@ function AdminAvailability() {
   const [editState, setEditState] = useState<
     Record<string, { start_time: string; end_time: string }>
   >({});
+  const [message, setMessage] = useState("");
 
   if (isLoading) {
     return (
@@ -33,16 +34,26 @@ function AdminAvailability() {
   async function handleToggle(day: number, current: boolean) {
     const slot = slots?.find((s) => s.day_of_week === day);
     if (!slot) return;
-    await updateAvail.mutateAsync({ id: slot.id, data: { is_available: !current } });
+    setMessage("");
+    const result = await updateAvail.mutateAsync({
+      id: slot.id,
+      data: { is_available: !current },
+    });
+    if (result.error) setMessage(result.error);
   }
 
   async function handleSave(day: number, id: string) {
     const state = editState[id];
     if (!state) return;
-    await updateAvail.mutateAsync({
+    setMessage("");
+    const result = await updateAvail.mutateAsync({
       id,
       data: { start_time: state.start_time, end_time: state.end_time },
     });
+    if (result.error) {
+      setMessage(result.error);
+      return;
+    }
     setEditState((prev) => {
       const next = { ...prev };
       delete next[id];
@@ -60,6 +71,12 @@ function AdminAvailability() {
       {isError && (
         <div className="mt-4">
           <QueryError error={error} />
+        </div>
+      )}
+
+      {message && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {message}
         </div>
       )}
 
@@ -81,7 +98,7 @@ function AdminAvailability() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Input
                     type="time"
-                    defaultValue={slot.start_time}
+                    value={editState[slot.id]?.start_time ?? slot.start_time}
                     className="h-9 w-32 text-sm"
                     onChange={(e) =>
                       setEditState((prev) => ({
@@ -93,7 +110,7 @@ function AdminAvailability() {
                   <span className="text-sm text-muted-foreground">to</span>
                   <Input
                     type="time"
-                    defaultValue={slot.end_time}
+                    value={editState[slot.id]?.end_time ?? slot.end_time}
                     className="h-9 w-32 text-sm"
                     onChange={(e) =>
                       setEditState((prev) => ({

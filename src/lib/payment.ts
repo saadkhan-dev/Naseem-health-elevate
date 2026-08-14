@@ -1,5 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { submitVideoPayment as submitVideoPaymentServer } from "@/lib/actions.functions";
+import { verifyVideoPayment as verifyVideoPaymentServer } from "@/lib/actions.functions";
+import { submitPaymentReceipt as submitPaymentReceiptServer } from "@/lib/actions.functions";
 import { submitPaymentSchema } from "@/lib/booking-schema";
 
 /**
@@ -90,4 +92,67 @@ export async function submitVideoPayment(input: SubmitVideoPaymentInput): Promis
   error: string | null;
 }> {
   return submitVideoPaymentServer({ data: input });
+}
+
+// ---------------------------------------------------------------------------
+// Patient — Payment Verification (appointment-status page)
+// ---------------------------------------------------------------------------
+
+/** Safe, patient-facing payment status for a video consultation. */
+export interface VideoPaymentVerification {
+  appointmentNo: string;
+  status: string;
+  paymentStatus: PaymentStatus;
+  paymentMethod: string | null;
+  paymentReference: string | null;
+  paymentAmount: number | null;
+  paymentSubmittedAt: string | null;
+  paymentVerifiedAt: string | null;
+  receiptUploaded: boolean;
+}
+
+export interface VerifyVideoPaymentInput {
+  /** Appointment ID (e.g. APT-7K4M92), a legacy row UUID, or the transaction reference. */
+  id: string;
+  phone?: string;
+  email?: string;
+}
+
+export interface SubmitPaymentReceiptInput extends VerifyVideoPaymentInput {
+  /** Payment method the patient used to make the transfer (matches Option 1). */
+  methodId?: string;
+  fileName: string;
+  mimeType: "image/jpeg" | "image/jpg" | "image/png";
+  fileBase64: string;
+  fileSize: number;
+}
+
+export async function verifyVideoPayment(input: VerifyVideoPaymentInput): Promise<{
+  error: string | null;
+  result: VideoPaymentVerification | null;
+}> {
+  return verifyVideoPaymentServer({
+    data: {
+      id: input.id,
+      phone: input.phone?.trim() || undefined,
+      email: input.email?.trim() || undefined,
+    },
+  }) as Promise<{ error: string | null; result: VideoPaymentVerification | null }>;
+}
+
+export async function submitPaymentReceipt(input: SubmitPaymentReceiptInput): Promise<{
+  error: string | null;
+}> {
+  return submitPaymentReceiptServer({
+    data: {
+      id: input.id,
+      phone: input.phone?.trim() || undefined,
+      email: input.email?.trim() || undefined,
+      methodId: input.methodId || undefined,
+      fileName: input.fileName,
+      mimeType: input.mimeType,
+      fileBase64: input.fileBase64,
+      fileSize: input.fileSize,
+    },
+  });
 }

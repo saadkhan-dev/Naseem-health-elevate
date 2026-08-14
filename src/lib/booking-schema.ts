@@ -62,3 +62,44 @@ export const submitPaymentSchema = z.object({
     .max(200),
   payerName: z.string().trim().min(2, "Enter the name the payment was made from").max(100),
 });
+
+/**
+ * Shared validation for the public "Payment Verification" lookup on the
+ * appointment-status page. The patient enters their Receipt ID / Patient ID
+ * (Appointment ID or the transaction reference) AND at least one contact
+ * method — the same ownership proof the status lookup uses, so payments cannot
+ * be enumerated by guessing IDs alone.
+ */
+export const verifyPaymentSchema = z
+  .object({
+    id: z.string().trim().min(1, "Enter your Receipt ID / Patient ID").max(200),
+    phone: z.string().trim().min(7).max(30).optional(),
+    email: z.string().trim().email("Please enter a valid email").max(200).toLowerCase().optional(),
+  })
+  .refine((v) => v.phone || v.email, {
+    message: "Enter your phone number or email.",
+  });
+
+/**
+ * Shared validation for the public payment-receipt screenshot upload. Only
+ * JPG/JPEG/PNG images up to 5 MB are accepted; ownership is proven the same
+ * way as the verify lookup above.
+ */
+export const submitReceiptSchema = z
+  .object({
+    id: z.string().trim().min(1, "Enter your Receipt ID / Patient ID").max(200),
+    phone: z.string().trim().min(7).max(30).optional(),
+    email: z.string().trim().email("Please enter a valid email").max(200).toLowerCase().optional(),
+    methodId: z.string().uuid("Invalid payment method").optional(),
+    fileName: z.string().trim().min(1).max(200),
+    mimeType: z.enum(["image/jpeg", "image/jpg", "image/png"]),
+    fileBase64: z.string().min(1, "Please choose a receipt image"),
+    fileSize: z
+      .number()
+      .int()
+      .positive()
+      .max(5 * 1024 * 1024),
+  })
+  .refine((v) => v.phone || v.email, {
+    message: "Enter your phone number or email.",
+  });

@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { staffSupabase } from "@/lib/supabase";
 import { todayInClinic } from "@/lib/clinic";
 import {
   adminUpdateAppointmentStatus,
@@ -56,12 +56,12 @@ export interface VideoPaymentStatusView {
 }
 
 export async function getAllServices(): Promise<Service[]> {
-  const { data } = await supabase.from("services").select("*").order("name");
+  const { data } = await staffSupabase.from("services").select("*").order("name");
   return data ?? [];
 }
 
 export async function getAllAvailability(): Promise<AvailabilitySlot[]> {
-  const { data } = await supabase.from("availability").select("*").order("day_of_week");
+  const { data } = await staffSupabase.from("availability").select("*").order("day_of_week");
   return data ?? [];
 }
 
@@ -72,7 +72,7 @@ export interface AppointmentWithDetails {
   service_id: string;
   date: string;
   time: string | null;
-  status: "pending" | "confirmed" | "rejected" | "completed" | "cancelled";
+  status: "pending" | "confirmed" | "rejected" | "completed" | "cancelled" | "arrived" | "no_show";
   notes: string | null;
   created_at: string;
   patient_name: string | null;
@@ -176,7 +176,7 @@ function compareAppointments(a: AppointmentWithDetails, b: AppointmentWithDetail
 }
 
 export async function getAllAppointments(): Promise<AppointmentWithDetails[]> {
-  const { data } = await supabase
+  const { data } = await staffSupabase
     .from("appointments")
     .select(
       `
@@ -212,7 +212,7 @@ export async function getAllAppointments(): Promise<AppointmentWithDetails[]> {
 }
 
 export async function getAppointmentById(id: string): Promise<AppointmentWithDetails | null> {
-  const { data } = await supabase
+  const { data } = await staffSupabase
     .from("appointments")
     .select(
       `
@@ -231,7 +231,7 @@ export async function getAppointmentById(id: string): Promise<AppointmentWithDet
 
 export async function updateAppointmentStatus(
   id: string,
-  status: "pending" | "confirmed" | "rejected" | "completed" | "cancelled",
+  status: "pending" | "confirmed" | "rejected" | "completed" | "cancelled" | "arrived" | "no_show",
 ) {
   return adminUpdateAppointmentStatus({ data: { id, status } });
 }
@@ -287,12 +287,16 @@ export interface Product {
 }
 
 export async function getProducts(): Promise<Product[]> {
-  const { data } = await supabase.from("products").select("*").order("name");
+  const { data } = await staffSupabase.from("products").select("*").order("name");
   return data ?? [];
 }
 
 export async function getPublishedProducts(): Promise<Product[]> {
-  const { data } = await supabase.from("products").select("*").eq("in_stock", true).order("name");
+  const { data } = await staffSupabase
+    .from("products")
+    .select("*")
+    .eq("in_stock", true)
+    .order("name");
   return data ?? [];
 }
 
@@ -442,13 +446,16 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const today = new Date().toISOString().split("T")[0];
 
   const [total, pending, todayAppts, patients] = await Promise.all([
-    supabase.from("appointments").select("id", { count: "exact", head: true }),
-    supabase
+    staffSupabase.from("appointments").select("id", { count: "exact", head: true }),
+    staffSupabase
       .from("appointments")
       .select("id", { count: "exact", head: true })
       .eq("status", "pending"),
-    supabase.from("appointments").select("id", { count: "exact", head: true }).eq("date", today),
-    supabase.from("profiles").select("id", { count: "exact", head: true }),
+    staffSupabase
+      .from("appointments")
+      .select("id", { count: "exact", head: true })
+      .eq("date", today),
+    staffSupabase.from("profiles").select("id", { count: "exact", head: true }),
   ]);
 
   return {

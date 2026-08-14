@@ -82,10 +82,13 @@ function AdminPayments() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<PaymentMethod | null>(null);
   const [form, setForm] = useState<MethodForm>(emptyMethodForm);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
 
   function openCreate() {
     setEditing(null);
     setForm(emptyMethodForm);
+    setSaveError(null);
     setDialogOpen(true);
   }
 
@@ -103,6 +106,7 @@ function AdminPayments() {
       is_active: m.is_active,
       sort_order: m.sort_order,
     });
+    setSaveError(null);
     setDialogOpen(true);
   }
 
@@ -125,12 +129,20 @@ function AdminPayments() {
   }
 
   async function handleSaveMethod() {
-    if (editing) {
-      await updateMethod.mutateAsync({ id: editing.id, data: form });
-    } else {
-      await createMethod.mutateAsync(form);
+    const result = editing
+      ? await updateMethod.mutateAsync({ id: editing.id, data: form })
+      : await createMethod.mutateAsync(form);
+    if (result.error) {
+      setSaveError(result.error);
+      return;
     }
+    setSaveError(null);
     setDialogOpen(false);
+  }
+
+  async function handleDeleteMethod(id: string) {
+    const result = await deleteMethod.mutateAsync(id);
+    if (result.error) setListError(result.error);
   }
 
   return (
@@ -150,6 +162,12 @@ function AdminPayments() {
       {(servicesError || methodsError) && (
         <div className="mt-4">
           <QueryError error={servicesError ? error : methodsErrorData} />
+        </div>
+      )}
+
+      {listError && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {listError}
         </div>
       )}
 
@@ -241,7 +259,7 @@ function AdminPayments() {
                     size="sm"
                     variant="ghost"
                     className="text-red-600"
-                    onClick={() => deleteMethod.mutate(m.id)}
+                    onClick={() => handleDeleteMethod(m.id)}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -367,6 +385,7 @@ function AdminPayments() {
               />
             </div>
           </div>
+          {saveError && <p className="text-sm font-medium text-destructive">{saveError}</p>}
           <DialogFooter className="shrink-0 -mx-6 -mb-6 gap-2 border-t bg-background px-6 py-4 sm:space-x-0">
             <DialogClose asChild>
               <Button type="button" variant="outline">

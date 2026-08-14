@@ -15,9 +15,6 @@ export function VideoGallery() {
             <p className="mt-2 text-sm text-muted-foreground">
               Informative videos by Dr. Naseem Ahmed Khan on health, fitness & natural healing.
             </p>
-            <button className="mt-4 rounded-xl border border-primary/30 bg-primary-soft px-4 py-2 text-sm font-semibold text-primary transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary hover:text-primary-foreground hover:shadow-sm active:scale-95">
-              View All Videos
-            </button>
           </div>
 
           <div className="flex flex-wrap justify-center gap-4">

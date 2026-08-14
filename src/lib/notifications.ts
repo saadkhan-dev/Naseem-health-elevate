@@ -58,7 +58,7 @@ export interface RescheduleNotificationDetails {
 }
 
 export type AppointmentStatusValue =
-  "pending" | "confirmed" | "rejected" | "cancelled" | "completed";
+  "pending" | "confirmed" | "rejected" | "cancelled" | "completed" | "arrived" | "no_show";
 
 export interface StatusChangeNotificationDetails {
   appointmentId: string;
@@ -83,6 +83,19 @@ export const STATUS_CHANGE_PHRASES: Record<AppointmentStatusValue, string> = {
   rejected: "was not accepted",
   cancelled: "has been cancelled",
   completed: "has been completed",
+  arrived: "has arrived at the clinic",
+  no_show: "was marked as a no-show (you did not attend)",
+};
+
+/** Human-readable display label for each appointment status (badges, filters). */
+export const APPOINTMENT_STATUS_LABELS: Record<AppointmentStatusValue, string> = {
+  pending: "Pending",
+  confirmed: "Confirmed",
+  rejected: "Rejected",
+  cancelled: "Cancelled",
+  completed: "Completed",
+  arrived: "Arrived",
+  no_show: "No-Show",
 };
 
 /**

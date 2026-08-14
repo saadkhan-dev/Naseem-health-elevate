@@ -10,26 +10,48 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AboutRouteImport } from './routes/about'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AppointmentStatusRouteImport } from './routes/appointment-status'
 import { Route as BookingRouteImport } from './routes/booking'
+import { Route as ConditionsRouteImport } from './routes/conditions'
+import { Route as FaqRouteImport } from './routes/faq'
+import { Route as PatientRouteImport } from './routes/patient'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as SearchRouteImport } from './routes/search'
+import { Route as SupportRouteImport } from './routes/support'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
 import { Route as AdminAppointmentsRouteImport } from './routes/admin.appointments'
 import { Route as AdminAvailabilityRouteImport } from './routes/admin.availability'
 import { Route as AdminConditionsRouteImport } from './routes/admin.conditions'
+import { Route as AdminDoctorRouteImport } from './routes/admin.doctor'
+import { Route as AdminDocumentsRouteImport } from './routes/admin.documents'
+import { Route as AdminFaqRouteImport } from './routes/admin.faq'
 import { Route as AdminLoginRouteImport } from './routes/admin.login'
 import { Route as AdminOffersRouteImport } from './routes/admin.offers'
+import { Route as AdminOrdersRouteImport } from './routes/admin.orders'
 import { Route as AdminPaymentsRouteImport } from './routes/admin.payments'
 import { Route as AdminProductsRouteImport } from './routes/admin.products'
+import { Route as AdminRemindersRouteImport } from './routes/admin.reminders'
 import { Route as AdminReviewsRouteImport } from './routes/admin.reviews'
 import { Route as AdminServicesRouteImport } from './routes/admin.services'
+import { Route as AdminSupportRouteImport } from './routes/admin.support'
 import { Route as AdminVideosRouteImport } from './routes/admin.videos'
+import { Route as PatientIndexRouteImport } from './routes/patient.index'
+import { Route as PatientDocumentsRouteImport } from './routes/patient.documents'
+import { Route as PatientOrdersRouteImport } from './routes/patient.orders'
+import { Route as PatientProfileRouteImport } from './routes/patient.profile'
 import { Route as VideoVcNoRouteImport } from './routes/video.$vcNo'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AboutRoute = AboutRouteImport.update({
+  id: '/about',
+  path: '/about',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -47,14 +69,44 @@ const BookingRoute = BookingRouteImport.update({
   path: '/booking',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConditionsRoute = ConditionsRouteImport.update({
+  id: '/conditions',
+  path: '/conditions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FaqRoute = FaqRouteImport.update({
+  id: '/faq',
+  path: '/faq',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PatientRoute = PatientRouteImport.update({
+  id: '/patient',
+  path: '/patient',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SearchRoute = SearchRouteImport.update({
+  id: '/search',
+  path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SupportRoute = SupportRouteImport.update({
+  id: '/support',
+  path: '/support',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminAppointmentsRoute = AdminAppointmentsRouteImport.update({
@@ -72,6 +124,21 @@ const AdminConditionsRoute = AdminConditionsRouteImport.update({
   path: '/conditions',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminDoctorRoute = AdminDoctorRouteImport.update({
+  id: '/doctor',
+  path: '/doctor',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminDocumentsRoute = AdminDocumentsRouteImport.update({
+  id: '/documents',
+  path: '/documents',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminFaqRoute = AdminFaqRouteImport.update({
+  id: '/faq',
+  path: '/faq',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminLoginRoute = AdminLoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -80,6 +147,11 @@ const AdminLoginRoute = AdminLoginRouteImport.update({
 const AdminOffersRoute = AdminOffersRouteImport.update({
   id: '/offers',
   path: '/offers',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminOrdersRoute = AdminOrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminPaymentsRoute = AdminPaymentsRouteImport.update({
@@ -92,6 +164,11 @@ const AdminProductsRoute = AdminProductsRouteImport.update({
   path: '/products',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminRemindersRoute = AdminRemindersRouteImport.update({
+  id: '/reminders',
+  path: '/reminders',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminReviewsRoute = AdminReviewsRouteImport.update({
   id: '/reviews',
   path: '/reviews',
@@ -102,10 +179,35 @@ const AdminServicesRoute = AdminServicesRouteImport.update({
   path: '/services',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminSupportRoute = AdminSupportRouteImport.update({
+  id: '/support',
+  path: '/support',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminVideosRoute = AdminVideosRouteImport.update({
   id: '/videos',
   path: '/videos',
   getParentRoute: () => AdminRoute,
+} as any)
+const PatientIndexRoute = PatientIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PatientRoute,
+} as any)
+const PatientDocumentsRoute = PatientDocumentsRouteImport.update({
+  id: '/documents',
+  path: '/documents',
+  getParentRoute: () => PatientRoute,
+} as any)
+const PatientOrdersRoute = PatientOrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
+  getParentRoute: () => PatientRoute,
+} as any)
+const PatientProfileRoute = PatientProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => PatientRoute,
 } as any)
 const VideoVcNoRoute = VideoVcNoRouteImport.update({
   id: '/video/$vcNo',
@@ -115,126 +217,232 @@ const VideoVcNoRoute = VideoVcNoRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
   '/admin': typeof AdminRouteWithChildren
   '/appointment-status': typeof AppointmentStatusRoute
   '/booking': typeof BookingRoute
+  '/conditions': typeof ConditionsRoute
+  '/faq': typeof FaqRoute
+  '/patient': typeof PatientRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
+  '/search': typeof SearchRoute
+  '/support': typeof SupportRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/availability': typeof AdminAvailabilityRoute
   '/admin/conditions': typeof AdminConditionsRoute
+  '/admin/doctor': typeof AdminDoctorRoute
+  '/admin/documents': typeof AdminDocumentsRoute
+  '/admin/faq': typeof AdminFaqRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/offers': typeof AdminOffersRoute
+  '/admin/orders': typeof AdminOrdersRoute
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/products': typeof AdminProductsRoute
+  '/admin/reminders': typeof AdminRemindersRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/admin/services': typeof AdminServicesRoute
+  '/admin/support': typeof AdminSupportRoute
   '/admin/videos': typeof AdminVideosRoute
+  '/patient/documents': typeof PatientDocumentsRoute
+  '/patient/orders': typeof PatientOrdersRoute
+  '/patient/profile': typeof PatientProfileRoute
   '/video/$vcNo': typeof VideoVcNoRoute
   '/admin/': typeof AdminIndexRoute
+  '/patient/': typeof PatientIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
   '/appointment-status': typeof AppointmentStatusRoute
   '/booking': typeof BookingRoute
+  '/conditions': typeof ConditionsRoute
+  '/faq': typeof FaqRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/search': typeof SearchRoute
+  '/support': typeof SupportRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/availability': typeof AdminAvailabilityRoute
   '/admin/conditions': typeof AdminConditionsRoute
+  '/admin/doctor': typeof AdminDoctorRoute
+  '/admin/documents': typeof AdminDocumentsRoute
+  '/admin/faq': typeof AdminFaqRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/offers': typeof AdminOffersRoute
+  '/admin/orders': typeof AdminOrdersRoute
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/products': typeof AdminProductsRoute
+  '/admin/reminders': typeof AdminRemindersRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/admin/services': typeof AdminServicesRoute
+  '/admin/support': typeof AdminSupportRoute
   '/admin/videos': typeof AdminVideosRoute
+  '/patient/documents': typeof PatientDocumentsRoute
+  '/patient/orders': typeof PatientOrdersRoute
+  '/patient/profile': typeof PatientProfileRoute
   '/video/$vcNo': typeof VideoVcNoRoute
   '/admin': typeof AdminIndexRoute
+  '/patient': typeof PatientIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
   '/admin': typeof AdminRouteWithChildren
   '/appointment-status': typeof AppointmentStatusRoute
   '/booking': typeof BookingRoute
+  '/conditions': typeof ConditionsRoute
+  '/faq': typeof FaqRoute
+  '/patient': typeof PatientRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
+  '/search': typeof SearchRoute
+  '/support': typeof SupportRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/availability': typeof AdminAvailabilityRoute
   '/admin/conditions': typeof AdminConditionsRoute
+  '/admin/doctor': typeof AdminDoctorRoute
+  '/admin/documents': typeof AdminDocumentsRoute
+  '/admin/faq': typeof AdminFaqRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/offers': typeof AdminOffersRoute
+  '/admin/orders': typeof AdminOrdersRoute
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/products': typeof AdminProductsRoute
+  '/admin/reminders': typeof AdminRemindersRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/admin/services': typeof AdminServicesRoute
+  '/admin/support': typeof AdminSupportRoute
   '/admin/videos': typeof AdminVideosRoute
+  '/patient/documents': typeof PatientDocumentsRoute
+  '/patient/orders': typeof PatientOrdersRoute
+  '/patient/profile': typeof PatientProfileRoute
   '/video/$vcNo': typeof VideoVcNoRoute
   '/admin/': typeof AdminIndexRoute
+  '/patient/': typeof PatientIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/about'
     | '/admin'
     | '/appointment-status'
     | '/booking'
+    | '/conditions'
+    | '/faq'
+    | '/patient'
     | '/reset-password'
+    | '/search'
+    | '/support'
+    | '/admin/analytics'
     | '/admin/appointments'
     | '/admin/availability'
     | '/admin/conditions'
+    | '/admin/doctor'
+    | '/admin/documents'
+    | '/admin/faq'
     | '/admin/login'
     | '/admin/offers'
+    | '/admin/orders'
     | '/admin/payments'
     | '/admin/products'
+    | '/admin/reminders'
     | '/admin/reviews'
     | '/admin/services'
+    | '/admin/support'
     | '/admin/videos'
+    | '/patient/documents'
+    | '/patient/orders'
+    | '/patient/profile'
     | '/video/$vcNo'
     | '/admin/'
+    | '/patient/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/about'
     | '/appointment-status'
     | '/booking'
+    | '/conditions'
+    | '/faq'
     | '/reset-password'
+    | '/search'
+    | '/support'
+    | '/admin/analytics'
     | '/admin/appointments'
     | '/admin/availability'
     | '/admin/conditions'
+    | '/admin/doctor'
+    | '/admin/documents'
+    | '/admin/faq'
     | '/admin/login'
     | '/admin/offers'
+    | '/admin/orders'
     | '/admin/payments'
     | '/admin/products'
+    | '/admin/reminders'
     | '/admin/reviews'
     | '/admin/services'
+    | '/admin/support'
     | '/admin/videos'
+    | '/patient/documents'
+    | '/patient/orders'
+    | '/patient/profile'
     | '/video/$vcNo'
     | '/admin'
+    | '/patient'
   id:
     | '__root__'
     | '/'
+    | '/about'
     | '/admin'
     | '/appointment-status'
     | '/booking'
+    | '/conditions'
+    | '/faq'
+    | '/patient'
     | '/reset-password'
+    | '/search'
+    | '/support'
+    | '/admin/analytics'
     | '/admin/appointments'
     | '/admin/availability'
     | '/admin/conditions'
+    | '/admin/doctor'
+    | '/admin/documents'
+    | '/admin/faq'
     | '/admin/login'
     | '/admin/offers'
+    | '/admin/orders'
     | '/admin/payments'
     | '/admin/products'
+    | '/admin/reminders'
     | '/admin/reviews'
     | '/admin/services'
+    | '/admin/support'
     | '/admin/videos'
+    | '/patient/documents'
+    | '/patient/orders'
+    | '/patient/profile'
     | '/video/$vcNo'
     | '/admin/'
+    | '/patient/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AboutRoute: typeof AboutRoute
   AdminRoute: typeof AdminRouteWithChildren
   AppointmentStatusRoute: typeof AppointmentStatusRoute
   BookingRoute: typeof BookingRoute
+  ConditionsRoute: typeof ConditionsRoute
+  FaqRoute: typeof FaqRoute
+  PatientRoute: typeof PatientRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
+  SearchRoute: typeof SearchRoute
+  SupportRoute: typeof SupportRoute
   VideoVcNoRoute: typeof VideoVcNoRoute
 }
 
@@ -245,6 +453,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/about': {
+      id: '/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -268,6 +483,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BookingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/conditions': {
+      id: '/conditions'
+      path: '/conditions'
+      fullPath: '/conditions'
+      preLoaderRoute: typeof ConditionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/faq': {
+      id: '/faq'
+      path: '/faq'
+      fullPath: '/faq'
+      preLoaderRoute: typeof FaqRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/patient': {
+      id: '/patient'
+      path: '/patient'
+      fullPath: '/patient'
+      preLoaderRoute: typeof PatientRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-password': {
       id: '/reset-password'
       path: '/reset-password'
@@ -275,11 +511,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/search': {
+      id: '/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/support': {
+      id: '/support'
+      path: '/support'
+      fullPath: '/support'
+      preLoaderRoute: typeof SupportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/': {
       id: '/admin/'
       path: '/'
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/analytics': {
+      id: '/admin/analytics'
+      path: '/analytics'
+      fullPath: '/admin/analytics'
+      preLoaderRoute: typeof AdminAnalyticsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/appointments': {
@@ -303,6 +560,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminConditionsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/doctor': {
+      id: '/admin/doctor'
+      path: '/doctor'
+      fullPath: '/admin/doctor'
+      preLoaderRoute: typeof AdminDoctorRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/documents': {
+      id: '/admin/documents'
+      path: '/documents'
+      fullPath: '/admin/documents'
+      preLoaderRoute: typeof AdminDocumentsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/faq': {
+      id: '/admin/faq'
+      path: '/faq'
+      fullPath: '/admin/faq'
+      preLoaderRoute: typeof AdminFaqRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/login': {
       id: '/admin/login'
       path: '/login'
@@ -315,6 +593,13 @@ declare module '@tanstack/react-router' {
       path: '/offers'
       fullPath: '/admin/offers'
       preLoaderRoute: typeof AdminOffersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/orders': {
+      id: '/admin/orders'
+      path: '/orders'
+      fullPath: '/admin/orders'
+      preLoaderRoute: typeof AdminOrdersRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/payments': {
@@ -331,6 +616,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminProductsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/reminders': {
+      id: '/admin/reminders'
+      path: '/reminders'
+      fullPath: '/admin/reminders'
+      preLoaderRoute: typeof AdminRemindersRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/reviews': {
       id: '/admin/reviews'
       path: '/reviews'
@@ -345,12 +637,47 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminServicesRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/support': {
+      id: '/admin/support'
+      path: '/support'
+      fullPath: '/admin/support'
+      preLoaderRoute: typeof AdminSupportRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/videos': {
       id: '/admin/videos'
       path: '/videos'
       fullPath: '/admin/videos'
       preLoaderRoute: typeof AdminVideosRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/patient/': {
+      id: '/patient/'
+      path: '/'
+      fullPath: '/patient/'
+      preLoaderRoute: typeof PatientIndexRouteImport
+      parentRoute: typeof PatientRoute
+    }
+    '/patient/documents': {
+      id: '/patient/documents'
+      path: '/documents'
+      fullPath: '/patient/documents'
+      preLoaderRoute: typeof PatientDocumentsRouteImport
+      parentRoute: typeof PatientRoute
+    }
+    '/patient/orders': {
+      id: '/patient/orders'
+      path: '/orders'
+      fullPath: '/patient/orders'
+      preLoaderRoute: typeof PatientOrdersRouteImport
+      parentRoute: typeof PatientRoute
+    }
+    '/patient/profile': {
+      id: '/patient/profile'
+      path: '/profile'
+      fullPath: '/patient/profile'
+      preLoaderRoute: typeof PatientProfileRouteImport
+      parentRoute: typeof PatientRoute
     }
     '/video/$vcNo': {
       id: '/video/$vcNo'
@@ -363,41 +690,78 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteChildren {
+  AdminAnalyticsRoute: typeof AdminAnalyticsRoute
   AdminAppointmentsRoute: typeof AdminAppointmentsRoute
   AdminAvailabilityRoute: typeof AdminAvailabilityRoute
   AdminConditionsRoute: typeof AdminConditionsRoute
+  AdminDoctorRoute: typeof AdminDoctorRoute
+  AdminDocumentsRoute: typeof AdminDocumentsRoute
+  AdminFaqRoute: typeof AdminFaqRoute
   AdminLoginRoute: typeof AdminLoginRoute
   AdminOffersRoute: typeof AdminOffersRoute
+  AdminOrdersRoute: typeof AdminOrdersRoute
   AdminPaymentsRoute: typeof AdminPaymentsRoute
   AdminProductsRoute: typeof AdminProductsRoute
+  AdminRemindersRoute: typeof AdminRemindersRoute
   AdminReviewsRoute: typeof AdminReviewsRoute
   AdminServicesRoute: typeof AdminServicesRoute
+  AdminSupportRoute: typeof AdminSupportRoute
   AdminVideosRoute: typeof AdminVideosRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminAnalyticsRoute: AdminAnalyticsRoute,
   AdminAppointmentsRoute: AdminAppointmentsRoute,
   AdminAvailabilityRoute: AdminAvailabilityRoute,
   AdminConditionsRoute: AdminConditionsRoute,
+  AdminDoctorRoute: AdminDoctorRoute,
+  AdminDocumentsRoute: AdminDocumentsRoute,
+  AdminFaqRoute: AdminFaqRoute,
   AdminLoginRoute: AdminLoginRoute,
   AdminOffersRoute: AdminOffersRoute,
+  AdminOrdersRoute: AdminOrdersRoute,
   AdminPaymentsRoute: AdminPaymentsRoute,
   AdminProductsRoute: AdminProductsRoute,
+  AdminRemindersRoute: AdminRemindersRoute,
   AdminReviewsRoute: AdminReviewsRoute,
   AdminServicesRoute: AdminServicesRoute,
+  AdminSupportRoute: AdminSupportRoute,
   AdminVideosRoute: AdminVideosRoute,
   AdminIndexRoute: AdminIndexRoute,
 }
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
+interface PatientRouteChildren {
+  PatientDocumentsRoute: typeof PatientDocumentsRoute
+  PatientOrdersRoute: typeof PatientOrdersRoute
+  PatientProfileRoute: typeof PatientProfileRoute
+  PatientIndexRoute: typeof PatientIndexRoute
+}
+
+const PatientRouteChildren: PatientRouteChildren = {
+  PatientDocumentsRoute: PatientDocumentsRoute,
+  PatientOrdersRoute: PatientOrdersRoute,
+  PatientProfileRoute: PatientProfileRoute,
+  PatientIndexRoute: PatientIndexRoute,
+}
+
+const PatientRouteWithChildren =
+  PatientRoute._addFileChildren(PatientRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AboutRoute: AboutRoute,
   AdminRoute: AdminRouteWithChildren,
   AppointmentStatusRoute: AppointmentStatusRoute,
   BookingRoute: BookingRoute,
+  ConditionsRoute: ConditionsRoute,
+  FaqRoute: FaqRoute,
+  PatientRoute: PatientRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
+  SearchRoute: SearchRoute,
+  SupportRoute: SupportRoute,
   VideoVcNoRoute: VideoVcNoRoute,
 }
 export const routeTree = rootRouteImport

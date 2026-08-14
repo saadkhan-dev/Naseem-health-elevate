@@ -23,7 +23,7 @@ export interface Appointment {
   service_id: string;
   date: string;
   time: string;
-  status: "pending" | "confirmed" | "completed" | "cancelled";
+  status: "pending" | "confirmed" | "completed" | "cancelled" | "rejected" | "arrived" | "no_show";
   notes: string | null;
   created_at: string;
 }
@@ -47,7 +47,7 @@ export async function getBookedSlots(date: string) {
     .from("appointments")
     .select("time")
     .eq("date", date)
-    .neq("status", "cancelled");
+    .not("status", "in", '("cancelled","rejected","no_show")');
   return new Set(data?.map((a) => a.time) ?? []);
 }
 

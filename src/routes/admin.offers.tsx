@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { isVideoConsultationService } from "@/lib/bookings";
 import { computeOfferAmount } from "@/lib/video-offer-types";
+import { todayInClinic } from "@/lib/clinic";
 import { QueryError } from "@/components/admin/QueryError";
 
 export const Route = createFileRoute("/admin/offers")({
@@ -50,7 +51,7 @@ interface OfferForm {
   terms: string;
 }
 
-const today = new Date().toISOString().slice(0, 10);
+const today = todayInClinic();
 
 const emptyForm: OfferForm = {
   title: "",
@@ -76,6 +77,7 @@ function AdminOffers() {
   const [editing, setEditing] = useState<VideoOffer | null>(null);
   const [form, setForm] = useState<OfferForm>(emptyForm);
   const [formError, setFormError] = useState("");
+  const [listError, setListError] = useState("");
 
   const videoService = services?.find(isVideoConsultationService);
   const basePrice = videoService?.price ?? 0;
@@ -155,11 +157,24 @@ function AdminOffers() {
       terms: form.terms.trim() || null,
     };
     if (editing) {
-      await updateOffer.mutateAsync({ id: editing.id, data: payload });
+      const result = await updateOffer.mutateAsync({ id: editing.id, data: payload });
+      if (result.error) {
+        setFormError(result.error);
+        return;
+      }
     } else {
-      await createOffer.mutateAsync(payload);
+      const result = await createOffer.mutateAsync(payload);
+      if (result.error) {
+        setFormError(result.error);
+        return;
+      }
     }
     setDialogOpen(false);
+  }
+
+  async function handleDelete(id: string) {
+    const result = await deleteOffer.mutateAsync(id);
+    if (result.error) setListError(result.error);
   }
 
   const typeLabel: Record<OfferForm["offer_type"], string> = {
@@ -185,6 +200,12 @@ function AdminOffers() {
       {isError && (
         <div className="mt-4">
           <QueryError error={error} />
+        </div>
+      )}
+
+      {listError && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {listError}
         </div>
       )}
 
@@ -237,7 +258,7 @@ function AdminOffers() {
                       size="sm"
                       variant="ghost"
                       className="text-red-600"
-                      onClick={() => deleteOffer.mutate(o.id)}
+                      onClick={() => handleDelete(o.id)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

@@ -324,7 +324,7 @@ export function DiseasesSection() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="font-display text-4xl font-bold text-red-600 sm:text-5xl">
-            Diseases & Conditions
+            Diseases & Symptoms
           </h2>
 
           <h3 className="mt-3 font-display text-xl font-semibold text-primary sm:text-2xl">
@@ -446,7 +446,7 @@ export function DiseasesSection() {
               {showHomeo && (
                 <section className="mt-12">
                   <h4 className="font-display text-lg font-semibold text-primary sm:text-xl">
-                    Conditions Treated With Homeopathy
+                    Symptoms & Diseases Treated With Homeopathy
                   </h4>
                   <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                     Personalized homeopathic consultation based on your individual symptoms, health

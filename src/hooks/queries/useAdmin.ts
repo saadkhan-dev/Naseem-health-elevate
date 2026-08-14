@@ -62,7 +62,8 @@ export function useUpdateAppointmentStatus() {
       status,
     }: {
       id: string;
-      status: "pending" | "confirmed" | "rejected" | "completed" | "cancelled";
+      status:
+        "pending" | "confirmed" | "rejected" | "completed" | "cancelled" | "arrived" | "no_show";
     }) => updateAppointmentStatus(id, status),
     onSuccess: () => {
       // Refresh the admin list + dashboard stats immediately, and the public

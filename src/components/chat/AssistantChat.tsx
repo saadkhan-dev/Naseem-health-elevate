@@ -9,17 +9,17 @@ const WELCOME_MESSAGE =
 const QUICK_ACTIONS: { label: string; prompt: string }[] = [
   { label: "How do I book an appointment?", prompt: "How do I book an appointment?" },
   { label: "How does video consultation work?", prompt: "How does video consultation work?" },
+  {
+    label: "How do I pay for a video consultation?",
+    prompt: "How do I pay for a video consultation?",
+  },
+  { label: "How can I check my appointment?", prompt: "How can I check my appointment?" },
   { label: "What treatments do you offer?", prompt: "What treatments do you offer?" },
   { label: "Where is the clinic?", prompt: "Where is the clinic located?" },
   { label: "What are the clinic timings?", prompt: "What are the clinic timings?" },
-  { label: "How can I check my appointment?", prompt: "How can I check my appointment?" },
   { label: "How can I order a product?", prompt: "How can I order a product?" },
-  {
-    label: "Are products available for delivery?",
-    prompt: "Are products available for delivery?",
-  },
-  { label: "How does product delivery work?", prompt: "How does product delivery work?" },
-  { label: "Which products are available?", prompt: "Which products are available?" },
+  { label: "How do I submit a review?", prompt: "How do I submit a review?" },
+  { label: "What is the patient portal?", prompt: "What is the patient portal?" },
 ];
 
 const MEDICAL_NOTE =

@@ -53,10 +53,13 @@ function AdminServices() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Service | null>(null);
   const [form, setForm] = useState<ServiceForm>(emptyForm);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
 
   function openCreate() {
     setEditing(null);
     setForm(emptyForm);
+    setSaveError(null);
     setDialogOpen(true);
   }
 
@@ -69,16 +72,25 @@ function AdminServices() {
       price: s.price,
       is_active: s.is_active,
     });
+    setSaveError(null);
     setDialogOpen(true);
   }
 
   async function handleSave() {
-    if (editing) {
-      await updateService.mutateAsync({ id: editing.id, data: form });
-    } else {
-      await createService.mutateAsync(form);
+    const result = editing
+      ? await updateService.mutateAsync({ id: editing.id, data: form })
+      : await createService.mutateAsync(form);
+    if (result.error) {
+      setSaveError(result.error);
+      return;
     }
+    setSaveError(null);
     setDialogOpen(false);
+  }
+
+  async function handleDelete(id: string) {
+    const result = await deleteService.mutateAsync(id);
+    if (result.error) setListError(result.error);
   }
 
   return (
@@ -96,6 +108,12 @@ function AdminServices() {
       {isError && (
         <div className="mt-4">
           <QueryError error={error} />
+        </div>
+      )}
+
+      {listError && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {listError}
         </div>
       )}
 
@@ -128,7 +146,7 @@ function AdminServices() {
                   size="sm"
                   variant="ghost"
                   className="text-red-600"
-                  onClick={() => deleteService.mutate(s.id)}
+                  onClick={() => handleDelete(s.id)}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -199,6 +217,7 @@ function AdminServices() {
               />
             </div>
           </div>
+          {saveError && <p className="text-sm font-medium text-destructive">{saveError}</p>}
           <DialogFooter className="shrink-0 -mx-6 -mb-6 gap-2 border-t bg-background px-6 py-4 sm:space-x-0">
             <DialogClose asChild>
               <Button type="button" variant="outline">

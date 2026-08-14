@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { Stethoscope, ArrowLeft, Loader2, KeyRound, CheckCircle2 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { supabase, staffSupabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,15 +20,24 @@ function ResetPasswordPage() {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
+    // The password-recovery token may land in either Supabase client (the
+    // admin/staff one or the public/patient one), so listen on both.
+    const { data: publicSub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") setReady(true);
+    });
+    const { data: staffSub } = staffSupabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY") setReady(true);
     });
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) setReady(true);
     });
-    return () => subscription.unsubscribe();
+    staffSupabase.auth.getSession().then(({ data }) => {
+      if (data.session) setReady(true);
+    });
+    return () => {
+      publicSub.subscription.unsubscribe();
+      staffSub.subscription.unsubscribe();
+    };
   }, []);
 
   async function handleSubmit(e: FormEvent) {
@@ -43,7 +52,13 @@ function ResetPasswordPage() {
       return;
     }
     setLoading(true);
-    const { error: err } = await supabase.auth.updateUser({ password });
+
+    // Update the password on whichever client actually holds the recovery session.
+    const publicSession = (await supabase.auth.getSession()).data.session;
+    const { error: err } = publicSession
+      ? await supabase.auth.updateUser({ password })
+      : await staffSupabase.auth.updateUser({ password });
+
     setLoading(false);
     if (err) {
       setError(err.message);
@@ -53,7 +68,9 @@ function ResetPasswordPage() {
   }
 
   async function finish() {
-    await supabase.auth.signOut();
+    // Clear BOTH clients so a recovery session that leaked into the other
+    // storage key is never left behind, then go to the admin login.
+    await Promise.all([supabase.auth.signOut(), staffSupabase.auth.signOut()]);
     navigate({ to: "/admin/login" });
   }
 

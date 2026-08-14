@@ -16,6 +16,7 @@ interface AuthState {
     phone: string,
   ) => Promise<string | null>;
   logout: () => Promise<void>;
+  refreshProfile: () => Promise<Profile | null>;
 }
 
 const AuthContext = createContext<AuthState>({
@@ -26,8 +27,14 @@ const AuthContext = createContext<AuthState>({
   login: async () => ({ error: null, role: null }),
   register: async () => null,
   logout: async () => {},
+  refreshProfile: async () => null,
 });
 
+/**
+ * Public / patient authentication state. Reads the PUBLIC Supabase client
+ * (`sb-<project>-public-auth-token` storage key) only — the Admin Panel session
+ * lives in a separate staff client and can never leak into this context.
+ */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -39,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        getProfile(session.user.id).then(setProfile);
+        getProfile(supabase, session.user.id).then(setProfile);
       }
       setLoading(false);
     });
@@ -50,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        getProfile(session.user.id).then(setProfile);
+        getProfile(supabase, session.user.id).then(setProfile);
       } else {
         setProfile(null);
       }
@@ -64,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (result.error || !result.user) {
       return { error: result.error, role: null };
     }
-    const p = await getProfile(result.user.id);
+    const p = await getProfile(supabase, result.user.id);
     setProfile(p);
     return { error: null, role: p?.role ?? "patient" };
   }, []);
@@ -84,8 +91,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
   }, []);
 
+  const refreshProfile = useCallback(async () => {
+    if (!user) return null;
+    const p = await getProfile(supabase, user.id);
+    setProfile(p);
+    return p;
+  }, [user]);
+
   return (
-    <AuthContext.Provider value={{ user, profile, session, loading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        profile,
+        session,
+        loading,
+        login,
+        register,
+        logout,
+        refreshProfile,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

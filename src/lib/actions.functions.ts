@@ -1,15 +1,28 @@
 import { createMiddleware, createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { supabase } from "@/lib/supabase";
+import { supabase, staffSupabase } from "@/lib/supabase";
 import { getSupabaseAdmin, isAdminOrDoctor } from "./server/supabase-admin";
 import { recoverAppointmentsByContact } from "./server/recover-appointments";
-import { submitVideoPaymentForAppointment, setVideoPaymentStatus } from "./server/video-payments";
+import {
+  submitVideoPaymentForAppointment,
+  setVideoPaymentStatus,
+  verifyVideoPaymentForAppointment,
+  submitVideoPaymentReceipt,
+} from "./server/video-payments";
 import { resolveVideoOffer, recordOfferUsage, releaseOfferUsage } from "./server/video-offers";
 import {
   createVideoSessionForAppointment,
   getVideoJoinByVcNo as getVideoJoinByVcNoServer,
   resendVideoNotification,
 } from "./server/video-sessions";
+import { createPatientNotification } from "./server/patient-notifications";
+import { validateAppointmentSlot } from "./server/slot-validation";
+import {
+  createAppointmentReminder,
+  sendDueAppointmentReminders as sendDueReminders,
+} from "./server/reminders";
+import { searchSite } from "./server/search";
+import { getAnalytics } from "./server/analytics";
 import {
   sendAppointmentNotifications,
   sendStatusChangeNotifications,
@@ -22,11 +35,17 @@ import {
   type NotificationResult,
   type AppointmentStatusValue,
 } from "./notifications";
-import { bookingSchema, recoverSchema, submitPaymentSchema } from "./booking-schema";
+import {
+  bookingSchema,
+  recoverSchema,
+  submitPaymentSchema,
+  verifyPaymentSchema,
+  submitReceiptSchema,
+} from "./booking-schema";
 import { todayInClinic, nowTimeInClinic, toMinutes } from "./clinic";
 import { intervalsOverlap } from "./slot-logic";
 import { getChatUsageStats, type ChatUsageRange, type ChatUsageStats } from "./server/chat-usage";
-import { generateAppointmentNo } from "./ids";
+import { generateAppointmentNo, generateOrderNo } from "./ids";
 
 /** Max insert attempts when a freshly generated patient-facing ID collides. */
 const ID_RETRY_ATTEMPTS = 5;
@@ -59,9 +78,11 @@ const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date");
 
 export const adminMiddleware = createMiddleware({ type: "function" })
   .client(async ({ next }) => {
+    // Admin/doctor session comes from the DEDICATED staff client, never the
+    // public/patient one.
     const accessToken =
       typeof window !== "undefined"
-        ? ((await supabase.auth.getSession()).data.session?.access_token ?? null)
+        ? ((await staffSupabase.auth.getSession()).data.session?.access_token ?? null)
         : null;
     return next({ sendContext: { accessToken } });
   })
@@ -107,6 +128,69 @@ export const optionalAuthMiddleware = createMiddleware({ type: "function" })
     return next({ context: { accessToken: context?.accessToken ?? null } });
   });
 
+/**
+ * Attaches BOTH the public/patient token and the staff/admin token. Used only
+ * by the video-consultation join lookup, which serves patients (public
+ * session) AND doctors/admins (staff session) on the same public route.
+ */
+export const anyAuthMiddleware = createMiddleware({ type: "function" })
+  .client(async ({ next }) => {
+    const publicToken =
+      typeof window !== "undefined"
+        ? ((await supabase.auth.getSession()).data.session?.access_token ?? null)
+        : null;
+    const staffToken =
+      typeof window !== "undefined"
+        ? ((await staffSupabase.auth.getSession()).data.session?.access_token ?? null)
+        : null;
+    return next({ sendContext: { publicToken, staffToken } });
+  })
+  .server(async ({ next, context }) => {
+    return next({
+      context: {
+        publicToken: context?.publicToken ?? null,
+        staffToken: context?.staffToken ?? null,
+      },
+    });
+  });
+
+/**
+ * Requires a signed-in user with a `patient` (or staff) profile role. Used by
+ * every patient-dashboard write so ownership can be verified server-side — the
+ * patient can only ever act on their OWN appointments/documents/orders.
+ */
+export const patientMiddleware = createMiddleware({ type: "function" })
+  .client(async ({ next }) => {
+    const accessToken =
+      typeof window !== "undefined"
+        ? ((await supabase.auth.getSession()).data.session?.access_token ?? null)
+        : null;
+    return next({ sendContext: { accessToken } });
+  })
+  .server(async ({ next, context }) => {
+    const token = context?.accessToken;
+    if (!token) throw new Error("Unauthorized");
+
+    const admin = getSupabaseAdmin();
+    const { data: userData, error } = await admin.auth.getUser(token);
+    if (error || !userData.user) throw new Error("Unauthorized");
+
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("role")
+      .eq("id", userData.user.id)
+      .single();
+
+    if (
+      !profile ||
+      (profile.role !== "patient" && profile.role !== "doctor" && profile.role !== "admin")
+    ) {
+      throw new Error("Forbidden");
+    }
+
+    return next({ context: { patientId: userData.user.id } });
+  });
+
 // ---------------------------------------------------------------------------
 // Public — guest booking (no login)
 // ---------------------------------------------------------------------------
@@ -127,9 +211,18 @@ export interface CreateBookingResult {
 }
 
 export const createBooking = createServerFn({ method: "POST" })
+  .middleware([optionalAuthMiddleware])
   .validator(bookingSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const admin = getSupabaseAdmin();
+
+    // When the patient is signed in, link the booking to their account so it
+    // shows up in their patient dashboard. Guests keep patient_id = null.
+    let patientId: string | null = null;
+    if (context?.accessToken) {
+      const { data: userData } = await admin.auth.getUser(context.accessToken);
+      if (userData?.user) patientId = userData.user.id;
+    }
 
     const { data: service } = await admin
       .from("services")
@@ -240,7 +333,7 @@ export const createBooking = createServerFn({ method: "POST" })
         .select("id")
         .eq("date", data.date)
         .eq("time", data.time)
-        .not("status", "in", '("cancelled","rejected")')
+        .not("status", "in", '("cancelled","rejected","no_show")')
         .maybeSingle();
 
       if (existing) {
@@ -262,7 +355,7 @@ export const createBooking = createServerFn({ method: "POST" })
         .from("appointments")
         .select("time, services:service_id (duration_minutes)")
         .eq("date", data.date)
-        .not("status", "in", '("cancelled","rejected")');
+        .not("status", "in", '("cancelled","rejected","no_show")');
 
       const overlaps = (activeRows ?? []).some((r) => {
         const t = r.time as string | null;
@@ -318,7 +411,7 @@ export const createBooking = createServerFn({ method: "POST" })
 
       const insertPayload: Record<string, unknown> = {
         id,
-        patient_id: null,
+        patient_id: patientId,
         patient_name: data.name,
         patient_phone: data.phone ?? null,
         patient_email: data.email ?? null,
@@ -352,6 +445,17 @@ export const createBooking = createServerFn({ method: "POST" })
             patientName: data.name,
             phone: data.phone ?? null,
             email: data.email ?? null,
+          });
+        }
+
+        // Signed-in patients also get an in-app notification.
+        if (patientId) {
+          await createPatientNotification(admin, {
+            userId: patientId,
+            type: "appointment_status",
+            title: "Appointment requested",
+            body: `Your appointment ${appointmentNo} for ${service.name} on ${data.date} is pending confirmation.`,
+            link: "/patient",
           });
         }
 
@@ -494,7 +598,8 @@ export const checkAppointmentStatus = createServerFn({ method: "POST" })
       appointment: {
         id: row.id as string,
         appointmentNo: (row.appointment_no as string | null) ?? (row.id as string),
-        status: row.status as "pending" | "confirmed" | "rejected" | "cancelled" | "completed",
+        status: row.status as
+          "pending" | "confirmed" | "rejected" | "cancelled" | "completed" | "arrived" | "no_show",
         date: row.date as string,
         time: (row.time as string | null)?.slice(0, 5) ?? null,
         serviceName,
@@ -537,6 +642,8 @@ const appointmentStatusSchema = z.enum([
   "rejected",
   "cancelled",
   "completed",
+  "arrived",
+  "no_show",
 ]);
 
 export const adminUpdateAppointmentStatus = createServerFn({ method: "POST" })
@@ -551,7 +658,7 @@ export const adminUpdateAppointmentStatus = createServerFn({ method: "POST" })
     const { data: row } = await admin
       .from("appointments")
       .select(
-        "id, appointment_no, patient_name, patient_phone, patient_email, date, time, status, services:service_id (name)",
+        "id, patient_id, appointment_no, patient_name, patient_phone, patient_email, date, time, status, services:service_id (name)",
       )
       .eq("id", data.id)
       .maybeSingle();
@@ -580,6 +687,17 @@ export const adminUpdateAppointmentStatus = createServerFn({ method: "POST" })
     // can use it again on a fresh booking.
     if (data.status === "cancelled" || data.status === "rejected") {
       await releaseOfferUsage(admin, data.id);
+    }
+
+    // Signed-in patients get an in-app notification of the status change.
+    if (row.patient_id) {
+      await createPatientNotification(admin, {
+        userId: row.patient_id as string,
+        type: "appointment_status",
+        title: `Appointment ${data.status}`,
+        body: `Your appointment ${(row.appointment_no as string | null) ?? data.id} is now "${data.status}".`,
+        link: "/patient",
+      });
     }
 
     // Best-effort patient notification of the status change. Unconfigured
@@ -784,6 +902,7 @@ const reviewInputSchema = z.object({
   rating: z.number().int().min(1).max(5),
   text: z.string().max(4000).optional(),
   is_active: z.boolean().optional(),
+  status: z.enum(["pending", "approved", "rejected"]).optional(),
 });
 
 export const adminCreateReview = createServerFn({ method: "POST" })
@@ -798,8 +917,41 @@ export const adminUpdateReview = createServerFn({ method: "POST" })
   .middleware([adminMiddleware])
   .validator(z.object({ id: uuidSchema, data: reviewInputSchema.partial() }))
   .handler(async ({ data }) => {
-    const { error } = await getSupabaseAdmin().from("reviews").update(data.data).eq("id", data.id);
-    return { error: error?.message ?? null };
+    const admin = getSupabaseAdmin();
+
+    const reviewData = { ...data.data };
+    // Approving a review also makes it publicly visible.
+    if (reviewData.status === "approved") {
+      reviewData.is_active = true;
+    }
+    if (reviewData.status === "rejected") {
+      reviewData.is_active = false;
+    }
+
+    const { error } = await admin.from("reviews").update(reviewData).eq("id", data.id);
+    if (error) return { error: error?.message ?? null };
+
+    // Notify the author when their review is approved or rejected.
+    if (reviewData.status) {
+      const { data: review } = await admin
+        .from("reviews")
+        .select("patient_id, rating, text")
+        .eq("id", data.id)
+        .maybeSingle();
+      if (review?.patient_id) {
+        const approved = reviewData.status === "approved";
+        await createPatientNotification(admin, {
+          userId: review.patient_id,
+          type: "review",
+          title: approved ? "Review approved" : "Review not approved",
+          body: approved
+            ? "Great news — your review is now live on the website. Thank you!"
+            : "Your submitted review was not approved and is not shown publicly.",
+          link: "/patient",
+        });
+      }
+    }
+    return { error: null };
   });
 
 export const adminDeleteReview = createServerFn({ method: "POST" })
@@ -861,7 +1013,7 @@ export const adminCreateVideoSession = createServerFn({ method: "POST" })
 // ---------------------------------------------------------------------------
 
 export const getVideoJoinByVcNo = createServerFn({ method: "POST" })
-  .middleware([optionalAuthMiddleware])
+  .middleware([anyAuthMiddleware])
   .validator(
     z.object({
       vcNo: z
@@ -876,7 +1028,7 @@ export const getVideoJoinByVcNo = createServerFn({ method: "POST" })
     const result = await getVideoJoinByVcNoServer(admin, data.vcNo);
 
     let sessionId: string | null = null;
-    if (result.session && (await isAdminOrDoctor(admin, context?.accessToken))) {
+    if (result.session && (await isAdminOrDoctor(admin, context?.staffToken))) {
       const { data: s } = await admin
         .from("video_sessions")
         .select("id")
@@ -950,6 +1102,34 @@ export const submitVideoPayment = createServerFn({ method: "POST" })
   .validator(submitPaymentSchema)
   .handler(async ({ data }) => {
     const error = await submitVideoPaymentForAppointment(getSupabaseAdmin(), data);
+    return error;
+  });
+
+// ---------------------------------------------------------------------------
+// Public — patient payment verification (Receipt ID / Patient ID lookup)
+// Ownership is proven with the identifier + phone/email, mirroring the
+// appointment-status lookup. Only safe fields are returned.
+// ---------------------------------------------------------------------------
+
+export const verifyVideoPayment = createServerFn({ method: "POST" })
+  .validator(verifyPaymentSchema)
+  .handler(async ({ data }) => {
+    const result = await verifyVideoPaymentForAppointment(getSupabaseAdmin(), data);
+    return result.error
+      ? { error: result.error, result: null }
+      : { error: null, result: result.result };
+  });
+
+// ---------------------------------------------------------------------------
+// Public — patient payment receipt screenshot upload (JPG/JPEG/PNG)
+// Uploads to a private storage bucket via the service-role client and marks
+// the appointment's payment as submitted for verification.
+// ---------------------------------------------------------------------------
+
+export const submitPaymentReceipt = createServerFn({ method: "POST" })
+  .validator(submitReceiptSchema)
+  .handler(async ({ data }) => {
+    const error = await submitVideoPaymentReceipt(getSupabaseAdmin(), data);
     return error;
   });
 
@@ -1118,7 +1298,7 @@ export const adminRescheduleAppointment = createServerFn({ method: "POST" })
     const { data: row } = await admin
       .from("appointments")
       .select(
-        "id, date, time, status, duration_minutes, patient_name, patient_phone, patient_email, appointment_no, service_id, services:service_id (name, duration_minutes)",
+        "id, patient_id, date, time, status, duration_minutes, patient_name, patient_phone, patient_email, appointment_no, service_id, services:service_id (name, duration_minutes)",
       )
       .eq("id", data.id)
       .maybeSingle();
@@ -1134,57 +1314,14 @@ export const adminRescheduleAppointment = createServerFn({ method: "POST" })
     const isVideo = serviceName.toLowerCase().includes("video consultation");
     const duration = isVideo ? 15 : (services?.duration_minutes ?? row.duration_minutes ?? 30);
 
-    const today = todayInClinic();
-    if (data.date < today) {
-      return { error: "That date has already passed. Please pick a future date." };
-    }
-
-    if (!isHomeVisit) {
-      if (!data.time) return { error: "A time slot is required." };
-      if (data.date === today && data.time <= nowTimeInClinic()) {
-        return { error: "That time has already passed. Please pick a later slot." };
-      }
-
-      const [y, m, d] = data.date.split("-").map(Number);
-      const dayOfWeek = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-      const timeMin = toMinutes(data.time);
-
-      const { data: windows } = await admin
-        .from("availability")
-        .select("start_time, end_time")
-        .eq("day_of_week", dayOfWeek)
-        .eq("is_available", true);
-
-      const inOpenWindow = (windows ?? []).some((w) => {
-        const start = toMinutes(w.start_time);
-        const end = toMinutes(w.end_time);
-        if (timeMin < start || timeMin >= end || timeMin + duration > end) return false;
-        return (timeMin - start) % duration === 0;
-      });
-      if (!inOpenWindow) {
-        return { error: "That slot is not available. Please pick an open slot." };
-      }
-
-      // Duration-aware overlap guard, excluding this appointment itself.
-      const { data: activeRows } = await admin
-        .from("appointments")
-        .select("time, services:service_id (duration_minutes)")
-        .eq("date", data.date)
-        .neq("id", data.id)
-        .not("status", "in", '("cancelled","rejected")');
-
-      const overlaps = (activeRows ?? []).some((r) => {
-        const t = r.time as string | null;
-        if (!t) return false;
-        const [th, tm] = t.split(":").map(Number);
-        const otherDur =
-          (r.services as { duration_minutes?: number | null } | null)?.duration_minutes ?? 30;
-        return intervalsOverlap(timeMin, duration, th * 60 + tm, otherDur);
-      });
-      if (overlaps) {
-        return { error: "That time overlaps an existing appointment. Please pick another time." };
-      }
-    }
+    const slotError = await validateAppointmentSlot(admin, {
+      date: data.date,
+      time: data.time ?? null,
+      durationMinutes: duration,
+      isHomeVisit,
+      excludeId: data.id,
+    });
+    if (slotError) return { error: slotError };
 
     const { error } = await admin
       .from("appointments")
@@ -1197,6 +1334,17 @@ export const adminRescheduleAppointment = createServerFn({ method: "POST" })
           ? "That slot was just taken. Please pick another time."
           : error.message,
       };
+    }
+
+    // Signed-in patients get an in-app notification of the new slot.
+    if (row.patient_id) {
+      await createPatientNotification(admin, {
+        userId: row.patient_id as string,
+        type: "appointment_rescheduled",
+        title: "Appointment rescheduled",
+        body: `Your appointment ${(row.appointment_no as string | null) ?? data.id} was moved to ${data.date}${data.time ? ` at ${data.time.slice(0, 5)}` : ""}.`,
+        link: "/patient",
+      });
     }
 
     // Notify the patient of the new slot.
@@ -1285,4 +1433,848 @@ export const adminGetChatUsage = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }): Promise<ChatUsageStats> => {
     return getChatUsageStats(data.range as ChatUsageRange);
+  });
+
+// ---------------------------------------------------------------------------
+// Patient — my appointments (dashboard)
+// ---------------------------------------------------------------------------
+
+interface PatientVideoRow {
+  vc_no: string | null;
+  status: string | null;
+  created_at: string | null;
+}
+
+export interface PatientAppointment {
+  id: string;
+  appointmentNo: string | null;
+  status: "pending" | "confirmed" | "rejected" | "cancelled" | "completed" | "arrived" | "no_show";
+  date: string;
+  time: string | null;
+  notes: string | null;
+  createdAt: string;
+  serviceName: string | null;
+  isVideo: boolean;
+  paymentStatus: string | null;
+  paymentAmount: number | null;
+  offerTitle: string | null;
+  vcNo: string | null;
+  videoSessionStatus: "scheduled" | "active" | "completed" | null;
+  canCancel: boolean;
+  canReschedule: boolean;
+}
+
+function mapPatientAppointment(row: {
+  id: string;
+  appointment_no: string | null;
+  status: string;
+  date: string;
+  time: string | null;
+  notes: string | null;
+  created_at: string;
+  payment_status: string | null;
+  payment_amount: number | null;
+  services?: unknown;
+  video_offers?: unknown;
+  video_sessions?: unknown;
+}): PatientAppointment {
+  const serviceRow = row.services as unknown as { name: string | null } | null;
+  const serviceName = serviceRow?.name ?? null;
+  const isVideo = serviceName?.toLowerCase().includes("video consultation") ?? false;
+  const sessions = (row.video_sessions as PatientVideoRow[] | null | undefined) ?? [];
+  const offerRow = row.video_offers as unknown as { title: string | null } | null;
+  const latest = [...sessions].sort((a, b) =>
+    (b.created_at ?? "").localeCompare(a.created_at ?? ""),
+  )[0];
+  const mutable = row.status === "pending" || row.status === "confirmed";
+  return {
+    id: row.id,
+    appointmentNo: row.appointment_no ?? null,
+    status: row.status as PatientAppointment["status"],
+    date: row.date,
+    time: (row.time as string | null)?.slice(0, 5) ?? null,
+    notes: row.notes,
+    createdAt: row.created_at,
+    serviceName,
+    isVideo,
+    paymentStatus: row.payment_status,
+    paymentAmount: row.payment_amount,
+    offerTitle: offerRow?.title ?? null,
+    vcNo: latest?.vc_no ?? null,
+    videoSessionStatus: (latest?.status as "scheduled" | "active" | "completed" | null) ?? null,
+    canCancel: mutable && row.date >= todayInClinic(),
+    canReschedule: mutable && row.date >= todayInClinic(),
+  };
+}
+
+export const patientGetMyAppointments = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async ({ context }) => {
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin
+      .from("appointments")
+      .select(
+        `
+        id, appointment_no, status, date, time, notes, created_at,
+        payment_status, payment_amount,
+        services:service_id (name),
+        video_offers:offer_id (title),
+        video_sessions:video_sessions (vc_no, status, created_at)
+      `,
+      )
+      .eq("patient_id", context.patientId)
+      .order("date", { ascending: false })
+      .order("time", { ascending: false });
+
+    if (error) return { error: error.message, appointments: [] };
+    const rows = (data ?? []).map(mapPatientAppointment);
+    const today = todayInClinic();
+    const upcoming = rows.filter((r) => r.date >= today);
+    const past = rows.filter((r) => r.date < today);
+    return { error: null, appointments: [...upcoming, ...past] };
+  });
+
+// ---------------------------------------------------------------------------
+// Patient — link a previously booked (guest) appointment to my account
+// ---------------------------------------------------------------------------
+
+export const patientClaimAppointment = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator(
+    z
+      .object({
+        appointmentId: z.string().trim().min(1).max(64),
+        phone: z.string().trim().min(7).max(30).optional(),
+        email: z.string().trim().email().max(200).toLowerCase().optional(),
+      })
+      .refine((v) => v.phone || v.email, { message: "Enter your phone number or email." }),
+  )
+  .handler(async ({ data, context }) => {
+    const admin = getSupabaseAdmin();
+    const id = data.appointmentId.trim();
+
+    let query = admin.from("appointments").select("id, patient_id");
+    if (uuidSchema.safeParse(id).success) {
+      query = query.or(`id.eq.${id},appointment_no.eq.${id}`);
+    } else {
+      query = query.eq("appointment_no", id);
+    }
+    if (data.email) query = query.eq("patient_email", data.email);
+    if (data.phone) query = query.eq("patient_phone", data.phone);
+
+    const { data: row, error } = await query.maybeSingle();
+    if (error || !row) {
+      return { error: "No matching appointment found. Check the ID and contact details." };
+    }
+    if (row.patient_id && row.patient_id !== context.patientId) {
+      return { error: "That appointment is already linked to another account." };
+    }
+
+    const { error: updateError } = await admin
+      .from("appointments")
+      .update({ patient_id: context.patientId })
+      .eq("id", row.id);
+    if (updateError) return { error: updateError.message };
+
+    await createPatientNotification(admin, {
+      userId: context.patientId,
+      type: "appointment_status",
+      title: "Appointment linked",
+      body: `Appointment ${id} is now linked to your account.`,
+      link: "/patient",
+    });
+    return { error: null };
+  });
+
+// ---------------------------------------------------------------------------
+// Patient — cancel my appointment
+// ---------------------------------------------------------------------------
+
+export const patientCancelAppointment = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator(z.object({ id: uuidSchema }))
+  .handler(async ({ data, context }) => {
+    const admin = getSupabaseAdmin();
+
+    const { data: row } = await admin
+      .from("appointments")
+      .select("id, patient_id, status, date, appointment_no")
+      .eq("id", data.id)
+      .maybeSingle();
+
+    if (!row) return { error: "Appointment not found." };
+    if (row.patient_id !== context.patientId) return { error: "Forbidden" };
+    if (row.status !== "pending" && row.status !== "confirmed") {
+      return { error: "Only pending or confirmed appointments can be cancelled." };
+    }
+    if (row.date < todayInClinic()) {
+      return { error: "Past appointments cannot be cancelled online. Please contact the clinic." };
+    }
+
+    const { error } = await admin
+      .from("appointments")
+      .update({ status: "cancelled" })
+      .eq("id", data.id);
+    if (error) return { error: error.message };
+
+    await releaseOfferUsage(admin, data.id);
+
+    await createPatientNotification(admin, {
+      userId: context.patientId,
+      type: "appointment_cancelled",
+      title: "Appointment cancelled",
+      body: `Your appointment ${(row.appointment_no as string | null) ?? data.id} has been cancelled.`,
+      link: "/patient",
+    });
+
+    return { error: null };
+  });
+
+// ---------------------------------------------------------------------------
+// Patient — reschedule my appointment (same rules as admin reschedule)
+// ---------------------------------------------------------------------------
+
+export const patientRescheduleAppointment = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator(z.object({ id: uuidSchema, date: dateSchema, time: timeSchema.nullable().optional() }))
+  .handler(async ({ data, context }) => {
+    const admin = getSupabaseAdmin();
+
+    const { data: row } = await admin
+      .from("appointments")
+      .select(
+        "id, patient_id, status, date, time, duration_minutes, services:service_id (name, duration_minutes)",
+      )
+      .eq("id", data.id)
+      .maybeSingle();
+
+    if (!row) return { error: "Appointment not found." };
+    if (row.patient_id !== context.patientId) return { error: "Forbidden" };
+    if (row.status !== "pending" && row.status !== "confirmed") {
+      return { error: "Only pending or confirmed appointments can be rescheduled." };
+    }
+    if (row.date < todayInClinic()) {
+      return {
+        error: "Past appointments cannot be rescheduled online. Please contact the clinic.",
+      };
+    }
+
+    const services = row.services as unknown as {
+      name: string | null;
+      duration_minutes: number | null;
+    } | null;
+    const serviceName = services?.name ?? "";
+    const isHomeVisit = serviceName.toLowerCase().includes("home visit");
+    const isVideo = serviceName.toLowerCase().includes("video consultation");
+    const duration = isVideo ? 15 : (services?.duration_minutes ?? row.duration_minutes ?? 30);
+
+    const slotError = await validateAppointmentSlot(admin, {
+      date: data.date,
+      time: data.time ?? null,
+      durationMinutes: duration,
+      isHomeVisit,
+      excludeId: data.id,
+    });
+    if (slotError) return { error: slotError };
+
+    const { error } = await admin
+      .from("appointments")
+      .update({ date: data.date, time: data.time ?? null })
+      .eq("id", data.id);
+    if (error) {
+      const isSlotCollision = error.code === "23505" || error.code === "23P01";
+      return {
+        error: isSlotCollision
+          ? "That slot was just taken. Please pick another time."
+          : error.message,
+      };
+    }
+
+    await createPatientNotification(admin, {
+      userId: context.patientId,
+      type: "appointment_rescheduled",
+      title: "Appointment rescheduled",
+      body: `Your appointment was moved to ${data.date}${data.time ? ` at ${data.time.slice(0, 5)}` : ""}.`,
+      link: "/patient",
+    });
+
+    return { error: null };
+  });
+
+// ---------------------------------------------------------------------------
+// Patient — in-app notification center
+// ---------------------------------------------------------------------------
+
+export const patientGetMyNotifications = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async ({ context }) => {
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin
+      .from("patient_notifications")
+      .select("*")
+      .eq("user_id", context.patientId)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    return { error: error?.message ?? null, notifications: data ?? [] };
+  });
+
+export const patientMarkNotificationRead = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator(z.object({ id: uuidSchema }))
+  .handler(async ({ data, context }) => {
+    const { error } = await getSupabaseAdmin()
+      .from("patient_notifications")
+      .update({ read_at: new Date().toISOString() })
+      .eq("id", data.id)
+      .eq("user_id", context.patientId);
+    return { error: error?.message ?? null };
+  });
+
+export const patientMarkAllNotificationsRead = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async ({ context }) => {
+    const { error } = await getSupabaseAdmin()
+      .from("patient_notifications")
+      .update({ read_at: new Date().toISOString() })
+      .eq("user_id", context.patientId)
+      .is("read_at", null);
+    return { error: error?.message ?? null };
+  });
+
+// ---------------------------------------------------------------------------
+// Patient — my profile
+// ---------------------------------------------------------------------------
+
+export const patientUpdateProfile = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator(
+    z.object({
+      full_name: z.string().trim().min(1).max(100).optional(),
+      phone: z.string().trim().max(30).optional(),
+      date_of_birth: dateSchema.nullable().optional(),
+      gender: z.string().trim().max(20).nullable().optional(),
+      address: z.string().trim().max(500).nullable().optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await getSupabaseAdmin()
+      .from("profiles")
+      .update(data)
+      .eq("id", context.patientId);
+    return { error: error?.message ?? null };
+  });
+
+// ---------------------------------------------------------------------------
+// Patient — my medical documents
+// ---------------------------------------------------------------------------
+
+export const patientGetMyDocuments = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async ({ context }) => {
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin
+      .from("documents")
+      .select("*")
+      .eq("patient_id", context.patientId)
+      .order("created_at", { ascending: false });
+    return { error: error?.message ?? null, documents: data ?? [] };
+  });
+
+export const patientDeleteDocument = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator(z.object({ id: uuidSchema }))
+  .handler(async ({ data, context }) => {
+    const admin = getSupabaseAdmin();
+    const { data: doc } = await admin
+      .from("documents")
+      .select("id, patient_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!doc) return { error: "Document not found." };
+    if (doc.patient_id !== context.patientId) return { error: "Forbidden" };
+    const { error } = await admin.from("documents").delete().eq("id", data.id);
+    return { error: error?.message ?? null };
+  });
+
+// ---------------------------------------------------------------------------
+// Public — reviews (moderated submission)
+// ---------------------------------------------------------------------------
+
+export const submitReview = createServerFn({ method: "POST" })
+  .middleware([optionalAuthMiddleware])
+  .validator(
+    z.object({
+      name: z.string().trim().min(1, "Enter your name").max(100),
+      rating: z.number().int().min(1).max(5),
+      text: z.string().trim().min(1, "Please write your review").max(4000),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const admin = getSupabaseAdmin();
+
+    // A signed-in patient's review is linked to their account.
+    let patientId: string | null = null;
+    if (context?.accessToken) {
+      const { data: userData } = await admin.auth.getUser(context.accessToken);
+      if (userData?.user) patientId = userData.user.id;
+    }
+
+    // Moderation: submissions start pending + hidden until an admin approves.
+    const { error } = await admin.from("reviews").insert({
+      name: data.name,
+      rating: data.rating,
+      text: data.text,
+      patient_id: patientId,
+      status: "pending",
+      is_active: false,
+    });
+    if (error) return { error: error.message };
+
+    if (patientId) {
+      await createPatientNotification(admin, {
+        userId: patientId,
+        type: "review",
+        title: "Review submitted",
+        body: "Thanks! Your review is pending approval and will appear once approved.",
+        link: "/patient",
+      });
+    }
+    return { error: null };
+  });
+
+// ---------------------------------------------------------------------------
+// Public — place a product order
+// ---------------------------------------------------------------------------
+
+const orderItemSchema = z.object({
+  productId: uuidSchema,
+  quantity: z.number().int().min(1).max(50),
+});
+
+export const placeOrder = createServerFn({ method: "POST" })
+  .middleware([optionalAuthMiddleware])
+  .validator(
+    z.object({
+      items: z.array(orderItemSchema).min(1, "Your cart is empty").max(50),
+      name: z.string().trim().min(1, "Enter your name").max(100),
+      phone: z.string().trim().min(7, "Enter a valid phone number").max(30),
+      email: z.string().trim().email().max(200).toLowerCase().optional(),
+      address: z.string().trim().min(1, "Enter your delivery address").max(1000),
+      notes: z.string().trim().max(1000).optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const admin = getSupabaseAdmin();
+
+    let patientId: string | null = null;
+    if (context?.accessToken) {
+      const { data: userData } = await admin.auth.getUser(context.accessToken);
+      if (userData?.user) patientId = userData.user.id;
+    }
+
+    // Validate products, snapshot prices, compute the total server-side.
+    const ids = data.items.map((i) => i.productId);
+    const { data: products, error: productsError } = await admin
+      .from("products")
+      .select("id, name, price, in_stock")
+      .in("id", ids);
+    if (productsError) return { error: productsError.message };
+
+    const byId = new Map((products ?? []).map((p) => [p.id, p]));
+    let total = 0;
+    const itemRows: Array<{
+      product_id: string;
+      product_name: string;
+      price: number;
+      quantity: number;
+    }> = [];
+    for (const item of data.items) {
+      const product = byId.get(item.productId);
+      if (!product) return { error: "One of the products is no longer available." };
+      if (product.in_stock !== true) return { error: `"${product.name}" is out of stock.` };
+      const price = Number(product.price ?? 0);
+      total += price * item.quantity;
+      itemRows.push({
+        product_id: item.productId,
+        product_name: product.name as string,
+        price,
+        quantity: item.quantity,
+      });
+    }
+
+    const orderId = crypto.randomUUID();
+    for (let attempt = 0; attempt < ID_RETRY_ATTEMPTS; attempt++) {
+      const orderNo = generateOrderNo();
+      const { error: orderError } = await admin.from("orders").insert({
+        id: orderId,
+        order_no: orderNo,
+        patient_id: patientId,
+        name: data.name,
+        phone: data.phone,
+        email: data.email ?? null,
+        address: data.address,
+        total,
+        status: "placed",
+        notes: data.notes ?? null,
+      });
+      if (!orderError) {
+        const { error: itemsError } = await admin
+          .from("order_items")
+          .insert(itemRows.map((r) => ({ order_id: orderId, ...r })));
+        if (itemsError) {
+          await admin.from("orders").delete().eq("id", orderId);
+          return { error: itemsError.message };
+        }
+
+        if (patientId) {
+          await createPatientNotification(admin, {
+            userId: patientId,
+            type: "appointment_status",
+            title: "Order placed",
+            body: `Your order ${orderNo} has been placed. We will contact you to confirm delivery.`,
+            link: "/patient/orders",
+          });
+        }
+        return { error: null, orderNo };
+      }
+      const isCodeCollision = orderError.code === "23505" && /order_no/i.test(orderError.message);
+      if (!isCodeCollision) return { error: orderError.message, orderNo: null };
+    }
+    return { error: "Could not generate a unique order number. Please try again.", orderNo: null };
+  });
+
+export const patientGetMyOrders = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async ({ context }) => {
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin
+      .from("orders")
+      .select("*, order_items:order_items (product_name, price, quantity)")
+      .eq("patient_id", context.patientId)
+      .order("created_at", { ascending: false });
+    return { error: error?.message ?? null, orders: data ?? [] };
+  });
+
+// ---------------------------------------------------------------------------
+// Public — FAQs, doctor profile, support
+// ---------------------------------------------------------------------------
+
+export const getPublicFaqs = createServerFn({ method: "GET" })
+  .validator((d: unknown) => d as undefined)
+  .handler(async () => {
+    const { data } = await getSupabaseAdmin()
+      .from("faqs")
+      .select("id, category, question, answer")
+      .eq("is_active", true)
+      .order("category")
+      .order("sort_order");
+    return { faqs: data ?? [] };
+  });
+
+export const getPublicDoctorProfile = createServerFn({ method: "GET" })
+  .validator((d: unknown) => d as undefined)
+  .handler(async () => {
+    const { data } = await getSupabaseAdmin()
+      .from("doctor_profile")
+      .select("*")
+      .eq("id", 1)
+      .maybeSingle();
+    return { profile: data ?? null };
+  });
+
+export const submitSupportMessage = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      name: z.string().trim().min(1, "Enter your name").max(100),
+      email: z.string().trim().email().max(200).toLowerCase().optional(),
+      phone: z.string().trim().max(30).optional(),
+      subject: z.string().trim().max(200).optional(),
+      message: z
+        .string()
+        .trim()
+        .min(10, "Please describe your question (at least 10 characters)")
+        .max(4000),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const { error } = await getSupabaseAdmin()
+      .from("support_messages")
+      .insert({
+        name: data.name,
+        email: data.email ?? null,
+        phone: data.phone ?? null,
+        subject: data.subject ?? "",
+        message: data.message,
+        status: "new",
+      });
+    return { error: error?.message ?? null };
+  });
+
+// ---------------------------------------------------------------------------
+// Public — global search
+// ---------------------------------------------------------------------------
+
+export const searchSiteContent = createServerFn({ method: "POST" })
+  .validator(z.object({ q: z.string().trim().max(200) }))
+  .handler(async ({ data }) => {
+    const groups = await searchSite(getSupabaseAdmin(), data.q);
+    return { groups };
+  });
+
+// ---------------------------------------------------------------------------
+// Admin — FAQs
+// ---------------------------------------------------------------------------
+
+const faqInputSchema = z.object({
+  category: z.string().trim().max(100).optional(),
+  question: z.string().trim().min(1, "Question is required").max(500),
+  answer: z.string().trim().min(1, "Answer is required").max(4000),
+  sort_order: z.number().int().optional(),
+  is_active: z.boolean().optional(),
+});
+
+export const adminGetFaqs = createServerFn({ method: "GET" })
+  .middleware([adminMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async () => {
+    const { data } = await getSupabaseAdmin()
+      .from("faqs")
+      .select("*")
+      .order("category")
+      .order("sort_order");
+    return { faqs: data ?? [] };
+  });
+
+export const adminCreateFaq = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(faqInputSchema)
+  .handler(async ({ data }) => {
+    const { error } = await getSupabaseAdmin().from("faqs").insert(data);
+    return { error: error?.message ?? null };
+  });
+
+export const adminUpdateFaq = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(z.object({ id: uuidSchema, data: faqInputSchema.partial() }))
+  .handler(async ({ data }) => {
+    const { error } = await getSupabaseAdmin().from("faqs").update(data.data).eq("id", data.id);
+    return { error: error?.message ?? null };
+  });
+
+export const adminDeleteFaq = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(z.object({ id: uuidSchema }))
+  .handler(async ({ data }) => {
+    const { error } = await getSupabaseAdmin().from("faqs").delete().eq("id", data.id);
+    return { error: error?.message ?? null };
+  });
+
+// ---------------------------------------------------------------------------
+// Admin — support inbox
+// ---------------------------------------------------------------------------
+
+export const adminGetSupportMessages = createServerFn({ method: "GET" })
+  .middleware([adminMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async () => {
+    const { data } = await getSupabaseAdmin()
+      .from("support_messages")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    return { messages: data ?? [] };
+  });
+
+export const adminUpdateSupportMessage = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(
+    z.object({
+      id: uuidSchema,
+      status: z.enum(["new", "in_progress", "resolved", "closed"]).optional(),
+      admin_notes: z.string().trim().max(2000).optional(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const updates: { status?: string; admin_notes?: string; resolved_at?: string | null } = {};
+    if (data.status) updates.status = data.status;
+    if (data.admin_notes !== undefined) updates.admin_notes = data.admin_notes;
+    if (data.status === "resolved" || data.status === "closed") {
+      updates.resolved_at = new Date().toISOString();
+    } else if (data.status) {
+      updates.resolved_at = null;
+    }
+    const { error } = await getSupabaseAdmin()
+      .from("support_messages")
+      .update(updates)
+      .eq("id", data.id);
+    return { error: error?.message ?? null };
+  });
+
+// ---------------------------------------------------------------------------
+// Admin — doctor profile
+// ---------------------------------------------------------------------------
+
+const doctorProfileInputSchema = z.object({
+  full_name: z.string().trim().min(1).max(200).optional(),
+  title: z.string().trim().max(200).optional(),
+  tagline: z.string().trim().max(500).optional(),
+  bio: z.string().trim().max(8000).optional(),
+  credentials: z.string().trim().max(2000).optional(),
+  education: z.string().trim().max(2000).optional(),
+  experience_years: z.number().int().min(0).max(100).optional(),
+  languages: z.string().trim().max(300).optional(),
+  specialties: z.string().trim().max(500).optional(),
+  photo_url: z.string().trim().max(1000).nullable().optional(),
+  phone: z.string().trim().max(50).nullable().optional(),
+  email: z.string().trim().email().max(200).nullable().optional(),
+  address: z.string().trim().max(500).nullable().optional(),
+  social_links: z.record(z.string()).optional(),
+  is_active: z.boolean().optional(),
+});
+
+export const adminGetDoctorProfile = createServerFn({ method: "GET" })
+  .middleware([adminMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async () => {
+    const { data } = await getSupabaseAdmin()
+      .from("doctor_profile")
+      .select("*")
+      .eq("id", 1)
+      .maybeSingle();
+    return { profile: data ?? null };
+  });
+
+export const adminUpdateDoctorProfile = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(doctorProfileInputSchema)
+  .handler(async ({ data }) => {
+    const { error } = await getSupabaseAdmin()
+      .from("doctor_profile")
+      .update({ ...data, updated_at: new Date().toISOString() })
+      .eq("id", 1);
+    return { error: error?.message ?? null };
+  });
+
+// ---------------------------------------------------------------------------
+// Admin — medical documents (all patients)
+// ---------------------------------------------------------------------------
+
+export const adminGetDocuments = createServerFn({ method: "GET" })
+  .middleware([adminMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async () => {
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin
+      .from("documents")
+      .select("*, profiles:patient_id (full_name)")
+      .order("created_at", { ascending: false })
+      .limit(500);
+    return { error: error?.message ?? null, documents: data ?? [] };
+  });
+
+// ---------------------------------------------------------------------------
+// Admin — orders
+// ---------------------------------------------------------------------------
+
+export const adminGetOrders = createServerFn({ method: "GET" })
+  .middleware([adminMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async () => {
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin
+      .from("orders")
+      .select("*, order_items:order_items (product_name, price, quantity)")
+      .order("created_at", { ascending: false })
+      .limit(500);
+    return { error: error?.message ?? null, orders: data ?? [] };
+  });
+
+export const adminUpdateOrderStatus = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(
+    z.object({
+      id: uuidSchema,
+      status: z.enum(["placed", "processing", "shipped", "delivered", "cancelled"]),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const { error } = await getSupabaseAdmin()
+      .from("orders")
+      .update({ status: data.status })
+      .eq("id", data.id);
+    return { error: error?.message ?? null };
+  });
+
+// ---------------------------------------------------------------------------
+// Admin — appointment reminders
+// ---------------------------------------------------------------------------
+
+export const adminGetReminders = createServerFn({ method: "GET" })
+  .middleware([adminMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async () => {
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin
+      .from("reminders")
+      .select(
+        "*, appointments:appointment_id (appointment_no, patient_name, date, time, services:service_id (name))",
+      )
+      .order("remind_at", { ascending: false })
+      .limit(200);
+    return { error: error?.message ?? null, reminders: data ?? [] };
+  });
+
+export const adminCreateReminder = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(
+    z.object({
+      appointmentId: uuidSchema,
+      channel: z.enum(["email", "sms", "whatsapp"]),
+      remindOn: dateSchema,
+      remindAt: timeSchema,
+    }),
+  )
+  .handler(async ({ data }) => {
+    const result = await createAppointmentReminder(getSupabaseAdmin(), {
+      appointmentId: data.appointmentId,
+      channel: data.channel,
+      remindOn: data.remindOn,
+      remindAt: data.remindAt,
+    });
+    return { error: result.error };
+  });
+
+export const adminCancelReminder = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(z.object({ id: uuidSchema }))
+  .handler(async ({ data }) => {
+    const { error } = await getSupabaseAdmin()
+      .from("reminders")
+      .update({ status: "cancelled" })
+      .eq("id", data.id);
+    return { error: error?.message ?? null };
+  });
+
+export const adminSendDueReminders = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async () => {
+    const result = await sendDueReminders(getSupabaseAdmin());
+    return result;
+  });
+
+// ---------------------------------------------------------------------------
+// Admin — analytics dashboard
+// ---------------------------------------------------------------------------
+
+export const adminGetAnalytics = createServerFn({ method: "GET" })
+  .middleware([adminMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async () => {
+    return getAnalytics(getSupabaseAdmin());
   });

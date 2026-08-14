@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +11,6 @@ interface LoginFormProps {
 
 export function LoginForm({ onSuccess }: LoginFormProps) {
   const { login } = useAuth();
-  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -28,9 +26,6 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       setLoading(false);
     } else {
       onSuccess();
-      if (result.role === "admin" || result.role === "doctor") {
-        navigate({ to: "/admin" });
-      }
     }
   }
 

@@ -1,11 +1,24 @@
 import * as React from "react";
 import { format } from "date-fns";
-import { CheckCircle2, Loader2, ShieldCheck, Lock, Wallet, ArrowRight } from "lucide-react";
+import {
+  CheckCircle2,
+  Loader2,
+  ShieldCheck,
+  Lock,
+  Wallet,
+  ArrowRight,
+  Upload,
+  ImageIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { formatTimeDisplay } from "@/lib/bookings";
-import { usePaymentMethods, useSubmitVideoPayment } from "@/hooks/queries/usePayment";
+import {
+  usePaymentMethods,
+  useSubmitVideoPayment,
+  useSubmitPaymentReceipt,
+} from "@/hooks/queries/usePayment";
 import { PAYMENT_STATUS_LABELS } from "@/lib/payment";
 
 interface VideoPaymentStepProps {
@@ -22,6 +35,9 @@ interface VideoPaymentStepProps {
   date: Date;
   time: string;
   patientName: string;
+  /** Contact details from the booking form — pre-filled for the receipt ownership check. */
+  phone?: string;
+  email?: string;
   onClose: () => void;
 }
 
@@ -43,16 +59,29 @@ export function VideoPaymentStep({
   date,
   time,
   patientName,
+  phone,
+  email,
   onClose,
 }: VideoPaymentStepProps) {
   const { data: methods, isLoading: methodsLoading } = usePaymentMethods();
   const submit = useSubmitVideoPayment();
+  const submitReceipt = useSubmitPaymentReceipt();
 
+  const [verificationMode, setVerificationMode] = React.useState<"transaction" | "receipt">(
+    "transaction",
+  );
   const [methodId, setMethodId] = React.useState<string>();
   const [reference, setReference] = React.useState("");
   const [payerName, setPayerName] = React.useState("");
   const [formError, setFormError] = React.useState("");
   const [done, setDone] = React.useState(false);
+
+  const [upId, setUpId] = React.useState(appointmentNo ?? "");
+  const [upPhone, setUpPhone] = React.useState(phone ?? "");
+  const [upEmail, setUpEmail] = React.useState(email ?? "");
+  const [upFile, setUpFile] = React.useState<File>();
+  const [upError, setUpError] = React.useState("");
+  const fileRef = React.useRef<HTMLInputElement>(null);
 
   const selectedMethod = methods?.find((m) => m.id === methodId);
 
@@ -85,6 +114,74 @@ export function VideoPaymentStep({
       setDone(true);
     } catch (e) {
       setFormError(e instanceof Error ? e.message : "Could not submit your payment. Try again.");
+    }
+  }
+
+  function pickReceiptFile(f: File) {
+    setUpError("");
+    if (!["image/jpeg", "image/jpg", "image/png"].includes(f.type)) {
+      setUpError("Please choose a JPG, JPEG or PNG receipt image.");
+      return;
+    }
+    if (f.size > 5 * 1024 * 1024) {
+      setUpError("Receipt image must be under 5 MB.");
+      return;
+    }
+    setUpFile(f);
+  }
+
+  function readFileAsBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = typeof reader.result === "string" ? reader.result : "";
+        resolve(result.split(",")[1] ?? "");
+      };
+      reader.onerror = () => reject(new Error("Could not read the receipt image."));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleUploadReceipt(e: React.FormEvent) {
+    e.preventDefault();
+    setUpError("");
+
+    if (!methodId) {
+      setUpError("Please choose a payment method.");
+      return;
+    }
+    if (!upId.trim()) {
+      setUpError("Please enter your Appointment ID.");
+      return;
+    }
+    if (!upPhone.trim() && !upEmail.trim()) {
+      setUpError("Please enter your phone number or email to verify.");
+      return;
+    }
+    if (!upFile) {
+      setUpError("Please choose a receipt screenshot (JPG/JPEG/PNG).");
+      return;
+    }
+
+    try {
+      const fileBase64 = await readFileAsBase64(upFile);
+      const res = await submitReceipt.mutateAsync({
+        id: upId.trim(),
+        phone: upPhone,
+        email: upEmail,
+        methodId,
+        fileName: upFile.name,
+        mimeType: upFile.type as "image/jpeg" | "image/jpg" | "image/png",
+        fileBase64,
+        fileSize: upFile.size,
+      });
+      if (res.error) {
+        setUpError(res.error);
+        return;
+      }
+      setDone(true);
+    } catch (err) {
+      setUpError(err instanceof Error ? err.message : "Could not upload your receipt.");
     }
   }
 
@@ -198,127 +295,300 @@ export function VideoPaymentStep({
       </div>
 
       <div className="mx-auto mt-6 w-full max-w-md">
-        <div className="text-sm font-semibold text-foreground">1. Choose a payment method</div>
+        <div className="text-sm font-semibold text-foreground">Payment Verification</div>
+        <div className="mt-2 grid grid-cols-2 gap-2 rounded-2xl bg-muted p-1">
+          <button
+            type="button"
+            onClick={() => setVerificationMode("transaction")}
+            className={`rounded-xl px-3 py-2.5 text-center transition-colors ${
+              verificationMode === "transaction"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <div className="text-[11px] font-semibold">Option 1</div>
+            <div className="text-sm font-medium">Enter Transaction ID</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setVerificationMode("receipt")}
+            className={`rounded-xl px-3 py-2.5 text-center transition-colors ${
+              verificationMode === "receipt"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <div className="text-[11px] font-semibold">Option 2</div>
+            <div className="text-sm font-medium">Upload Payment Receipt</div>
+          </button>
+        </div>
 
-        {methodsLoading ? (
-          <div className="mt-2 flex items-center gap-2 py-4 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading payment methods...
-          </div>
-        ) : !methods || methods.length === 0 ? (
-          <div className="mt-2 rounded-xl border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
-            Payment methods are being configured by the clinic. Please contact Dr. Naseem to
-            complete your payment.
-          </div>
-        ) : (
-          <div className="mt-2 space-y-2">
-            {methods.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => setMethodId(m.id)}
-                className={cn(
-                  "w-full rounded-xl border px-4 py-3 text-left transition-colors",
-                  methodId === m.id
-                    ? "border-primary bg-primary-soft"
-                    : "border-border bg-background hover:bg-muted",
-                )}
-              >
-                <div className="text-sm font-semibold text-foreground">{m.name}</div>
-                {m.description && (
-                  <div className="mt-0.5 text-xs text-muted-foreground">{m.description}</div>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
+        {verificationMode === "transaction" ? (
+          <>
+            <div className="mt-6 text-sm font-semibold text-foreground">
+              1. Choose a payment method
+            </div>
 
-        {selectedMethod && (selectedMethod.instructions || hasMethodDetails(selectedMethod)) && (
-          <div className="mt-3 rounded-xl border border-dashed border-primary/40 bg-primary-soft/60 p-3 text-sm">
-            <div className="text-xs font-semibold text-primary">Payment instructions</div>
-            {selectedMethod.instructions && (
-              <div className="mt-1 whitespace-pre-wrap text-muted-foreground">
-                {selectedMethod.instructions}
+            {methodsLoading ? (
+              <div className="mt-2 flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading payment methods...
+              </div>
+            ) : !methods || methods.length === 0 ? (
+              <div className="mt-2 rounded-xl border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
+                Payment methods are being configured by the clinic. Please contact Dr. Naseem to
+                complete your payment.
+              </div>
+            ) : (
+              <div className="mt-2 space-y-2">
+                {methods.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setMethodId(m.id)}
+                    className={cn(
+                      "w-full rounded-xl border px-4 py-3 text-left transition-colors",
+                      methodId === m.id
+                        ? "border-primary bg-primary-soft"
+                        : "border-border bg-background hover:bg-muted",
+                    )}
+                  >
+                    <div className="text-sm font-semibold text-foreground">{m.name}</div>
+                    {m.description && (
+                      <div className="mt-0.5 text-xs text-muted-foreground">{m.description}</div>
+                    )}
+                  </button>
+                ))}
               </div>
             )}
-            {hasMethodDetails(selectedMethod) && (
-              <dl className="mt-2 space-y-1 text-xs">
-                {selectedMethod.account_holder_name && (
-                  <DetailRow label="Account holder" value={selectedMethod.account_holder_name} />
-                )}
-                {selectedMethod.bank_name && (
-                  <DetailRow label="Bank" value={selectedMethod.bank_name} />
-                )}
-                {selectedMethod.account_number && (
-                  <DetailRow label="Account no." value={selectedMethod.account_number} mono />
-                )}
-                {selectedMethod.iban && <DetailRow label="IBAN" value={selectedMethod.iban} mono />}
-                {selectedMethod.mobile_number && (
-                  <DetailRow label="Mobile" value={selectedMethod.mobile_number} mono />
-                )}
-              </dl>
-            )}
-          </div>
-        )}
 
-        <div className="mt-6 text-sm font-semibold text-foreground">
-          2. Enter your payment details
-        </div>
-        <div className="mt-2 space-y-3">
-          <div>
-            <div className="mb-1.5 text-xs font-medium text-foreground">
-              Transaction / Reference ID
+            {selectedMethod &&
+              (selectedMethod.instructions || hasMethodDetails(selectedMethod)) && (
+                <div className="mt-3 rounded-xl border border-dashed border-primary/40 bg-primary-soft/60 p-3 text-sm">
+                  <div className="text-xs font-semibold text-primary">Payment instructions</div>
+                  {selectedMethod.instructions && (
+                    <div className="mt-1 whitespace-pre-wrap text-muted-foreground">
+                      {selectedMethod.instructions}
+                    </div>
+                  )}
+                  {hasMethodDetails(selectedMethod) && (
+                    <dl className="mt-2 space-y-1 text-xs">
+                      {selectedMethod.account_holder_name && (
+                        <DetailRow
+                          label="Account holder"
+                          value={selectedMethod.account_holder_name}
+                        />
+                      )}
+                      {selectedMethod.bank_name && (
+                        <DetailRow label="Bank" value={selectedMethod.bank_name} />
+                      )}
+                      {selectedMethod.account_number && (
+                        <DetailRow label="Account no." value={selectedMethod.account_number} mono />
+                      )}
+                      {selectedMethod.iban && (
+                        <DetailRow label="IBAN" value={selectedMethod.iban} mono />
+                      )}
+                      {selectedMethod.mobile_number && (
+                        <DetailRow label="Mobile" value={selectedMethod.mobile_number} mono />
+                      )}
+                    </dl>
+                  )}
+                </div>
+              )}
+
+            <div className="mt-6 text-sm font-semibold text-foreground">
+              2. Enter your payment details
             </div>
-            <Input
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-              placeholder="e.g. TRX-123456789"
-              className="h-11 rounded-xl"
-            />
-          </div>
-          <div>
-            <div className="mb-1.5 text-xs font-medium text-foreground">Payer Name</div>
-            <Input
-              value={payerName}
-              onChange={(e) => setPayerName(e.target.value)}
-              placeholder="Name the payment was made from"
-              className="h-11 rounded-xl"
-            />
-          </div>
-        </div>
+            <div className="mt-2 space-y-3">
+              <div>
+                <div className="mb-1.5 text-xs font-medium text-foreground">
+                  Transaction / Reference ID
+                </div>
+                <Input
+                  value={reference}
+                  onChange={(e) => setReference(e.target.value)}
+                  placeholder="e.g. TRX-123456789"
+                  className="h-11 rounded-xl"
+                />
+              </div>
+              <div>
+                <div className="mb-1.5 text-xs font-medium text-foreground">Payer Name</div>
+                <Input
+                  value={payerName}
+                  onChange={(e) => setPayerName(e.target.value)}
+                  placeholder="Name the payment was made from"
+                  className="h-11 rounded-xl"
+                />
+              </div>
+            </div>
 
-        {formError && <p className="mt-3 text-sm font-medium text-destructive">{formError}</p>}
+            {formError && <p className="mt-3 text-sm font-medium text-destructive">{formError}</p>}
 
-        <div className="mt-4 flex items-start gap-2 rounded-xl border border-border bg-background p-3 text-xs text-muted-foreground">
-          <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-          <p>
-            The clinic verifies prepaid payments manually before the video call is unlocked. This
-            keeps consultations secure.
-          </p>
-        </div>
+            <div className="mt-4 flex items-start gap-2 rounded-xl border border-border bg-background p-3 text-xs text-muted-foreground">
+              <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+              <p>
+                The clinic verifies prepaid payments manually before the video call is unlocked.
+                This keeps consultations secure.
+              </p>
+            </div>
 
-        <Button
-          onClick={handleSubmit}
-          disabled={submit.isPending}
-          className="mt-4 h-12 w-full rounded-xl"
-        >
-          {submit.isPending ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" /> Submitting...
-            </>
-          ) : (
-            <>
-              <ShieldCheck className="h-4 w-4" /> I've made the payment — submit for verification
-            </>
-          )}
-        </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={submit.isPending}
+              className="mt-4 h-12 w-full rounded-xl"
+            >
+              {submit.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Submitting...
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="h-4 w-4" /> I've made the payment — submit for
+                  verification
+                </>
+              )}
+            </Button>
 
-        <button
-          type="button"
-          onClick={onClose}
-          className="mt-3 flex w-full items-center justify-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
-        >
-          <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Skip for now (book another)
-        </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-3 flex w-full items-center justify-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+            >
+              <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Skip for now (book another)
+            </button>
+          </>
+        ) : (
+          <form onSubmit={handleUploadReceipt} className="mt-6 space-y-4">
+            <div>
+              <div className="text-sm font-semibold text-foreground">Choose a payment method</div>
+
+              {methodsLoading ? (
+                <div className="mt-2 flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading payment methods...
+                </div>
+              ) : !methods || methods.length === 0 ? (
+                <div className="mt-2 rounded-xl border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
+                  Payment methods are being configured by the clinic. Please contact Dr. Naseem to
+                  complete your payment.
+                </div>
+              ) : (
+                <div className="mt-2 space-y-2">
+                  {methods.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setMethodId(m.id)}
+                      className={cn(
+                        "w-full rounded-xl border px-4 py-3 text-left transition-colors",
+                        methodId === m.id
+                          ? "border-primary bg-primary-soft"
+                          : "border-border bg-background hover:bg-muted",
+                      )}
+                    >
+                      <div className="text-sm font-semibold text-foreground">{m.name}</div>
+                      {m.description && (
+                        <div className="mt-0.5 text-xs text-muted-foreground">{m.description}</div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <div className="mb-1.5 text-xs font-medium text-foreground">
+                Receipt ID / Patient ID
+              </div>
+              <Input
+                value={upId}
+                onChange={(e) => setUpId(e.target.value)}
+                placeholder="Appointment ID (APT-7K4M92)"
+                className="h-11 rounded-xl"
+              />
+            </div>
+
+            <div>
+              <div className="mb-1.5 text-xs font-medium text-foreground">Phone Number</div>
+              <Input
+                value={upPhone}
+                onChange={(e) => setUpPhone(e.target.value)}
+                placeholder="+92 3XX XXXXXXX"
+                className="h-11 rounded-xl"
+              />
+            </div>
+
+            <div className="text-center text-xs text-muted-foreground">or</div>
+
+            <div>
+              <div className="mb-1.5 text-xs font-medium text-foreground">Email Address</div>
+              <Input
+                type="email"
+                value={upEmail}
+                onChange={(e) => setUpEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="h-11 rounded-xl"
+              />
+            </div>
+
+            <div>
+              <div className="mb-1.5 text-xs font-medium text-foreground">
+                Payment receipt screenshot
+              </div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/jpg,image/png"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) pickReceiptFile(f);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="flex w-full items-center gap-3 rounded-xl border border-dashed border-border bg-background px-4 py-4 text-left transition-colors hover:border-primary/40"
+              >
+                {upFile ? (
+                  <ImageIcon className="h-5 w-5 shrink-0 text-primary" />
+                ) : (
+                  <Upload className="h-5 w-5 shrink-0 text-muted-foreground" />
+                )}
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-foreground">
+                    {upFile ? upFile.name : "Choose a receipt screenshot"}
+                  </div>
+                  <div className="text-xs text-muted-foreground">JPG / JPEG / PNG · max 5 MB</div>
+                </div>
+              </button>
+            </div>
+
+            {upError && <p className="text-sm font-medium text-destructive">{upError}</p>}
+
+            <Button
+              type="submit"
+              disabled={submitReceipt.isPending}
+              className="h-12 w-full rounded-xl"
+            >
+              {submitReceipt.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4" /> Upload Receipt for Verification
+                </>
+              )}
+            </Button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex w-full items-center justify-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+            >
+              <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Skip for now (book another)
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

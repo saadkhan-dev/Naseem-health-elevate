@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Plus, Loader2, Pencil, Trash2, Check, X } from "lucide-react";
 import {
   useAdminReviews,
   useCreateReview,
@@ -36,6 +36,12 @@ export const Route = createFileRoute("/admin/reviews")({
 
 const emptyForm = { name: "", rating: 5, text: "", is_active: true };
 
+const statusStyles: Record<string, string> = {
+  pending: "bg-amber-100 text-amber-700",
+  approved: "bg-green-100 text-green-700",
+  rejected: "bg-red-100 text-red-700",
+};
+
 function AdminReviews() {
   const { data: reviews, isLoading, isError, error } = useAdminReviews();
   const createReview = useCreateReview();
@@ -45,10 +51,15 @@ function AdminReviews() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Review | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
+
+  const pendingCount = (reviews ?? []).filter((r) => r.status === "pending").length;
 
   function openCreate() {
     setEditing(null);
     setForm(emptyForm);
+    setSaveError(null);
     setDialogOpen(true);
   }
 
@@ -60,16 +71,30 @@ function AdminReviews() {
       text: r.text,
       is_active: r.is_active,
     });
+    setSaveError(null);
     setDialogOpen(true);
   }
 
   async function handleSave() {
-    if (editing) {
-      await updateReview.mutateAsync({ id: editing.id, data: form });
-    } else {
-      await createReview.mutateAsync(form);
+    const result = editing
+      ? await updateReview.mutateAsync({ id: editing.id, data: form })
+      : await createReview.mutateAsync(form);
+    if (result.error) {
+      setSaveError(result.error);
+      return;
     }
+    setSaveError(null);
     setDialogOpen(false);
+  }
+
+  async function setStatus(r: Review, status: "approved" | "rejected") {
+    const result = await updateReview.mutateAsync({ id: r.id, data: { status } });
+    if (result.error) setListError(result.error);
+  }
+
+  async function handleDelete(id: string) {
+    const result = await deleteReview.mutateAsync(id);
+    if (result.error) setListError(result.error);
   }
 
   return (
@@ -78,7 +103,12 @@ function AdminReviews() {
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Patient Reviews</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Manage reviews shown on the public site
+            Approve or manage reviews shown on the public site
+            {pendingCount > 0 && (
+              <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                {pendingCount} pending
+              </span>
+            )}
           </p>
         </div>
         <Button onClick={openCreate}>
@@ -89,6 +119,12 @@ function AdminReviews() {
       {isError && (
         <div className="mt-4">
           <QueryError error={error} />
+        </div>
+      )}
+
+      {listError && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {listError}
         </div>
       )}
 
@@ -103,21 +139,52 @@ function AdminReviews() {
           reviews?.map((r) => (
             <div
               key={r.id}
-              className="flex items-center justify-between rounded-xl border bg-card px-5 py-4"
+              className={`flex items-center justify-between rounded-xl border bg-card px-5 py-4 ${
+                r.status === "pending" ? "border-amber-300" : ""
+              }`}
             >
-              <div>
-                <div className="font-medium text-foreground">
-                  {r.name}{" "}
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2 font-medium text-foreground">
+                  <span>{r.name}</span>
                   <span className="text-xs font-normal text-muted-foreground">
                     {"★".repeat(r.rating)}
                   </span>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${
+                      statusStyles[r.status ?? "pending"] ?? statusStyles.pending
+                    }`}
+                  >
+                    {r.status ?? "pending"}
+                  </span>
+                  {!r.is_active && r.status !== "rejected" && (
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                      hidden
+                    </span>
+                  )}
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  {r.text}
-                  {!r.is_active && " (hidden)"}
-                </div>
+                <div className="mt-1 text-xs text-muted-foreground">{r.text}</div>
               </div>
-              <div className="flex gap-1">
+              <div className="flex shrink-0 items-center gap-1">
+                {r.status === "pending" && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-green-600"
+                      onClick={() => setStatus(r, "approved")}
+                    >
+                      <Check className="h-4 w-4" /> Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-red-600"
+                      onClick={() => setStatus(r, "rejected")}
+                    >
+                      <X className="h-4 w-4" /> Reject
+                    </Button>
+                  </>
+                )}
                 <Button size="sm" variant="ghost" onClick={() => openEdit(r)}>
                   <Pencil className="h-4 w-4" />
                 </Button>
@@ -125,7 +192,7 @@ function AdminReviews() {
                   size="sm"
                   variant="ghost"
                   className="text-red-600"
-                  onClick={() => deleteReview.mutate(r.id)}
+                  onClick={() => handleDelete(r.id)}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -187,6 +254,7 @@ function AdminReviews() {
               />
             </div>
           </div>
+          {saveError && <p className="text-sm font-medium text-destructive">{saveError}</p>}
           <DialogFooter className="shrink-0 -mx-6 -mb-6 gap-2 border-t bg-background px-6 py-4 sm:space-x-0">
             <DialogClose asChild>
               <Button type="button" variant="outline">

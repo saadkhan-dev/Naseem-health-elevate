@@ -1,15 +1,7 @@
-import {
-  Facebook,
-  Instagram,
-  Youtube,
-  MessageCircle,
-  Phone,
-  Mail,
-  MapPin,
-  Stethoscope,
-} from "lucide-react";
+import { Facebook, Instagram, MessageCircle, Phone, Mail, MapPin, Stethoscope } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { PHONE, EMAIL, telUrl, whatsappUrl } from "@/lib/contact";
+import { SectionLink } from "@/components/site/SectionLink";
 
 export function SiteFooter() {
   return (
@@ -40,11 +32,6 @@ export function SiteFooter() {
                 Icon: Instagram,
                 link: "https://www.instagram.com/rahatphysio9?igsh=bTE0N2k0d3o4cXI2",
                 label: "Instagram",
-              },
-              {
-                Icon: Youtube,
-                link: "YOUR_YOUTUBE_LINK",
-                label: "YouTube",
               },
               {
                 Icon: MessageCircle,
@@ -162,16 +149,27 @@ function FCol({ title, items }: { title: string; items: { label: string; href: s
     <div>
       <div className="mb-3 text-sm font-semibold text-white">{title}</div>
       <ul className="space-y-2.5 text-sm text-white/75">
-        {items.map((i) => (
-          <li key={i.label}>
-            <Link
-              to={i.href}
-              className="inline-block transition-all duration-300 hover:translate-x-0.5 hover:text-white"
-            >
-              {i.label}
-            </Link>
-          </li>
-        ))}
+        {items.map((i) =>
+          i.href.startsWith("/#") ? (
+            <li key={i.label}>
+              <SectionLink
+                hash={i.href.slice(1)}
+                className="inline-block transition-all duration-300 hover:translate-x-0.5 hover:text-white"
+              >
+                {i.label}
+              </SectionLink>
+            </li>
+          ) : (
+            <li key={i.label}>
+              <Link
+                to={i.href}
+                className="inline-block transition-all duration-300 hover:translate-x-0.5 hover:text-white"
+              >
+                {i.label}
+              </Link>
+            </li>
+          ),
+        )}
       </ul>
     </div>
   );

@@ -54,7 +54,7 @@ export interface Appointment {
   service_id: string;
   date: string;
   time: string;
-  status: "pending" | "confirmed" | "rejected" | "completed" | "cancelled";
+  status: "pending" | "confirmed" | "rejected" | "completed" | "cancelled" | "arrived" | "no_show";
   notes: string | null;
   created_at: string;
 }
@@ -206,7 +206,7 @@ export interface AppointmentStatus {
   id: string;
   /** Short patient-facing appointment number (falls back to the row UUID for legacy rows). */
   appointmentNo: string;
-  status: "pending" | "confirmed" | "rejected" | "cancelled" | "completed";
+  status: "pending" | "confirmed" | "rejected" | "cancelled" | "completed" | "arrived" | "no_show";
   date: string;
   /** "HH:mm". null for flexible services (e.g. Home Visit — doctor confirms the time). */
   time: string | null;

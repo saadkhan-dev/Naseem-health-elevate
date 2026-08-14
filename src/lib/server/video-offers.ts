@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { computeOfferAmount, type VideoOffer } from "@/lib/video-offer-types";
+import { computeOfferAmount, isOfferVisible, type VideoOffer } from "@/lib/video-offer-types";
+import { todayInClinic } from "@/lib/clinic";
 
 /**
  * Server-side Video Consultation offer resolution.
@@ -21,7 +22,7 @@ import { computeOfferAmount, type VideoOffer } from "@/lib/video-offer-types";
  */
 
 export type { VideoOffer, VideoOfferType, VideoOfferEligibility } from "@/lib/video-offer-types";
-export { computeOfferAmount } from "@/lib/video-offer-types";
+export { computeOfferAmount, isOfferVisible, isOfferActive } from "@/lib/video-offer-types";
 
 export interface OfferDecision {
   /** The price the patient is actually charged (Rs., >= 0). */
@@ -63,6 +64,10 @@ export async function hasUsedAnyOffer(
  * validity window and passes its eligibility check wins. A "new_patients"
  * offer is skipped when the patient already used an offer before, but a
  * later (older) offer that is open to everyone can still apply.
+ *
+ * This is the PRICE rule: only offers whose start date has been reached are
+ * considered (upcoming offers never discount the fee). The end date is
+ * inclusive — an offer stays active for the whole of its end date.
  */
 export async function resolveVideoOffer(
   admin: SupabaseClient,
@@ -73,7 +78,7 @@ export async function resolveVideoOffer(
     patientName: string;
   },
 ): Promise<OfferDecision> {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayInClinic();
 
   const { data: offers, error } = await admin
     .from("video_offers")
@@ -98,6 +103,29 @@ export async function resolveVideoOffer(
   }
 
   return { amount: params.servicePrice, offer_id: null, offer_title: null };
+}
+
+/**
+ * All offers that should be DISPLAYED on the public website — active offers
+ * AND upcoming ones whose start date is still in the future. Expired offers
+ * and offers the admin deactivated are excluded. The end date is inclusive.
+ *
+ * Distinct from `resolveVideoOffer` (the PRICE rule): a returned upcoming
+ * offer must NOT be discounted until its start date arrives.
+ */
+export async function getVisibleVideoOffers(
+  admin: SupabaseClient,
+  today: string = todayInClinic(),
+): Promise<VideoOffer[]> {
+  const { data, error } = await admin
+    .from("video_offers")
+    .select("*")
+    .eq("is_active", true)
+    .or(`end_date.is.null,end_date.gte.${today}`)
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+  return (data as unknown as VideoOffer[]).filter((o) => isOfferVisible(o, today));
 }
 
 /**

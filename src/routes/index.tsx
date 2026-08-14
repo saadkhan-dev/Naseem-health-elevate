@@ -9,7 +9,6 @@ import { ConsultationProducts } from "@/components/site/ConsultationProducts";
 import { VideoGallery } from "@/components/site/VideoGallery";
 import { LocationAbout } from "@/components/site/LocationAbout";
 import { ReviewsSection } from "@/components/site/ReviewsSection";
-import { RecentAppointmentBanner } from "@/components/site/RecentAppointmentBanner";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
 export const Route = createFileRoute("/")({
@@ -49,9 +48,6 @@ function Index() {
       <Nav />
       <main>
         <Hero />
-        <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
-          <RecentAppointmentBanner />
-        </div>
         <ServicesSection />
         <DiseasesSection />
         <BookingPanel />

@@ -42,6 +42,7 @@
 
 :root {
   --radius: 0.875rem;
+  --navbar-height: 4rem;
   --background: oklch(0.995 0.003 220);
   --foreground: oklch(62.237% 0.25009 29.284);
   --card: oklch(1 0 0);
@@ -85,40 +86,8 @@
 
   html {
     scroll-behavior: smooth;
-    scroll-padding-top: 5rem;
-  }
-
-  #home {
-    scroll-margin-top: -1rem;
-  }
-
-  @media (min-width: 768px) {
-    #home {
-      scroll-margin-top: -0.5rem;
-    }
-  }
-
-  #services,
-  #contact {
-    scroll-margin-top: -3.75rem;
-  }
-
-  #diseases {
-    scroll-margin-top: -4rem;
-  }
-
-  #reviews {
-    scroll-margin-top: -3.5rem;
-  }
-
-  @media (min-width: 640px) {
-    #diseases {
-      scroll-margin-top: -5rem;
-    }
-
-    #reviews {
-      scroll-margin-top: -4.5rem;
-    }
+    /* Prevent horizontal page scrolling. `clip` (not `hidden`) keeps the navbar sticky. */
+    overflow-x: clip;
   }
 
   body {
@@ -126,7 +95,10 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    overflow-x: clip;
   }
+
+  
 
   h1,
   h2,

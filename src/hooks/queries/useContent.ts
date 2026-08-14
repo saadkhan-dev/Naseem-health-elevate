@@ -1,4 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getPublicVideoOffers } from "@/lib/video-offers-public";
+import type { VideoOffer } from "@/lib/video-offer-types";
 import { getPublishedProducts, type Product } from "@/lib/admin-data";
 import {
   getVideos,
@@ -39,6 +41,15 @@ export function usePublishedVideos() {
     queryKey: ["videos", "published"],
     queryFn: getPublishedVideos,
     staleTime: 1000 * 60 * 10,
+  });
+}
+
+// Video Consultation offers (public — active + upcoming, DISPLAY rule)
+export function usePublicVideoOffers() {
+  return useQuery<VideoOffer[]>({
+    queryKey: ["video-offers", "public"],
+    queryFn: getPublicVideoOffers,
+    staleTime: 1000 * 60 * 2,
   });
 }
 

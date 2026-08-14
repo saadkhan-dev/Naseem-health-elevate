@@ -59,6 +59,8 @@ export interface VideoJoinSession {
   roomName: string;
   durationMinutes: number;
   status: "scheduled" | "active" | "completed";
+  /** Jitsi Meet instance to connect to — returned by the server join lookup. */
+  jitsiDomain: string;
 }
 
 export interface VideoJoinAppointment {

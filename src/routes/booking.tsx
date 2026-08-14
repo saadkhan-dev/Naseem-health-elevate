@@ -33,6 +33,8 @@ import { BookingConfirmation } from "@/components/site/BookingConfirmation";
 import { VideoPaymentStep } from "@/components/site/VideoPaymentStep";
 import { Nav } from "@/components/site/Nav";
 import { SiteFooter } from "@/components/site/SiteFooter";
+import { VideoOfferCards } from "@/components/site/VideoOfferCards";
+import { usePublicVideoOffers } from "@/hooks/queries/useContent";
 import type { NotificationResult } from "@/lib/notifications";
 
 export const Route = createFileRoute("/booking")({
@@ -76,6 +78,7 @@ function BookingPage() {
   const { data: availability } = useAvailability();
   const { slots, isLoading: slotsLoading } = useTimeSlots(date, serviceId, services);
   const createAppointment = useCreateAppointment();
+  const { data: videoOffers } = usePublicVideoOffers();
 
   const bookingServices = React.useMemo(
     () =>
@@ -250,6 +253,13 @@ function BookingPage() {
             </div>
 
             <div className="rounded-3xl border border-border bg-card p-5 shadow-soft md:p-6">
+              {isVideoMode && (
+                <VideoOfferCards
+                  offers={videoOffers ?? []}
+                  basePrice={selectedService?.price}
+                  className="mb-6"
+                />
+              )}
               {bookingReady ? (
                 isVideoMode ? (
                   appointmentId && selectedService ? (
@@ -262,6 +272,8 @@ function BookingPage() {
                       date={date!}
                       time={time!}
                       patientName={name.trim()}
+                      phone={phone.trim()}
+                      email={email.trim()}
                       onClose={reset}
                     />
                   ) : null

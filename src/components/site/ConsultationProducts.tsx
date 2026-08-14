@@ -1,14 +1,20 @@
-import { Check, Video, ShoppingCart, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Check, Video, ShoppingCart, Loader2 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import consultationImg from "@/assets/consultation.jpg";
 import { whatsappUrl } from "@/lib/contact";
-import { usePublishedProducts } from "@/hooks/queries/useContent";
+import { usePublishedProducts, usePublicVideoOffers } from "@/hooks/queries/useContent";
+import { useServices } from "@/hooks/queries/useBookings";
+import { isVideoConsultationService } from "@/lib/bookings";
+import { VideoOfferCards } from "@/components/site/VideoOfferCards";
 
 export function ConsultationProducts() {
   const { data: products, isLoading } = usePublishedProducts();
+  const { data: offers } = usePublicVideoOffers();
+  const { data: services } = useServices();
+  const videoServicePrice = services?.find(isVideoConsultationService)?.price;
 
   return (
-    <section id="services" className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
+    <section className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
       <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-2">
         <div
           id="video-consultation"
@@ -40,6 +46,11 @@ export function ConsultationProducts() {
               >
                 <Video className="h-4 w-4" /> Consult Now
               </Link>
+              <VideoOfferCards
+                offers={offers ?? []}
+                basePrice={videoServicePrice}
+                className="mt-4"
+              />
             </div>
             <div className="group overflow-hidden rounded-2xl bg-primary-soft">
               <img
@@ -66,14 +77,6 @@ export function ConsultationProducts() {
               <p className="mt-1 text-sm text-muted-foreground">
                 Safe, natural & effective products for better health.
               </p>
-            </div>
-            <div className="hidden gap-2 sm:flex">
-              <button className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background text-foreground transition-all duration-300 hover:-translate-y-0.5 hover:bg-muted hover:shadow-sm active:scale-90">
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background text-foreground transition-all duration-300 hover:-translate-y-0.5 hover:bg-muted hover:shadow-sm active:scale-90">
-                <ChevronRight className="h-4 w-4" />
-              </button>
             </div>
           </div>
           {isLoading ? (

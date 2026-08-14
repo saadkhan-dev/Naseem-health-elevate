@@ -10,6 +10,7 @@ import {
 } from "@tanstack/react-router";
 
 import { AuthProvider } from "@/hooks/useAuth";
+import { StaffAuthProvider } from "@/hooks/useStaffAuth";
 import { AssistantChat } from "@/components/chat/AssistantChat";
 import appCss from "../styles.css?url";
 
@@ -145,10 +146,12 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <Outlet />
-        {!isAdminRoute && <AssistantChat />}
-      </AuthProvider>
+      <StaffAuthProvider>
+        <AuthProvider>
+          <Outlet />
+          {!isAdminRoute && <AssistantChat />}
+        </AuthProvider>
+      </StaffAuthProvider>
     </QueryClientProvider>
   );
 }

@@ -13,6 +13,7 @@ import { useCreateVideoSession } from "@/hooks/queries/useVideo";
 import type { AppointmentWithDetails } from "@/lib/admin-data";
 import { formatTimeDisplay, getBookedSlots, generateTimeSlots } from "@/lib/bookings";
 import { todayInClinic, nowTimeInClinic } from "@/lib/clinic";
+import { APPOINTMENT_STATUS_LABELS, type AppointmentStatusValue } from "@/lib/notifications";
 import { PAYMENT_STATUS_BADGES, PAYMENT_STATUS_LABELS, type PaymentStatus } from "@/lib/payment";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,7 +39,8 @@ export const Route = createFileRoute("/admin/appointments")({
   component: AdminAppointments,
 });
 
-type StatusFilter = "all" | "pending" | "confirmed" | "rejected" | "completed" | "cancelled";
+type StatusFilter =
+  "all" | "pending" | "confirmed" | "rejected" | "completed" | "cancelled" | "arrived" | "no_show";
 type DateFilter = "all" | "today" | "upcoming" | "past" | "specific";
 type TypeFilter = "normal" | "video" | "all";
 
@@ -55,6 +57,8 @@ const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: "rejected", label: "Rejected" },
   { value: "completed", label: "Completed" },
   { value: "cancelled", label: "Cancelled" },
+  { value: "arrived", label: "Arrived" },
+  { value: "no_show", label: "No-Show" },
 ];
 
 const DATE_OPTIONS: { value: DateFilter; label: string }[] = [
@@ -76,6 +80,10 @@ function statusBadgeClasses(status: string): string {
       return "bg-red-100 text-red-700";
     case "completed":
       return "bg-blue-100 text-blue-700";
+    case "arrived":
+      return "bg-teal-100 text-teal-700";
+    case "no_show":
+      return "bg-gray-100 text-gray-700";
     default:
       return "bg-gray-100 text-gray-700";
   }
@@ -106,6 +114,7 @@ function AdminAppointments() {
     vcNo: string;
   } | null>(null);
   const [callDuration, setCallDuration] = useState(20);
+  const [videoError, setVideoError] = useState("");
 
   const [rescheduleTarget, setRescheduleTarget] = useState<AppointmentWithDetails | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState("");
@@ -178,7 +187,7 @@ function AdminAppointments() {
 
   async function changeStatus(
     id: string,
-    status: "confirmed" | "rejected" | "completed" | "cancelled",
+    status: "confirmed" | "rejected" | "completed" | "cancelled" | "arrived" | "no_show",
   ) {
     const result = await updateStatus.mutateAsync({ id, status });
     if (result.error) alert(result.error);
@@ -192,16 +201,24 @@ function AdminAppointments() {
     if (result.error) alert(result.error);
   }
 
-  async function handleStartVideo(appointmentId: string) {
+  function openVideoDialog(appointmentId: string) {
+    setCallDuration(20);
+    setVideoError("");
+    setVideoDialog({ appointmentId, roomName: "", vcNo: "" });
+  }
+
+  async function startVideoSession() {
+    if (!videoDialog) return;
+    setVideoError("");
     const result = await createVideo.mutateAsync({
-      appointmentId,
+      appointmentId: videoDialog.appointmentId,
       durationMinutes: callDuration,
     });
     if (result.error) {
-      alert(result.error);
+      setVideoError(result.error);
     } else if (result.session) {
       setVideoDialog({
-        appointmentId,
+        appointmentId: videoDialog.appointmentId,
         roomName: result.session.room_name,
         vcNo: result.session.vc_no ?? "",
       });
@@ -270,10 +287,10 @@ function AdminAppointments() {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => changeStatus(a.id, "completed")}
+            onClick={() => changeStatus(a.id, "arrived")}
             disabled={busy}
           >
-            Complete
+            Arrived
           </Button>
           <Button size="sm" variant="outline" onClick={() => openReschedule(a)} disabled={busy}>
             Reschedule
@@ -282,10 +299,10 @@ function AdminAppointments() {
             size="sm"
             variant="outline"
             className="text-red-600"
-            onClick={() => changeStatus(a.id, "cancelled")}
+            onClick={() => changeStatus(a.id, "no_show")}
             disabled={busy}
           >
-            Cancel
+            No-Show
           </Button>
         </>
       );
@@ -377,7 +394,7 @@ function AdminAppointments() {
             key="video"
             size="sm"
             variant="default"
-            onClick={() => handleStartVideo(a.id)}
+            onClick={() => openVideoDialog(a.id)}
             disabled={busy}
           >
             {createVideo.isPending ? (
@@ -416,7 +433,7 @@ function AdminAppointments() {
             key="video"
             size="sm"
             variant="default"
-            onClick={() => handleStartVideo(a.id)}
+            onClick={() => openVideoDialog(a.id)}
             disabled={busy}
           >
             {createVideo.isPending ? (
@@ -460,14 +477,14 @@ function AdminAppointments() {
     ) {
       actions.push(
         <Button
-          key="cancel"
+          key="no-show"
           size="sm"
           variant="outline"
           className="text-red-600"
-          onClick={() => changeStatus(a.id, "cancelled")}
+          onClick={() => changeStatus(a.id, "no_show")}
           disabled={busy}
         >
-          Cancel
+          No-Show
         </Button>,
       );
     }
@@ -615,9 +632,9 @@ function AdminAppointments() {
                     <td className="px-4 py-3">{formatTimeDisplay(a.time ?? "Flexible")}</td>
                     <td className="px-4 py-3">
                       <span
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${statusBadgeClasses(a.status)}`}
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusBadgeClasses(a.status)}`}
                       >
-                        {a.status}
+                        {APPOINTMENT_STATUS_LABELS[a.status as AppointmentStatusValue] ?? a.status}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -717,6 +734,7 @@ function AdminAppointments() {
         open={!!videoDialog}
         onOpenChange={() => {
           setVideoDialog(null);
+          setVideoError("");
           setCallDuration(20);
         }}
       >
@@ -724,7 +742,8 @@ function AdminAppointments() {
           <DialogHeader>
             <DialogTitle>Start Video Call</DialogTitle>
             <DialogDescription>
-              Set the session duration, then join or share the link with the patient.
+              Pick a session duration, start the session, then join or share the link with the
+              patient.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -734,18 +753,25 @@ function AdminAppointments() {
                 {[15, 20, 30, 45, 60].map((min) => (
                   <button
                     key={min}
+                    type="button"
                     onClick={() => setCallDuration(min)}
+                    disabled={!!videoDialog?.vcNo}
                     className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                       callDuration === min
                         ? "bg-primary text-primary-foreground"
                         : "bg-muted text-muted-foreground hover:bg-accent"
-                    }`}
+                    } disabled:cursor-not-allowed disabled:opacity-60`}
                   >
                     {min} min
                   </button>
                 ))}
               </div>
             </div>
+            {videoError && (
+              <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {videoError}
+              </p>
+            )}
             {videoDialog?.vcNo && (
               <div className="rounded-lg bg-muted p-3">
                 <label className="text-xs font-medium text-muted-foreground">
@@ -772,17 +798,31 @@ function AdminAppointments() {
                 </div>
               </div>
             )}
-            <Button
-              className="w-full"
-              disabled={!videoDialog?.vcNo}
-              onClick={() => {
-                window.open(`/video/${videoDialog?.vcNo}?as=doctor`, "_blank");
-                setVideoDialog(null);
-              }}
-            >
-              <Video className="mr-2 h-4 w-4" />
-              Join as Doctor ({callDuration} min)
-            </Button>
+            {videoDialog?.vcNo ? (
+              <Button
+                className="w-full"
+                onClick={() => {
+                  window.open(`/video/${videoDialog?.vcNo}?as=doctor`, "_blank");
+                  setVideoDialog(null);
+                }}
+              >
+                <Video className="mr-2 h-4 w-4" />
+                Join as Doctor ({callDuration} min)
+              </Button>
+            ) : (
+              <Button
+                className="w-full"
+                onClick={startVideoSession}
+                disabled={createVideo.isPending}
+              >
+                {createVideo.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Video className="mr-2 h-4 w-4" />
+                )}
+                Start {callDuration} min Session
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

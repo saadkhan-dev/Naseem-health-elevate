@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, PhoneOff, Clock, AlertTriangle } from "lucide-react";
+import { Loader2, PhoneOff, Clock, AlertTriangle, Captions, CaptionsOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface JitsiApi {
   addListener: (event: string, handler: (...args: unknown[]) => void) => void;
   dispose: () => void;
+  executeCommand: (command: string, ...args: unknown[]) => void;
 }
 
 type JitsiMeetExternalAPIClass = new (domain: string, options: Record<string, unknown>) => JitsiApi;
@@ -17,6 +18,11 @@ declare global {
 
 interface VideoCallRoomProps {
   roomName: string;
+  /**
+   * Jitsi Meet instance (host) to connect to, e.g. "jitsi.riot.im". Provided by
+   * the server join lookup so the instance is never a client-side secret.
+   */
+  domain?: string;
   userName: string;
   durationMinutes: number;
   onLeave: () => void;
@@ -28,19 +34,25 @@ interface VideoCallRoomProps {
   onConferenceLeft?: () => void;
   /** Reliable join signal — fired on the Jitsi `videoConferenceJoined` event. Doctor only. */
   onConferenceJoined?: () => void;
+  /**
+   * Live captions / subtitles (Jitsi built-in transcription — no external key).
+   * Defaults to on; patients and doctor can toggle it from the toolbar.
+   */
+  captionsEnabled?: boolean;
 }
 
-/** Load the Jitsi Meet External API library once (idempotent). */
-function loadJitsiScript(): Promise<void> {
+/** Load the Jitsi Meet External API library from the configured instance (idempotent). */
+function loadJitsiScript(domain: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const existing = document.getElementById("jitsi-external-api");
+    const scriptId = `jitsi-external-api-${domain}`;
+    const existing = document.getElementById(scriptId);
     if (existing) {
       resolve();
       return;
     }
     const script = document.createElement("script");
-    script.id = "jitsi-external-api";
-    script.src = "https://meet.jit.si/external_api.js";
+    script.id = scriptId;
+    script.src = `https://${domain}/external_api.js`;
     script.async = true;
     script.onload = () => resolve();
     script.onerror = () => {
@@ -53,11 +65,13 @@ function loadJitsiScript(): Promise<void> {
 
 export function VideoCallRoom({
   roomName,
+  domain = "jitsi.riot.im",
   userName,
   durationMinutes,
   onLeave,
   onConferenceLeft,
   onConferenceJoined,
+  captionsEnabled = true,
 }: VideoCallRoomProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const apiRef = useRef<JitsiApi | null>(null);
@@ -67,17 +81,19 @@ export function VideoCallRoom({
   const [loadError, setLoadError] = useState(false);
   const [timeLeft, setTimeLeft] = useState(durationMinutes * 60);
   const [ended, setEnded] = useState(false);
+  const [captions, setCaptions] = useState(captionsEnabled);
+  const captionsEnabledRef = useRef(captionsEnabled);
   const startTimeRef = useRef(Date.now());
 
   useEffect(() => {
     let disposed = false;
     let fallback: number | undefined;
 
-    loadJitsiScript()
+    loadJitsiScript(domain)
       .then(() => {
         if (disposed || !window.JitsiMeetExternalAPI || !containerRef.current) return;
 
-        const api = new window.JitsiMeetExternalAPI("meet.jit.si", {
+        const api = new window.JitsiMeetExternalAPI(domain, {
           roomName,
           parentNode: containerRef.current,
           width: "100%",
@@ -86,10 +102,53 @@ export function VideoCallRoom({
           configOverwrite: {
             startWithAudioMuted: false,
             startWithVideoMuted: false,
+            // Jitsi's built-in live captions (transcription) — no external key.
+            liveSubtitles: true,
+            transcribingEnabled: captionsEnabledRef.current,
+          },
+          interfaceConfigOverwrite: {
+            SHOW_JITSI_WATERMARK: false,
+            SHOW_WATERMARK_FOR_GUESTS: false,
+            DEFAULT_REMOTE_DISPLAY_NAME: "Guest",
+            TOOLBAR_BUTTONS: [
+              "microphone",
+              "camera",
+              "desktop",
+              "fullscreen",
+              "fodeviceselection",
+              "hangup",
+              "profile",
+              "chat",
+              "recording",
+              "livestreaming",
+              "etherpad",
+              "sharedvideo",
+              "shareddocument",
+              "settings",
+              "raisehand",
+              "videoquality",
+              "filmstrip",
+              "invite",
+              "feedback",
+              "stats",
+              "shortcuts",
+              "tileview",
+              "videobackgroundblur",
+              "download",
+              "help",
+              "mute-everyone",
+              "security",
+              "captions",
+            ],
           },
           userInfo: { displayName: userName },
         });
         apiRef.current = api;
+
+        // Keep the toolbar captions button in sync with our state.
+        if (captionsEnabledRef.current) {
+          api.executeCommand("toggleSubtitles");
+        }
 
         api.addListener("videoConferenceJoined", () => {
           setLoading(false);
@@ -122,7 +181,7 @@ export function VideoCallRoom({
       apiRef.current?.dispose();
       apiRef.current = null;
     };
-  }, [roomName, userName, onConferenceJoined, onConferenceLeft]);
+  }, [domain, roomName, userName, onConferenceJoined, onConferenceLeft]);
 
   useEffect(() => {
     if (ended) return;
@@ -217,11 +276,32 @@ export function VideoCallRoom({
       <div ref={containerRef} className="flex-1 overflow-hidden" />
 
       <div className="flex items-center justify-between border-t bg-card px-4 py-3">
-        <div className="text-xs text-muted-foreground">{userName}</div>
-        <Button variant="destructive" onClick={handleLeave} className="rounded-full">
-          <PhoneOff className="h-4 w-4" />
-          Leave Call
-        </Button>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          {captions ? (
+            <Captions className="h-4 w-4 text-primary" />
+          ) : (
+            <CaptionsOff className="h-4 w-4" />
+          )}
+          {captions ? "Live captions on" : "Live captions off"}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              apiRef.current?.executeCommand("toggleSubtitles");
+              setCaptions((c) => !c);
+            }}
+            className="gap-1.5"
+          >
+            {captions ? <CaptionsOff className="h-4 w-4" /> : <Captions className="h-4 w-4" />}
+            Captions
+          </Button>
+          <Button variant="destructive" onClick={handleLeave} className="rounded-full">
+            <PhoneOff className="h-4 w-4" />
+            Leave Call
+          </Button>
+        </div>
         <div />
       </div>
     </div>

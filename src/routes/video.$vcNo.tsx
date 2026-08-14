@@ -124,6 +124,7 @@ function VideoCallPage() {
       <div className="flex h-screen flex-col bg-black">
         <VideoCallRoom
           roomName={session.roomName}
+          domain={session.jitsiDomain}
           userName={userName || (isDoctor ? "Dr. Naseem Ahmed Khan" : "Patient")}
           durationMinutes={session.durationMinutes}
           onLeave={() => {
@@ -132,6 +133,7 @@ function VideoCallPage() {
           }}
           onConferenceJoined={isDoctor ? handleConferenceJoined : undefined}
           onConferenceLeft={isDoctor ? handleConferenceLeft : undefined}
+          captionsEnabled
         />
       </div>
     );

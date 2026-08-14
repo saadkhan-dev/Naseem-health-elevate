@@ -237,6 +237,7 @@ describe("Video session — secure join lookup by VC code", () => {
       roomName: started.session!.room_name,
       durationMinutes: 20,
       status: "scheduled",
+      jitsiDomain: expect.stringMatching(/^[a-z0-9.-]+$/) as string,
     });
     expect("id" in join.session!).toBe(false);
     expect("appointment_id" in join.session!).toBe(false);

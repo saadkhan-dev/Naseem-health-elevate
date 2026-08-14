@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateVideoConsultationNo } from "@/lib/ids";
-import { sendVideoReadyNotifications, getServerNotificationEnv } from "./notifications";
+import {
+  sendVideoReadyNotifications,
+  getServerNotificationEnv,
+  getJitsiDomain,
+} from "./notifications";
+import { createPatientNotification } from "./patient-notifications";
 import { normalizeSiteUrl, videoJoinUrl } from "@/lib/video-join";
 import type { NotificationEnv, NotificationResult } from "@/lib/notifications";
 
@@ -133,6 +138,8 @@ export async function getVideoJoinByVcNo(
     roomName: string;
     durationMinutes: number;
     status: VideoSessionStatus;
+    /** Jitsi Meet instance to connect to (server-configured, never a client secret). */
+    jitsiDomain: string;
   } | null;
   appointment: VideoJoinAppointment | null;
 }> {
@@ -156,7 +163,11 @@ export async function getVideoJoinByVcNo(
     return { error: "No appointment found for that code.", session: null, appointment: null };
   }
 
-  if (appointment.status === "cancelled" || appointment.status === "rejected") {
+  if (
+    appointment.status === "cancelled" ||
+    appointment.status === "rejected" ||
+    appointment.status === "no_show"
+  ) {
     return {
       error: "This video consultation is no longer available.",
       session: null,
@@ -172,6 +183,7 @@ export async function getVideoJoinByVcNo(
       roomName: session.room_name as string,
       durationMinutes: (session.duration_minutes as number | null) ?? 30,
       status: session.status as VideoSessionStatus,
+      jitsiDomain: getJitsiDomain(),
     },
     appointment: {
       status: appointment.status as string,
@@ -274,7 +286,7 @@ export async function resendVideoNotification(
   const { data: appointment } = await admin
     .from("appointments")
     .select(
-      "appointment_no, patient_name, patient_phone, patient_email, date, time, services:service_id (name)",
+      "patient_id, appointment_no, patient_name, patient_phone, patient_email, date, time, services:service_id (name)",
     )
     .eq("id", appointmentId)
     .maybeSingle();
@@ -298,6 +310,16 @@ export async function resendVideoNotification(
   const service = appointment.services as unknown as { name: string | null } | null;
   const vcNo = session.vc_no as string;
   const normalizedSiteUrl = normalizeSiteUrl(siteUrl);
+
+  if (appointment.patient_id) {
+    await createPatientNotification(admin, {
+      userId: appointment.patient_id as string,
+      type: "video_ready",
+      title: "Video consultation ready",
+      body: `Your online video consultation is ready to join. Use code ${vcNo} on the join page.`,
+      link: `/video/${vcNo}`,
+    });
+  }
 
   const notifications = await sendVideoReadyNotifications(
     {

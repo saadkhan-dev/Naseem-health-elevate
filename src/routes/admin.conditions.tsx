@@ -113,6 +113,8 @@ function AdminConditions() {
   const [editing, setEditing] = useState<Condition | null>(null);
   const [sectionCategory, setSectionCategory] = useState<ConditionCategory>("homeopathic");
   const [form, setForm] = useState(emptyForm);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
 
   const homeopathic = useMemo(
     () => (conditions ?? []).filter((c) => c.category === "homeopathic"),
@@ -127,6 +129,7 @@ function AdminConditions() {
     setEditing(null);
     setSectionCategory(category);
     setForm({ ...emptyForm, category });
+    setSaveError(null);
     setDialogOpen(true);
   }
 
@@ -140,16 +143,25 @@ function AdminConditions() {
       sort_order: c.sort_order,
       is_active: c.is_active,
     });
+    setSaveError(null);
     setDialogOpen(true);
   }
 
   async function handleSave() {
-    if (editing) {
-      await updateCondition.mutateAsync({ id: editing.id, data: form });
-    } else {
-      await createCondition.mutateAsync(form);
+    const result = editing
+      ? await updateCondition.mutateAsync({ id: editing.id, data: form })
+      : await createCondition.mutateAsync(form);
+    if (result.error) {
+      setSaveError(result.error);
+      return;
     }
+    setSaveError(null);
     setDialogOpen(false);
+  }
+
+  async function handleDelete(id: string) {
+    const result = await deleteCondition.mutateAsync(id);
+    if (result.error) setListError(result.error);
   }
 
   return (
@@ -167,6 +179,12 @@ function AdminConditions() {
         </div>
       )}
 
+      {listError && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {listError}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex justify-center p-12">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -179,7 +197,7 @@ function AdminConditions() {
             conditions={homeopathic}
             onAdd={openCreate}
             onEdit={openEdit}
-            onDelete={(id) => deleteCondition.mutate(id)}
+            onDelete={handleDelete}
           />
           <ConditionsSection
             title="Physiotherapy Diseases"
@@ -187,7 +205,7 @@ function AdminConditions() {
             conditions={physiotherapy}
             onAdd={openCreate}
             onEdit={openEdit}
-            onDelete={(id) => deleteCondition.mutate(id)}
+            onDelete={handleDelete}
           />
         </div>
       )}
@@ -236,6 +254,7 @@ function AdminConditions() {
               />
             </div>
           </div>
+          {saveError && <p className="text-sm font-medium text-destructive">{saveError}</p>}
           <DialogFooter className="shrink-0 -mx-6 -mb-6 gap-2 border-t bg-background px-6 py-4 sm:space-x-0">
             <DialogClose asChild>
               <Button type="button" variant="outline">
