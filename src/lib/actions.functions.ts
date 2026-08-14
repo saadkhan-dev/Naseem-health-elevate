@@ -2276,12 +2276,39 @@ export const adminGetDocuments = createServerFn({ method: "GET" })
   .validator((d: unknown) => d as undefined)
   .handler(async () => {
     const admin = getSupabaseAdmin();
+
+    // The `documents.patient_id` column has NO foreign key to `profiles`, so
+    // PostgREST cannot embed a join (`profiles:patient_id (full_name)`) — that
+    // query fails with PGRST200 ("Could not find a relationship ...") and the
+    // error was silently collapsed into `documents: []`, leaving the admin
+    // documents page permanently empty. Fetch the documents first, then resolve
+    // patient names with a separate, explicit query.
     const { data, error } = await admin
       .from("documents")
-      .select("*, profiles:patient_id (full_name)")
+      .select("*")
       .order("created_at", { ascending: false })
       .limit(500);
-    return { error: error?.message ?? null, documents: data ?? [] };
+    if (error) return { error: error.message, documents: [] };
+
+    const rows = data ?? [];
+    const patientIds = Array.from(new Set(rows.map((r) => r.patient_id).filter(Boolean)));
+    const nameById = new Map<string, string | null>();
+    if (patientIds.length > 0) {
+      const { data: profiles, error: profilesError } = await admin
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", patientIds);
+      if (profilesError) return { error: profilesError.message, documents: [] };
+      for (const p of profiles ?? []) nameById.set(p.id, p.full_name);
+    }
+
+    const documents = rows.map((r) => ({
+      ...r,
+      profiles: nameById.has(r.patient_id)
+        ? { full_name: nameById.get(r.patient_id) ?? null }
+        : null,
+    }));
+    return { error: null, documents };
   });
 
 /** Mark a shared document as received after the doctor opens/downloads it. */
@@ -2373,14 +2400,58 @@ export const adminGetOrderRequests = createServerFn({ method: "GET" })
   .validator((d: unknown) => d as undefined)
   .handler(async () => {
     const admin = getSupabaseAdmin();
+
+    // Same embedded-join problem as `adminGetDocuments`: `order_requests` has
+    // no FK to `profiles`, and the orders join referenced a non-existent
+    // `total_amount` column. Both errors were silently collapsed into an empty
+    // list. Fetch the base rows, then resolve the related order and patient in
+    // separate explicit queries.
     const { data, error } = await admin
       .from("order_requests")
-      .select(
-        "*, order:orders!inner (order_no, status, total_amount, created_at), patient:profiles!patient_id (full_name, phone)",
-      )
+      .select("*")
       .order("created_at", { ascending: false })
       .limit(500);
-    return { error: error?.message ?? null, requests: data ?? [] };
+    if (error) return { error: error.message, requests: [] };
+    const rows = data ?? [];
+
+    const patientIds = Array.from(new Set(rows.map((r) => r.patient_id).filter(Boolean)));
+    const patientsById = new Map<string, { full_name: string | null; phone: string | null }>();
+    if (patientIds.length > 0) {
+      const { data: profiles, error: profilesError } = await admin
+        .from("profiles")
+        .select("id, full_name, phone")
+        .in("id", patientIds);
+      if (profilesError) return { error: profilesError.message, requests: [] };
+      for (const p of profiles ?? [])
+        patientsById.set(p.id, { full_name: p.full_name, phone: p.phone });
+    }
+
+    const orderIds = Array.from(new Set(rows.map((r) => r.order_id).filter(Boolean)));
+    const ordersById = new Map<
+      string,
+      { order_no: string | null; status: string; total: number; created_at: string }
+    >();
+    if (orderIds.length > 0) {
+      const { data: orders, error: ordersError } = await admin
+        .from("orders")
+        .select("id, order_no, status, total, created_at")
+        .in("id", orderIds);
+      if (ordersError) return { error: ordersError.message, requests: [] };
+      for (const o of orders ?? [])
+        ordersById.set(o.id, {
+          order_no: o.order_no,
+          status: o.status,
+          total: o.total,
+          created_at: o.created_at,
+        });
+    }
+
+    const requests = rows.map((r) => ({
+      ...r,
+      order: ordersById.get(r.order_id) ?? null,
+      patient: patientsById.get(r.patient_id) ?? null,
+    }));
+    return { error: null, requests };
   });
 
 /** Admin/doctor — respond to a patient order request. */

@@ -33,8 +33,8 @@ function AdminDocuments() {
     }
   }
 
-  const shared = (documents ?? []).filter((d) => d.shared_with_doctor);
-  const notShared = (documents ?? []).filter((d) => !d.shared_with_doctor);
+  const all = documents ?? [];
+  const shared = all.filter((d) => d.shared_with_doctor);
 
   return (
     <div>
@@ -94,20 +94,20 @@ function AdminDocuments() {
             <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground">
               <Send className="h-4 w-4 text-primary" />
               All patient documents
-              {notShared.length > 0 && (
+              {all.length > 0 && (
                 <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                  {notShared.length}
+                  {all.length}
                 </span>
               )}
             </h2>
             <div className="mt-3 space-y-2">
-              {notShared.length === 0 ? (
+              {all.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-card p-12 text-center">
                   <FolderOpen className="h-10 w-10 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">No documents uploaded yet</p>
                 </div>
               ) : (
-                notShared.map((doc) => (
+                all.map((doc) => (
                   <DocumentRow key={doc.id} doc={doc} onDownload={() => handleDownload(doc)} />
                 ))
               )}
