@@ -2126,7 +2126,7 @@ export const placeOrder = createServerFn({ method: "POST" })
       .from("products")
       .select("id, name, price, discount_price, in_stock, stock_quantity")
       .in("id", ids);
-    if (productsError) return { error: productsError.message, orderId: null };
+    if (productsError) return { error: productsError.message, orderId: null, total: null };
     const byId = new Map((products ?? []).map((p) => [p.id, p]));
     let total = 0;
     const itemRows: Array<{
@@ -2137,13 +2137,15 @@ export const placeOrder = createServerFn({ method: "POST" })
     }> = [];
     for (const item of data.items) {
       const product = byId.get(item.productId);
-      if (!product) return { error: "One of the products is no longer available.", orderId: null };
+      if (!product)
+        return { error: "One of the products is no longer available.", orderId: null, total: null };
       if (product.in_stock !== true)
-        return { error: `"${product.name}" is out of stock.`, orderId: null };
+        return { error: `"${product.name}" is out of stock.`, orderId: null, total: null };
       if (typeof product.stock_quantity === "number" && product.stock_quantity < item.quantity) {
         return {
           error: `Only ${product.stock_quantity} of "${product.name}" is in stock.`,
           orderId: null,
+          total: null,
         };
       }
       // Effective price = discounted sale price when set, otherwise the list price.
@@ -2174,8 +2176,8 @@ export const placeOrder = createServerFn({ method: "POST" })
         total,
         payment_amount: total,
         payment_status: "payment_pending",
-        status: "placed",
-        notes: data.notes ?? null,
+        status: "pending",
+        notes: data.notes ?? "",
       });
       if (!orderError) {
         const { error: itemsError } = await admin
@@ -2183,7 +2185,7 @@ export const placeOrder = createServerFn({ method: "POST" })
           .insert(itemRows.map((r) => ({ order_id: orderId, ...r })));
         if (itemsError) {
           await admin.from("orders").delete().eq("id", orderId);
-          return { error: itemsError.message, orderId: null };
+          return { error: itemsError.message, orderId: null, total: null };
         }
 
         // Decrement literal stock counts (best-effort; NULL = unlimited).
@@ -2200,7 +2202,7 @@ export const placeOrder = createServerFn({ method: "POST" })
         // Seed the immutable timeline so the patient sees the placement event.
         await admin.from("order_status_history").insert({
           order_id: orderId,
-          status: "placed",
+          status: "pending",
           note: "Order placed",
         });
 
@@ -2213,15 +2215,17 @@ export const placeOrder = createServerFn({ method: "POST" })
             link: "/patient/orders",
           });
         }
-        return { error: null, orderNo, orderId };
+        return { error: null, orderNo, orderId, total };
       }
       const isCodeCollision = orderError.code === "23505" && /order_no/i.test(orderError.message);
-      if (!isCodeCollision) return { error: orderError.message, orderNo: null, orderId: null };
+      if (!isCodeCollision)
+        return { error: orderError.message, orderNo: null, orderId: null, total: null };
     }
     return {
       error: "Could not generate a unique order number. Please try again.",
       orderNo: null,
       orderId: null,
+      total: null,
     };
   });
 
@@ -2398,7 +2402,7 @@ export const patientReorder = createServerFn({ method: "POST" })
         total,
         payment_amount: total,
         payment_status: "payment_pending",
-        status: "placed",
+        status: "pending",
         notes: `Reordered from ${order.order_no ?? "a previous order"}.`,
       });
       if (!orderError) {
@@ -2422,7 +2426,7 @@ export const patientReorder = createServerFn({ method: "POST" })
 
         await admin.from("order_status_history").insert({
           order_id: orderId,
-          status: "placed",
+          status: "pending",
           note: "Order placed (reorder)",
         });
 

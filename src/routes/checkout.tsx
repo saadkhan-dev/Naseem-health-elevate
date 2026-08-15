@@ -54,6 +54,7 @@ function CheckoutPage() {
   const [placed, setPlaced] = useState<{
     orderId: string | null;
     orderNo: string | null;
+    total: number | null;
   } | null>(null);
   const [showPayment, setShowPayment] = useState(false);
 
@@ -79,8 +80,13 @@ function CheckoutPage() {
         setPlacing(false);
         return;
       }
+      const orderTotal = typeof result.total === "number" ? result.total : subtotal;
       cart.clear();
-      setPlaced({ orderId: result.orderId ?? null, orderNo: result.orderNo ?? null });
+      setPlaced({
+        orderId: result.orderId ?? null,
+        orderNo: result.orderNo ?? null,
+        total: orderTotal,
+      });
       setShowPayment(true);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Could not place your order.");
@@ -116,7 +122,7 @@ function CheckoutPage() {
 
               <div className="mx-auto mt-5 w-full max-w-sm space-y-2 rounded-xl bg-muted p-4 text-left text-sm">
                 <Row label="Order ID" value={placed.orderNo ?? "—"} mono />
-                <Row label="Amount" value={`Rs. ${subtotal.toLocaleString()}`} />
+                <Row label="Amount" value={`Rs. ${(placed.total ?? 0).toLocaleString()}`} />
               </div>
             </div>
 
@@ -125,7 +131,7 @@ function CheckoutPage() {
                 <OrderPaymentStep
                   orderId={placed.orderId ?? undefined}
                   orderNo={placed.orderNo}
-                  amount={subtotal}
+                  amount={placed.total ?? 0}
                   signedIn={!!user}
                   phone={phone}
                   email={email}
