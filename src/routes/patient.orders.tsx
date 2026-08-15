@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { format } from "date-fns";
 import {
@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   PackageCheck,
   Star,
+  ArrowLeft,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -88,6 +89,15 @@ function PatientOrders() {
   const [requestMessage, setRequestMessage] = useState("");
   const [requestError, setRequestError] = useState("");
   const [payFor, setPayFor] = useState<PatientOrder | null>(null);
+
+  useEffect(() => {
+    if (!payFor) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [payFor]);
 
   function toggle(id: string) {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -179,17 +189,43 @@ function PatientOrders() {
       </div>
 
       {payFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-soft">
-            <OrderPaymentStep
-              orderId={payFor.id}
-              orderNo={payFor.order_no}
-              amount={Number(payFor.payment_amount ?? payFor.total)}
-              signedIn
-              phone={payFor.phone}
-              email={payFor.email ?? ""}
-              onClose={() => setPayFor(null)}
-            />
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Complete your payment"
+          className="fixed inset-0 z-50 overflow-y-auto bg-background/70"
+        >
+          <div className="flex min-h-full items-center justify-center p-4 py-6">
+            <div className="relative flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-5 py-3 sm:px-6">
+                <button
+                  type="button"
+                  onClick={() => setPayFor(null)}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                >
+                  <ArrowLeft className="h-4 w-4" /> Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPayFor(null)}
+                  aria-label="Close payment"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
+                <OrderPaymentStep
+                  orderId={payFor.id}
+                  orderNo={payFor.order_no}
+                  amount={Number(payFor.payment_amount ?? payFor.total)}
+                  signedIn
+                  phone={payFor.phone}
+                  email={payFor.email ?? ""}
+                  onClose={() => setPayFor(null)}
+                />
+              </div>
+            </div>
           </div>
         </div>
       )}

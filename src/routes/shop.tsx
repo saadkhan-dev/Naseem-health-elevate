@@ -65,7 +65,7 @@ function ShopPage() {
         <div className="mx-auto max-w-6xl">
           <div className="flex items-end justify-between gap-3">
             <div>
-              <h1 className="font-display text-3xl font-bold text-foreground">Our Shop</h1>
+              <h1 className="font-display text-3xl font-bold text-foreground">Products & Homeopathic Medicine</h1>
               <p className="mt-1 text-sm text-muted-foreground">
                 Safe, natural & effective products for better health — order online.
               </p>

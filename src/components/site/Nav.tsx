@@ -68,7 +68,7 @@ export function Nav() {
         <SectionLink
           hash="#home"
           ariaLabel="Dr. Naseem Ahmed Khan — back to top"
-          className={`group flex min-w-0 flex-1 items-center gap-2.5 rounded-lg sm:gap-3 xl:w-60 xl:flex-none transition-transform duration-300 hover:scale-[1.02] active:scale-[0.98] ${focusRing}`}
+          className={`group flex min-w-0 flex-1 items-center gap-2.5 rounded-lg sm:gap-3 xl:w-52 xl:flex-none transition-transform duration-300 hover:scale-[1.02] active:scale-[0.98] ${focusRing}`}
         >
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-primary text-primary-foreground shadow-card transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105">
             <Stethoscope className="h-5 w-5" />
@@ -86,7 +86,7 @@ export function Nav() {
         {/* Centered desktop navigation */}
         <nav
           aria-label="Main navigation"
-          className="hidden flex-1 items-center justify-center gap-x-3 xl:flex 2xl:gap-x-5"
+          className="hidden min-w-0 flex-1 items-center justify-center gap-x-2.5 xl:flex 2xl:gap-x-4"
         >
           {links.map((l) => (
             <SectionLink key={l.href} hash={l.href} className={desktopLinkClass}>
@@ -108,7 +108,7 @@ export function Nav() {
         </nav>
 
         {/* Desktop actions — aligned right */}
-        <div className="hidden shrink-0 items-center justify-end gap-1.5 xl:flex">
+        <div className="hidden shrink-0 items-center justify-end gap-1 xl:flex">
           <Link
             to="/cart"
             aria-label="Shopping cart"
@@ -124,7 +124,7 @@ export function Nav() {
           <Link
             to="/appointment-status"
             aria-label="Appointment status"
-            className={`inline-flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-gradient-primary px-4 text-sm font-semibold text-primary-foreground shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:brightness-[1.05] hover:shadow-soft active:scale-95 ${focusRing}`}
+            className={`inline-flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-gradient-primary px-3.5 text-sm font-semibold text-primary-foreground shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:brightness-[1.05] hover:shadow-soft active:scale-95 ${focusRing}`}
           >
             <CalendarCheck className="h-4 w-4 shrink-0" />
             Appointment Status
