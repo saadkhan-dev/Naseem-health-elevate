@@ -1830,6 +1830,48 @@ export const patientShareDocument = createServerFn({ method: "POST" })
     return { error: error?.message ?? null };
   });
 
+/**
+ * Tests / lab investigations the doctor recommended for this patient. These
+ * are created from the admin Reports section and appear on the patient's
+ * dashboard automatically.
+ */
+export const patientGetMyTestRecommendations = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async ({ context }) => {
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin
+      .from("test_recommendations")
+      .select("id, test_name, notes, status, created_at")
+      .eq("patient_id", context.patientId)
+      .order("created_at", { ascending: false });
+    return { error: error?.message ?? null, recommendations: data ?? [] };
+  });
+
+/**
+ * Patient confirms they got the recommended test done. Only the patient who
+ * owns the recommendation can update it (ownership verified server-side).
+ */
+export const patientMarkTestRecommendationCompleted = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator(z.object({ id: uuidSchema }))
+  .handler(async ({ data, context }) => {
+    const admin = getSupabaseAdmin();
+    const { data: rec } = await admin
+      .from("test_recommendations")
+      .select("id, patient_id, status")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!rec) return { error: "Recommendation not found." };
+    if (rec.patient_id !== context.patientId) return { error: "Forbidden" };
+    if (rec.status === "completed") return { error: null };
+    const { error } = await admin
+      .from("test_recommendations")
+      .update({ status: "completed" })
+      .eq("id", data.id);
+    return { error: error?.message ?? null };
+  });
+
 // ---------------------------------------------------------------------------
 // Public — reviews (moderated submission)
 // ---------------------------------------------------------------------------
@@ -2292,20 +2334,21 @@ export const adminGetDocuments = createServerFn({ method: "GET" })
 
     const rows = data ?? [];
     const patientIds = Array.from(new Set(rows.map((r) => r.patient_id).filter(Boolean)));
-    const nameById = new Map<string, string | null>();
+    const patientById = new Map<string, { full_name: string | null; phone: string | null }>();
     if (patientIds.length > 0) {
       const { data: profiles, error: profilesError } = await admin
         .from("profiles")
-        .select("id, full_name")
+        .select("id, full_name, phone")
         .in("id", patientIds);
       if (profilesError) return { error: profilesError.message, documents: [] };
-      for (const p of profiles ?? []) nameById.set(p.id, p.full_name);
+      for (const p of profiles ?? [])
+        patientById.set(p.id, { full_name: p.full_name, phone: p.phone });
     }
 
     const documents = rows.map((r) => ({
       ...r,
-      profiles: nameById.has(r.patient_id)
-        ? { full_name: nameById.get(r.patient_id) ?? null }
+      profiles: patientById.has(r.patient_id)
+        ? (patientById.get(r.patient_id) ?? { full_name: null, phone: null })
         : null,
     }));
     return { error: null, documents };
@@ -2330,6 +2373,87 @@ export const adminMarkDocumentReceived = createServerFn({ method: "POST" })
       .update({ status: "received" })
       .eq("id", data.id);
     return { error: error?.message ?? null };
+  });
+
+/**
+ * Recommend a test / lab investigation for a patient. The recommendation is
+ * saved to `test_recommendations` and the patient is notified, so it shows up
+ * automatically on their dashboard.
+ */
+export const adminCreateTestRecommendation = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(
+    z.object({
+      patientId: uuidSchema,
+      testName: z.string().trim().min(1, "Enter the test name").max(200),
+      notes: z.string().trim().max(1000).optional().default(""),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const admin = getSupabaseAdmin();
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("id", data.patientId)
+      .maybeSingle();
+    if (!profile) return { error: "Patient not found." };
+
+    const { error } = await admin.from("test_recommendations").insert({
+      patient_id: data.patientId,
+      test_name: data.testName,
+      notes: data.notes,
+      status: "pending",
+    });
+    if (error) return { error: error.message };
+
+    await createPatientNotification(admin, {
+      userId: data.patientId,
+      type: "general",
+      title: "New test recommendation",
+      body: `Dr. Naseem recommended: ${data.testName}`,
+      link: "/patient",
+    });
+
+    return { error: null };
+  });
+
+/**
+ * All test recommendations for the Reports section, with the patient's name
+ * and phone so the doctor can see who the test is for and whether the patient
+ * has confirmed it is done.
+ */
+export const adminGetTestRecommendations = createServerFn({ method: "GET" })
+  .middleware([adminMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async () => {
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin
+      .from("test_recommendations")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (error) return { error: error.message, recommendations: [] };
+
+    const rows = data ?? [];
+    const patientIds = Array.from(new Set(rows.map((r) => r.patient_id).filter(Boolean)));
+    const patientById = new Map<string, { full_name: string | null; phone: string | null }>();
+    if (patientIds.length > 0) {
+      const { data: profiles, error: profilesError } = await admin
+        .from("profiles")
+        .select("id, full_name, phone")
+        .in("id", patientIds);
+      if (profilesError) return { error: profilesError.message, recommendations: [] };
+      for (const p of profiles ?? [])
+        patientById.set(p.id, { full_name: p.full_name, phone: p.phone });
+    }
+
+    const recommendations = rows.map((r) => ({
+      ...r,
+      profiles: patientById.has(r.patient_id)
+        ? (patientById.get(r.patient_id) ?? { full_name: null, phone: null })
+        : null,
+    }));
+    return { error: null, recommendations };
   });
 
 // ---------------------------------------------------------------------------

@@ -158,6 +158,50 @@ describe("Video session — one room/link per appointment (reuse)", () => {
   });
 });
 
+describe("Video session — two users can join the SAME room (connection preflight)", () => {
+  it("the doctor and the patient resolve to the IDENTICAL room and Jitsi domain", async () => {
+    const { id } = await createVideoAppointment();
+    const started = await startSessionFor(id);
+    const vcNo = started.session!.vc_no!;
+
+    // Two independent join lookups — one for the patient's browser, one for
+    // the doctor's — must both land on the same room on the same instance,
+    // otherwise they would never see each other.
+    const patientJoin = await getVideoJoinByVcNo(admin, vcNo);
+    const doctorJoin = await getVideoJoinByVcNo(admin, vcNo);
+
+    expect(patientJoin.error).toBeNull();
+    expect(doctorJoin.error).toBeNull();
+    expect(patientJoin.session!.roomName).toBe(doctorJoin.session!.roomName);
+    expect(patientJoin.session!.roomName).toBe(started.session!.room_name);
+    expect(patientJoin.session!.jitsiDomain).toBe(doctorJoin.session!.jitsiDomain);
+  });
+
+  it("the configured Jitsi instance actually serves the External API both users load", async () => {
+    const { id } = await createVideoAppointment();
+    const started = await startSessionFor(id);
+    const join = await getVideoJoinByVcNo(admin, started.session!.vc_no!);
+
+    const domain = join.session!.jitsiDomain;
+    const apiUrl = `https://${domain}/external_api.js`;
+    const res = await fetch(apiUrl);
+    expect(res.ok).toBe(true);
+    const body = await res.text();
+    expect(body).toContain("JitsiMeetExternalAPI");
+  });
+
+  it("a joinable room passes the provider's connection preflight (HTTP reachable)", async () => {
+    const { id } = await createVideoAppointment();
+    const started = await startSessionFor(id);
+    const join = await getVideoJoinByVcNo(admin, started.session!.vc_no!);
+
+    // The meeting page URL is what JitsiMeetExternalAPI's iframe loads.
+    const meetingUrl = `https://${join.session!.jitsiDomain}/${join.session!.roomName}`;
+    const res = await fetch(meetingUrl);
+    expect(res.ok).toBe(true);
+  });
+});
+
 describe("Video session — start gate (payment + eligibility)", () => {
   it("refuses to start when the payment is not verified or waived", async () => {
     const { id } = await createVideoAppointment({ payment_status: "payment_submitted" });

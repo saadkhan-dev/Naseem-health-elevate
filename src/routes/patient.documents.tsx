@@ -24,6 +24,7 @@ import type { PatientDocumentStatus } from "@/lib/patient-data";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { QueryError } from "@/components/admin/QueryError";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/patient/documents")({
   component: PatientDocuments,
@@ -134,25 +135,29 @@ function PatientDocuments() {
             placeholder="Document title (e.g. Blood report — August 2026)"
           />
           <div className="flex gap-2">
-            <input
-              ref={fileRef}
-              type="file"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFile(f);
-              }}
-            />
-            <Button onClick={() => fileRef.current?.click()} disabled={uploading} className="h-10">
-              {uploading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Upload className="h-4 w-4" />
-              )}
-              Choose file
+            <Button asChild className={cn("h-10", uploading && "pointer-events-none opacity-60")}>
+              <label htmlFor="doc-file" className="cursor-pointer">
+                {uploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" />
+                )}
+                Choose file
+              </label>
             </Button>
           </div>
         </div>
+        <input
+          ref={fileRef}
+          id="doc-file"
+          type="file"
+          className="sr-only"
+          disabled={uploading}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) handleFile(f);
+          }}
+        />
         {message && (
           <p
             className={`mt-2 text-sm font-medium ${

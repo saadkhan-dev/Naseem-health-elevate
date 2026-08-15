@@ -19,8 +19,8 @@ declare global {
 interface VideoCallRoomProps {
   roomName: string;
   /**
-   * Jitsi Meet instance (host) to connect to, e.g. "jitsi.riot.im". Provided by
-   * the server join lookup so the instance is never a client-side secret.
+   * Jitsi Meet instance (host) to connect to, e.g. "meet.jit.si". Provided
+   * by the server join lookup so the instance is never a client-side secret.
    */
   domain?: string;
   userName: string;
@@ -65,7 +65,7 @@ function loadJitsiScript(domain: string): Promise<void> {
 
 export function VideoCallRoom({
   roomName,
-  domain = "jitsi.riot.im",
+  domain = "meet.jit.si",
   userName,
   durationMinutes,
   onLeave,
@@ -77,13 +77,23 @@ export function VideoCallRoom({
   const apiRef = useRef<JitsiApi | null>(null);
   const joinedReportedRef = useRef(false);
   const leftReportedRef = useRef(false);
+  // The conference callbacks are held in refs so re-renders of the parent
+  // (which recreates the inline handlers, e.g. when a status mutation fires)
+  // can never dispose and rebuild the live Jitsi conference.
+  const onConferenceJoinedRef = useRef(onConferenceJoined);
+  const onConferenceLeftRef = useRef(onConferenceLeft);
+
+  useEffect(() => {
+    onConferenceJoinedRef.current = onConferenceJoined;
+    onConferenceLeftRef.current = onConferenceLeft;
+  });
+
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [connectError, setConnectError] = useState(false);
   const [timeLeft, setTimeLeft] = useState(durationMinutes * 60);
   const [ended, setEnded] = useState(false);
   const [captions, setCaptions] = useState(captionsEnabled);
-  const captionsEnabledRef = useRef(captionsEnabled);
   const startTimeRef = useRef(Date.now());
   const [retryKey, setRetryKey] = useState(0);
 
@@ -112,9 +122,9 @@ export function VideoCallRoom({
           configOverwrite: {
             startWithAudioMuted: false,
             startWithVideoMuted: false,
-            // Jitsi's built-in live captions (transcription) — no external key.
-            liveSubtitles: true,
-            transcribingEnabled: captionsEnabledRef.current,
+            // Transcription is left to the instance — forcing it can error on
+            // instances without a transcriber. Captions remain available via
+            // the toolbar button when the instance supports them.
           },
           interfaceConfigOverwrite: {
             SHOW_JITSI_WATERMARK: false,
@@ -155,18 +165,13 @@ export function VideoCallRoom({
         });
         apiRef.current = api;
 
-        // Keep the toolbar captions button in sync with our state.
-        if (captionsEnabledRef.current) {
-          api.executeCommand("toggleSubtitles");
-        }
-
         api.addListener("videoConferenceJoined", () => {
           setLoading(false);
           setConnectError(false);
           if (connectTimeout) window.clearTimeout(connectTimeout);
-          if (!joinedReportedRef.current && onConferenceJoined) {
+          if (!joinedReportedRef.current && onConferenceJoinedRef.current) {
             joinedReportedRef.current = true;
-            onConferenceJoined();
+            onConferenceJoinedRef.current();
           }
         });
 
@@ -183,9 +188,9 @@ export function VideoCallRoom({
         const handleLeft = () => {
           setLoading(false);
           if (connectTimeout) window.clearTimeout(connectTimeout);
-          if (!leftReportedRef.current && onConferenceLeft) {
+          if (!leftReportedRef.current && onConferenceLeftRef.current) {
             leftReportedRef.current = true;
-            onConferenceLeft();
+            onConferenceLeftRef.current();
           }
         };
         api.addListener("videoConferenceLeft", handleLeft);
@@ -214,7 +219,12 @@ export function VideoCallRoom({
       apiRef.current?.dispose();
       apiRef.current = null;
     };
-  }, [domain, roomName, userName, onConferenceJoined, onConferenceLeft, retryKey]);
+    // Deliberately excludes onConferenceJoined/onConferenceLeft (and userName):
+    // those change whenever the parent re-renders, and rebuilding the Jitsi
+    // conference on every re-render is exactly what prevented the doctor from
+    // ever staying connected. The latest callback is read from a ref instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [domain, roomName, retryKey]);
 
   useEffect(() => {
     if (ended) return;

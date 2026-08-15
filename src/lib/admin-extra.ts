@@ -9,6 +9,8 @@ import {
   adminUpdateDoctorProfile,
   adminGetDocuments,
   adminMarkDocumentReceived,
+  adminCreateTestRecommendation,
+  adminGetTestRecommendations,
   adminGetOrders,
   adminUpdateOrderStatus,
   adminGetOrderRequests,
@@ -49,7 +51,17 @@ export interface AdminDocument {
   shared_with_doctor: boolean;
   shared_at: string | null;
   status: "available" | "sent_to_doctor" | "received";
-  profiles?: { full_name: string | null } | null;
+  profiles?: { full_name: string | null; phone: string | null } | null;
+}
+
+export interface AdminTestRecommendation {
+  id: string;
+  patient_id: string;
+  test_name: string;
+  notes: string;
+  status: "pending" | "completed";
+  created_at: string;
+  profiles?: { full_name: string | null; phone: string | null } | null;
 }
 
 export interface AdminOrder {
@@ -171,6 +183,19 @@ export async function getDocumentsAdmin(): Promise<AdminDocument[]> {
 
 export async function markDocumentReceivedAdmin(id: string): Promise<{ error: string | null }> {
   return adminMarkDocumentReceived({ data: { id } });
+}
+
+export async function createTestRecommendationAdmin(data: {
+  patientId: string;
+  testName: string;
+  notes?: string;
+}): Promise<{ error: string | null }> {
+  return adminCreateTestRecommendation({ data });
+}
+
+export async function getTestRecommendationsAdmin(): Promise<AdminTestRecommendation[]> {
+  const result = await adminGetTestRecommendations({ data: undefined });
+  return (result.recommendations ?? []) as AdminTestRecommendation[];
 }
 
 export async function getOrdersAdmin(): Promise<AdminOrder[]> {

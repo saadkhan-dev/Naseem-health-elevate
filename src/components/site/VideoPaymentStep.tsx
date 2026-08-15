@@ -549,9 +549,10 @@ export function VideoPaymentStep({
               </div>
               <input
                 ref={fileRef}
+                id="receipt-gallery"
                 type="file"
                 accept="image/jpeg,image/jpg,image/png"
-                className="hidden"
+                className="sr-only"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) pickReceiptFile(f);
@@ -560,10 +561,11 @@ export function VideoPaymentStep({
               />
               <input
                 ref={cameraRef}
+                id="receipt-camera"
                 type="file"
                 accept="image/jpeg,image/jpg,image/png"
                 capture="environment"
-                className="hidden"
+                className="sr-only"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) pickReceiptFile(f);
@@ -601,35 +603,32 @@ export function VideoPaymentStep({
                         {upFile ? `${(upFile.size / (1024 * 1024)).toFixed(1)} MB` : ""}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => fileRef.current?.click()}
-                      className="text-sm font-medium text-primary hover:underline"
+                    <label
+                      htmlFor="receipt-gallery"
+                      className="cursor-pointer text-sm font-medium text-primary hover:underline"
                     >
                       Change
-                    </button>
+                    </label>
                   </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => cameraRef.current?.click()}
-                    className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-border bg-background px-4 py-4 text-left transition-colors hover:border-primary/40"
+                  <label
+                    htmlFor="receipt-camera"
+                    className="flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-dashed border-border bg-background px-4 py-4 text-left transition-colors hover:border-primary/40"
                   >
                     <Camera className="h-5 w-5 shrink-0 text-muted-foreground" />
                     <span className="text-sm font-medium text-foreground">Take Photo</span>
                     <span className="text-[11px] text-muted-foreground">Use the camera</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => fileRef.current?.click()}
-                    className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-border bg-background px-4 py-4 text-left transition-colors hover:border-primary/40"
+                  </label>
+                  <label
+                    htmlFor="receipt-gallery"
+                    className="flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-dashed border-border bg-background px-4 py-4 text-left transition-colors hover:border-primary/40"
                   >
                     <ImageIcon className="h-5 w-5 shrink-0 text-muted-foreground" />
                     <span className="text-sm font-medium text-foreground">Choose from Gallery</span>
                     <span className="text-[11px] text-muted-foreground">JPG / PNG · max 5 MB</span>
-                  </button>
+                  </label>
                 </div>
               )}
             </div>

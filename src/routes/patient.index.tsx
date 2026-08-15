@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { format } from "date-fns";
 import {
   Bell,
@@ -7,15 +7,25 @@ import {
   Video,
   CalendarX,
   Loader2,
-  CalendarClock,
+  Calendar,
   Package,
   FolderOpen,
   Inbox,
+  FlaskConical,
+  Link2,
+  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import {
   useMyAppointments,
   useMyNotifications,
@@ -23,9 +33,11 @@ import {
   useMarkAllNotificationsRead,
   useCancelMyAppointment,
   useRescheduleMyAppointment,
-  useClaimAppointment,
+  useMyTestRecommendations,
+  useMarkTestRecommendationCompleted,
 } from "@/hooks/queries/usePatient";
 import { formatTimeDisplay } from "@/lib/bookings";
+import { scrollToHash } from "@/lib/scroll";
 import { APPOINTMENT_STATUS_LABELS, type AppointmentStatusValue } from "@/lib/notifications";
 import { QueryError } from "@/components/admin/QueryError";
 
@@ -105,59 +117,101 @@ function NotificationsPanel() {
   );
 }
 
-function ClaimSection() {
-  const [appointmentNo, setAppointmentNo] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [msg, setMsg] = useState("");
-  const claim = useClaimAppointment();
+function TestRecommendationsPanel() {
+  const { data: recommendations, isLoading, isError, error } = useMyTestRecommendations();
+  const markCompleted = useMarkTestRecommendationCompleted();
 
-  async function handleClaim() {
-    setMsg("");
-    const result = await claim.mutateAsync({
-      appointmentId: appointmentNo.trim(),
-      phone: phone.trim() || undefined,
-      email: email.trim() || undefined,
-    });
-    setMsg(result.error ?? "Appointment linked to your account.");
+  async function handleConfirm(id: string) {
+    const result = await markCompleted.mutateAsync(id);
+    if (result?.error) return;
   }
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-      <h3 className="font-display font-semibold text-foreground">Link an existing appointment</h3>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Booked earlier without signing in? Enter your Appointment ID and the phone/email you used to
-        link it to your account.
-      </p>
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
-        <Input
-          value={appointmentNo}
-          onChange={(e) => setAppointmentNo(e.target.value)}
-          placeholder="Appointment ID (e.g. AP-xxxx)"
-        />
-        <Input
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="Phone number"
-        />
-        <Input
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email address"
-        />
+    <div className="rounded-2xl border border-border bg-card shadow-soft">
+      <div className="flex items-center gap-2 border-b border-border px-5 py-4">
+        <FlaskConical className="h-4 w-4 text-primary" />
+        <span className="font-display font-semibold text-foreground">Test Recommendations</span>
+        {!isLoading && (recommendations ?? []).length > 0 && (
+          <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-primary-foreground">
+            {(recommendations ?? []).length}
+          </span>
+        )}
       </div>
-      <Button
-        onClick={handleClaim}
-        disabled={claim.isPending || !appointmentNo.trim()}
-        className="mt-3 h-9 rounded-xl text-xs"
-        size="sm"
-      >
-        {claim.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-        Link appointment
-      </Button>
-      {msg && <p className="mt-2 text-xs font-medium text-primary">{msg}</p>}
+      {isError && (
+        <div className="p-4">
+          <QueryError error={error} />
+        </div>
+      )}
+      {isLoading ? (
+        <div className="flex justify-center p-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : (recommendations ?? []).length === 0 ? (
+        <div className="flex flex-col items-center gap-2 p-8 text-center">
+          <FlaskConical className="h-8 w-8 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            No test recommendations yet. Your doctor will add any recommended tests here.
+          </p>
+        </div>
+      ) : (
+        <div className="max-h-72 divide-y overflow-auto">
+          {(recommendations ?? []).map((r) => (
+            <div key={r.id} className="px-5 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-foreground">{r.test_name}</span>
+                  <Badge
+                    className={
+                      r.status === "completed"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-amber-100 text-amber-700"
+                    }
+                  >
+                    {r.status === "completed" ? "Completed" : "Pending"}
+                  </Badge>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground">
+                    {format(new Date(r.created_at), "MMM d, yyyy")}
+                  </span>
+                  {r.status !== "completed" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1.5 text-xs text-primary"
+                      disabled={markCompleted.isPending}
+                      onClick={() => handleConfirm(r.id)}
+                    >
+                      {markCompleted.isPending ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <CheckCheck className="h-3.5 w-3.5" />
+                      )}
+                      Test done
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {r.notes && <p className="mt-0.5 text-xs text-muted-foreground">{r.notes}</p>}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
+}
+
+/** Extract a VC-XXXXXX code from a full meeting link, path, or bare code. */
+function extractVcCode(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  // Bare code: VC-4K7M92
+  const bare = trimmed.match(/^VC-[A-Z0-9]{6}$/i);
+  if (bare) return bare[0].toUpperCase();
+  // URL or path: https://site/video/VC-4K7M92 or /video/VC-4K7M92
+  const inPath = trimmed.match(/\/video\/(VC-[A-Z0-9]{6})/i);
+  if (inPath) return inPath[1].toUpperCase();
+  return null;
 }
 
 function RescheduleDialog({
@@ -219,11 +273,106 @@ function RescheduleDialog({
   );
 }
 
+function JoinVideoDialog({
+  appointment,
+  onClose,
+}: {
+  appointment: import("@/lib/patient-data").PatientAppointment;
+  onClose: () => void;
+}) {
+  const navigate = useNavigate();
+  const prefillLink = appointment.vcNo ? `${window.location.origin}/video/${appointment.vcNo}` : "";
+  const [link, setLink] = useState(prefillLink);
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+
+  function handleJoin() {
+    setError("");
+    const vcNo = extractVcCode(link);
+    if (!vcNo) {
+      setError(
+        "That link doesn't look right. Paste the full meeting link (e.g. https://your-site/video/VC-4K7M92) or the VC-XXXXXX code.",
+      );
+      return;
+    }
+    if (!name.trim()) {
+      setError("Enter your name to join the call.");
+      return;
+    }
+    navigate({
+      to: "/video/$vcNo",
+      params: { vcNo },
+      search: { name: name.trim() },
+    });
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Join Video Consultation</DialogTitle>
+          <DialogDescription>
+            Paste the meeting link your doctor shared and enter your name to join the same call.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="joinLink">Meeting link</Label>
+            <Input
+              id="joinLink"
+              value={link}
+              onChange={(e) => setLink(e.target.value)}
+              placeholder="Paste meeting link (…/video/VC-XXXXXX)"
+              className="h-10"
+            />
+            {appointment.vcNo && (
+              <p className="text-xs text-muted-foreground">
+                Your appointment's link is pre-filled. You can paste a different link if the doctor
+                shared one.
+              </p>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="joinName">Your name</Label>
+            <Input
+              id="joinName"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter your name"
+              className="h-10"
+            />
+          </div>
+          {error && <p className="text-sm font-medium text-destructive">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleJoin} className="gap-1.5">
+              <Video className="h-4 w-4" /> Join Video Call
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function PatientDashboard() {
+  const router = useRouter();
   const { data: appointments, isLoading, isError, error } = useMyAppointments();
   const cancel = useCancelMyAppointment();
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
-  const [claimMsg, setClaimMsg] = useState("");
+  const [joiningVideo, setJoiningVideo] = useState<
+    import("@/lib/patient-data").PatientAppointment | null
+  >(null);
+
+  async function goToBookingSection(e: React.MouseEvent) {
+    e.preventDefault();
+    if (window.location.pathname !== "/") {
+      await router.navigate({ to: "/", hash: "booking" });
+    }
+    scrollToHash("booking");
+  }
 
   return (
     <div className="space-y-6">
@@ -234,22 +383,25 @@ function PatientDashboard() {
             Manage your upcoming and past consultations
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <a
+            href="/#booking"
+            onClick={goToBookingSection}
+            className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-soft transition-all duration-300 hover:-translate-y-0.5 hover:brightness-[1.05] hover:shadow-glass active:scale-[0.97]"
+          >
+            <Calendar className="h-4 w-4" /> Book Appointment
+          </a>
           <Link
             to="/booking"
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-gradient-primary px-4 text-sm font-semibold text-primary-foreground shadow-card transition hover:brightness-[1.05]"
+            search={{ mode: "video" }}
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-6 py-3.5 text-sm font-semibold text-foreground shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-muted hover:shadow-soft active:scale-[0.97]"
           >
-            <CalendarClock className="h-4 w-4" /> Book New
+            <Video className="h-4 w-4 text-primary" /> Video Consultation
           </Link>
         </div>
       </div>
 
       {isError && <QueryError error={error} />}
-      {claimMsg && (
-        <Alert>
-          <AlertDescription>{claimMsg}</AlertDescription>
-        </Alert>
-      )}
 
       <div className="space-y-3">
         {isLoading ? (
@@ -295,16 +447,34 @@ function PatientDashboard() {
                     </div>
                   )}
                   {a.notes && <div className="mt-1 text-xs text-muted-foreground">{a.notes}</div>}
+                  {a.isVideo && a.vcNo && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+                      <Link2 className="h-3.5 w-3.5 shrink-0 text-primary" />
+                      <span className="text-xs text-muted-foreground">Meeting link:</span>
+                      <code className="max-w-[14rem] truncate rounded bg-background px-2 py-0.5 font-mono text-xs text-foreground">
+                        {window.location.origin}/video/{a.vcNo}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigator.clipboard.writeText(`${window.location.origin}/video/${a.vcNo}`)
+                        }
+                        className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-primary transition hover:bg-primary/10"
+                      >
+                        <Copy className="h-3 w-3" /> Copy
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  {a.isVideo && a.vcNo && (
-                    <Link
-                      to="/video/$vcNo"
-                      params={{ vcNo: a.vcNo }}
+                  {a.isVideo && (
+                    <button
+                      type="button"
+                      onClick={() => setJoiningVideo(a)}
                       className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground"
                     >
-                      <Video className="h-3.5 w-3.5" /> Join
-                    </Link>
+                      <Video className="h-3.5 w-3.5" /> Join Video Consultation
+                    </button>
                   )}
                   {a.canCancel && (
                     <Button
@@ -336,7 +506,7 @@ function PatientDashboard() {
         )}
       </div>
 
-      <ClaimSection />
+      <TestRecommendationsPanel />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <NotificationsPanel />
@@ -373,6 +543,10 @@ function PatientDashboard() {
           </Link>
         </div>
       </div>
+
+      {joiningVideo && (
+        <JoinVideoDialog appointment={joiningVideo} onClose={() => setJoiningVideo(null)} />
+      )}
     </div>
   );
 }

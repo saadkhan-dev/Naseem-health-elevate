@@ -15,6 +15,8 @@ export const Route = createFileRoute("/video/$vcNo")({
   validateSearch: z.object({
     /** "doctor" opens the call in doctor mode (session completion reporting). */
     as: z.string().optional(),
+    /** Pre-fills the patient's name on the join form (from the dashboard join dialog). */
+    name: z.string().optional(),
   }),
   component: VideoCallPage,
 });
@@ -25,7 +27,7 @@ function VideoCallPage() {
   const navigate = useNavigate();
   const { data: join, isLoading, refetch } = useVideoJoin(vcNo);
   const updateStatus = useUpdateVideoStatus();
-  const [userName, setUserName] = useState("");
+  const [userName, setUserName] = useState(search.name ?? "");
   const [joined, setJoined] = useState(false);
   const [joinTimedOut, setJoinTimedOut] = useState(false);
 

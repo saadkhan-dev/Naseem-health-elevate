@@ -11,12 +11,15 @@ import {
   getMyDocuments,
   deleteMyDocument,
   shareMyDocument,
+  getMyTestRecommendations,
+  markTestRecommendationCompleted,
   getMyOrders,
   getMyOrderDetail,
   submitOrderRequest,
   type PatientAppointment,
   type PatientNotification,
   type PatientDocument,
+  type PatientTestRecommendation,
   type PatientOrder,
 } from "@/lib/patient-data";
 
@@ -129,6 +132,25 @@ export function useShareMyDocument() {
   return useMutation({
     mutationFn: (id: string) => shareMyDocument(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["patient", "documents"] }),
+  });
+}
+
+// --- Test recommendations (from the doctor) ---
+
+export function useMyTestRecommendations(enabled = true) {
+  return useQuery<PatientTestRecommendation[]>({
+    queryKey: ["patient", "testRecommendations"],
+    queryFn: getMyTestRecommendations,
+    enabled,
+    refetchInterval: 60000,
+  });
+}
+
+export function useMarkTestRecommendationCompleted() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => markTestRecommendationCompleted(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["patient", "testRecommendations"] }),
   });
 }
 

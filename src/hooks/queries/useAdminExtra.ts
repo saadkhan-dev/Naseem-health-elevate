@@ -10,6 +10,8 @@ import {
   updateDoctorProfileAdmin,
   getDocumentsAdmin,
   markDocumentReceivedAdmin,
+  createTestRecommendationAdmin,
+  getTestRecommendationsAdmin,
   getOrdersAdmin,
   updateOrderStatusAdmin,
   getOrderRequestsAdmin,
@@ -23,6 +25,7 @@ import {
   type DoctorProfile,
   type SupportMessage,
   type AdminDocument,
+  type AdminTestRecommendation,
   type AdminOrder,
   type AdminOrderRequest,
   type AdminReminder,
@@ -130,6 +133,21 @@ export function useMarkDocumentReceived() {
   return useMutation({
     mutationFn: (id: string) => markDocumentReceivedAdmin(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "documents"] }),
+  });
+}
+
+export function useCreateTestRecommendation() {
+  return useMutation({
+    mutationFn: (data: { patientId: string; testName: string; notes?: string }) =>
+      createTestRecommendationAdmin(data),
+  });
+}
+
+export function useAdminTestRecommendations() {
+  return useQuery<AdminTestRecommendation[]>({
+    queryKey: ["admin", "testRecommendations"],
+    queryFn: getTestRecommendationsAdmin,
+    refetchInterval: 60000,
   });
 }
 

@@ -64,16 +64,19 @@ export function getSiteUrl(): string | undefined {
 /**
  * Jitsi Meet instance used for video consultation rooms.
  *
- * The public `meet.jit.si` instance requires an account to create rooms
- * anonymously (since 2023), so the app defaults to a public instance that
- * supports anonymous rooms and lets the clinic override it with the server-only
- * `JITSI_DOMAIN` env var. This value is read on the SERVER only and returned to
- * the join page through the existing server function — it is never exposed as a
- * VITE_* variable.
+ * Defaults to the official `meet.jit.si` instance: its `external_api.js` and
+ * XMPP endpoints (`http-bind`/websocket) are reachable and it allows anonymous
+ * room joins (`anonymousdomain: guest.meet.jit.si`, `requireDisplayName:
+ * false`). The previously used `jitsi.osadl.org` must NOT be used — its BOSH
+ * endpoint times out and its guest/MUC domains do not resolve, so conferences
+ * never establish even though `external_api.js` loads. The clinic can override
+ * it with the server-only `JITSI_DOMAIN` env var. This value is read on the
+ * SERVER only and returned to the join page through the existing server
+ * function — it is never exposed as a VITE_* variable.
  */
 export function getJitsiDomain(): string {
   const domain = readEnv("JITSI_DOMAIN");
-  return (domain ?? "jitsi.riot.im").replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  return (domain ?? "meet.jit.si").replace(/^https?:\/\//, "").replace(/\/+$/, "");
 }
 
 function basicAuth(username: string, password: string): string {

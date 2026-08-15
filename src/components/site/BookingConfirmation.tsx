@@ -40,15 +40,15 @@ const CHANNEL_LABELS: Record<NotificationResult["channel"], string> = {
 
 function notificationNote(notifications: NotificationResult[]): string | null {
   const sent = notifications.filter((n) => n.status === "sent");
+
   if (sent.length > 0) {
     const labels = sent
       .map((n) => CHANNEL_LABELS[n.channel])
       .filter((v, i, a) => a.indexOf(v) === i);
+
     return `We've also sent your Appointment ID to your ${labels.join(" and ")}.`;
   }
-  if (notifications.length > 0) {
-    return "We couldn't send your Appointment ID by SMS/email because messaging isn't configured yet. Copy it above and keep it safe.";
-  }
+
   return null;
 }
 
@@ -85,13 +85,12 @@ export function BookingConfirmation({
         Appointment Requested
       </h3>
       <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-        Your appointment has been submitted. Dr. Naseem will confirm your slot shortly. Keep your
-        Appointment ID to check the status.
+        You will soom receive a message to confirm your appointment. If you don't receive a confirmation message within 3 hours, plz contact <strong>03152968384</strong>
       </p>
 
       {appointmentNo && (
         <div className="mt-6 w-full max-w-xs rounded-2xl border border-primary/30 bg-primary-soft p-4">
-          <div className="text-xs font-medium text-primary">Your Appointment ID</div>
+          <div className="text-xs font-medium text-primary">Keep Your Appointment ID </div>
           <div className="mt-1 flex items-center justify-center gap-2">
             <span className="font-display text-2xl font-bold tracking-wide text-foreground break-all">
               {appointmentNo}
@@ -165,15 +164,15 @@ export function BookingConfirmation({
 
       <div className="mt-4 w-full max-w-xs rounded-xl border border-dashed border-primary/40 bg-primary-soft/60 p-3 text-xs text-muted-foreground">
         <p>
-          <span className="font-medium text-primary">Didn't save your Appointment ID?</span> No
-          problem — you can find it again anytime on the{" "}
+          <span className="font-medium text-primary">To check your appointment status, </span> 
+          Please enter your name, phone number or Email.{" "}
           <Link
             to="/appointment-status"
             className="font-medium text-primary underline-offset-2 hover:underline"
           >
-            Appointment Status
+          
           </Link>{" "}
-          page using the phone number or email you used when booking.
+         
         </p>
       </div>
 

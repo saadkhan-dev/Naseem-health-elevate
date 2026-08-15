@@ -64,7 +64,7 @@ function getSectionGap(id: string): number {
       return 12;
 
     case "booking":
-      return 12;
+      return 0;
 
     case "video-consultation":
       return 12;
@@ -118,10 +118,14 @@ function navbarHeightPx(): number {
    FIND ACTUAL HEADING
    ========================================================= */
 
-function getScrollTarget(el: HTMLElement): HTMLElement {
-  const heading =
-    el.querySelector<HTMLElement>("h1, h2, h3");
+function getScrollTarget(el: HTMLElement, id?: string): HTMLElement {
+  // Booking section: scroll to the section itself, not its heading.
+  // This keeps the booking heading completely below the sticky navbar.
+  if (id === "booking") {
+    return el;
+  }
 
+  const heading = el.querySelector<HTMLElement>("h1, h2, h3");
   return heading ?? el;
 }
 
@@ -137,7 +141,7 @@ function getTargetTop(
     return 0;
   }
 
-  const target = getScrollTarget(el);
+  const target = getScrollTarget(el, id);
 
   const navbarHeight = navbarHeightPx();
 
@@ -292,3 +296,8 @@ export function scrollToHash(hash: string) {
 
   performScroll();
 }
+
+
+
+
+

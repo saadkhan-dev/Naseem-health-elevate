@@ -53,8 +53,18 @@ export function BookingPanel() {
   const { data: availability } = useAvailability();
   const { slots, isLoading: slotsLoading } = useTimeSlots(date, serviceId, services);
   const createAppointment = useCreateAppointment();
+  const bookingServices = services
+    ?.filter((s) => !isVideoConsultationService(s))
+    .sort((a, b) => {
+      const order = (service: typeof a) => {
+        if (service.name.toLowerCase().includes("homeopathic")) return 1;
+        if (service.name.toLowerCase().includes("physio")) return 2;
+        if (isHomeVisitService(service)) return 3;
+        return 99;
+      };
 
-  const bookingServices = services?.filter((s) => !isVideoConsultationService(s));
+      return order(a) - order(b);
+    });
   const selectedService = services?.find((s) => s.id === serviceId);
   const isHomeVisit = selectedService ? isHomeVisitService(selectedService) : false;
 
@@ -100,7 +110,7 @@ export function BookingPanel() {
 
   if (confirmed && selectedService && date) {
     return (
-      <section id="booking" className="relative -mt-6 px-4 md:-mt-12 md:px-8">
+      <section id="booking" className="relative -mt-10 px-4 md:-mt-16 md:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="rounded-3xl border border-border bg-card p-5 shadow-soft md:p-8">
             <BookingConfirmation
@@ -128,7 +138,7 @@ export function BookingPanel() {
   }
 
   return (
-    <section id="booking" className="relative -mt-6 px-4 md:-mt-12 md:px-8">
+      <section id="booking" className="relative -mt-10 px-4 md:-mt-16 md:px-8">
       <div className="mx-auto max-w-7xl">
         <div className="rounded-3xl border border-border bg-card p-5 shadow-soft md:p-8">
           <div className="text-center">
@@ -141,7 +151,7 @@ export function BookingPanel() {
             </p>
           </div>
 
-          <div className="mt-6 grid items-end gap-5 lg:grid-cols-[1fr_1fr_1fr_auto]">
+          <div className="mt-6 grid items-end gap-5 lg:grid-cols-3">
             <Field label="Select Service">
               <Select
                 value={serviceId}
@@ -229,63 +239,64 @@ export function BookingPanel() {
                 </Select>
               </Field>
             )}
-
-            <Button
-              onClick={handleSubmit}
-              disabled={
-                !serviceId || !date || (!isHomeVisit && !time) || createAppointment.isPending
-              }
-              className="h-11 rounded-xl px-6 hover:brightness-[1.05]"
-            >
-              {createAppointment.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  Book Appointment <ArrowRight className="h-4 w-4" />
-                </>
-              )}
-            </Button>
           </div>
 
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <div>
-              <div className="mb-1.5 text-xs font-medium text-foreground">Your Name</div>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Full name"
-                className="h-11 rounded-xl transition-all duration-300 hover:border-primary/40"
-              />
-            </div>
-            <div>
-              <div className="mb-1.5 text-xs font-medium text-foreground">
-                Phone Number <span className="text-muted-foreground">(optional)</span>
+          <div className="mt-6">
+            <h3 className="text-sm font-semibold text-foreground">Your Details</h3>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <div className="mb-1.5 text-xs font-medium text-foreground">Your Name</div>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Full name"
+                  className="h-11 rounded-xl transition-all duration-300 hover:border-primary/40"
+                />
               </div>
-              <Input
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+92 3XX XXXXXXX"
-                className="h-11 rounded-xl transition-all duration-300 hover:border-primary/40"
-              />
-            </div>
-            <div>
-              <div className="mb-1.5 text-xs font-medium text-foreground">
-                Email Address <span className="text-muted-foreground">(optional)</span>
+              <div>
+                <div className="mb-1.5 text-xs font-medium text-foreground">
+                  Phone Number <span className="text-muted-foreground">(optional)</span>
+                </div>
+                <Input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+92 3XX XXXXXXX"
+                  className="h-11 rounded-xl transition-all duration-300 hover:border-primary/40"
+                />
               </div>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="h-11 rounded-xl transition-all duration-300 hover:border-primary/40"
-              />
+              <div>
+                <div className="mb-1.5 text-xs font-medium text-foreground">
+                  Email Address <span className="text-muted-foreground">(optional)</span>
+                </div>
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="h-11 rounded-xl transition-all duration-300 hover:border-primary/40"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                Provide at least one — we'll send your Appointment ID there.
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground sm:col-span-2">
-              Provide at least one — we'll send your Appointment ID there.
-            </p>
           </div>
 
           {formError && <p className="mt-3 text-sm font-medium text-destructive">{formError}</p>}
+
+          <Button
+            onClick={handleSubmit}
+            disabled={!serviceId || !date || (!isHomeVisit && !time) || createAppointment.isPending}
+            className="mt-6 h-12 w-full rounded-xl hover:brightness-[1.05]"
+          >
+            {createAppointment.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                Book Appointment <ArrowRight className="h-4 w-4" />
+              </>
+            )}
+          </Button>
 
           <div className="mt-7 grid gap-4 border-t border-border pt-6 sm:grid-cols-2 lg:grid-cols-4">
             {[

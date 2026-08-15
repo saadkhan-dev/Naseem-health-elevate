@@ -10,6 +10,8 @@ import {
   patientGetMyDocuments,
   patientDeleteDocument,
   patientShareDocument,
+  patientGetMyTestRecommendations,
+  patientMarkTestRecommendationCompleted,
   patientGetMyOrders,
   patientGetOrderDetail,
   patientSubmitOrderRequest,
@@ -30,6 +32,14 @@ export interface PatientNotification {
 }
 
 export type PatientDocumentStatus = "available" | "sent_to_doctor" | "received";
+
+export interface PatientTestRecommendation {
+  id: string;
+  test_name: string;
+  notes: string;
+  status: "pending" | "completed";
+  created_at: string;
+}
 
 export interface PatientDocument {
   id: string;
@@ -146,6 +156,17 @@ export async function deleteMyDocument(id: string): Promise<{ error: string | nu
 
 export async function shareMyDocument(id: string): Promise<{ error: string | null }> {
   return patientShareDocument({ data: { id } });
+}
+
+export async function getMyTestRecommendations(): Promise<PatientTestRecommendation[]> {
+  const result = await patientGetMyTestRecommendations({ data: undefined });
+  return (result.recommendations ?? []) as PatientTestRecommendation[];
+}
+
+export async function markTestRecommendationCompleted(
+  id: string,
+): Promise<{ error: string | null }> {
+  return patientMarkTestRecommendationCompleted({ data: { id } });
 }
 
 export async function getMyOrders(): Promise<PatientOrder[]> {
