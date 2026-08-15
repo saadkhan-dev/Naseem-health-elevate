@@ -7,6 +7,12 @@ import { Button } from "@/components/ui/button";
 import { QueryError } from "@/components/admin/QueryError";
 import { usePublishedProducts } from "@/hooks/queries/useContent";
 import { useCart } from "@/lib/cart";
+import { todayInClinic } from "@/lib/clinic";
+import {
+  productEffectivePrice,
+  productOfferLabel,
+  isProductOfferActive,
+} from "@/lib/product-offer-types";
 import type { Product } from "@/lib/admin-data";
 
 export const Route = createFileRoute("/shop")({
@@ -19,14 +25,11 @@ export const Route = createFileRoute("/shop")({
   component: ShopPage,
 });
 
-function effectivePrice(p: Product): number {
-  return p.discount_price != null ? Number(p.discount_price) : Number(p.price);
-}
-
 function ShopPage() {
   const { data: products, isLoading, isError, error } = usePublishedProducts();
   const cart = useCart();
   const [addedId, setAddedId] = useState<string | null>(null);
+  const today = todayInClinic();
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -171,14 +174,19 @@ function ShopPage() {
                         </div>
                         <div className="mt-2 flex items-baseline gap-2">
                           <span className="text-base font-bold text-primary">
-                            Rs. {effectivePrice(p).toLocaleString()}
+                            Rs. {productEffectivePrice(p, today).toLocaleString()}
                           </span>
-                          {p.discount_price != null && (
+                          {isProductOfferActive(p, today) && (
                             <span className="text-xs text-muted-foreground line-through">
                               Rs. {Number(p.price).toLocaleString()}
                             </span>
                           )}
                         </div>
+                        {productOfferLabel(p) && (
+                          <div className="mt-1 inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
+                            {productOfferLabel(p)}
+                          </div>
+                        )}
                       </div>
                     </Link>
                     <div className="mt-3 flex gap-2">

@@ -58,8 +58,16 @@ export async function submitOrderPayment(input: {
   methodId: string;
   reference: string;
   payerName: string;
+  payerPhone?: string;
+  payerEmail?: string;
 }): Promise<OrderPaymentResult> {
-  return submitOrderPaymentServer({ data: input });
+  return submitOrderPaymentServer({
+    data: {
+      ...input,
+      payerPhone: input.payerPhone?.trim() || undefined,
+      payerEmail: input.payerEmail?.trim()?.toLowerCase() || undefined,
+    },
+  });
 }
 
 /** Guest (no account) submits payment proof using Order ID + contact details. */

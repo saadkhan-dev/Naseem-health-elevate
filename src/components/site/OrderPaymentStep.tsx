@@ -1,13 +1,5 @@
 import * as React from "react";
-import {
-  CheckCircle2,
-  Loader2,
-  ShieldCheck,
-  Wallet,
-  Upload,
-  X,
-  Truck,
-} from "lucide-react";
+import { CheckCircle2, Loader2, ShieldCheck, Wallet, Upload, X, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -43,6 +35,10 @@ interface OrderPaymentStepProps {
  *
  * Signed-in patients submit by order id (ownership enforced server-side);
  * guests submit by Order ID + the phone/email used at checkout.
+ *
+ * Mobile / Phone Number and Email Address are both optional individually
+ * (phone OR email OR both) for the payer contact; guests still need at least
+ * one of them so the clinic can match their order.
  */
 export function OrderPaymentStep({
   orderId,
@@ -65,12 +61,12 @@ export function OrderPaymentStep({
   const [methodId, setMethodId] = React.useState<string>();
   const [reference, setReference] = React.useState("");
   const [payerName, setPayerName] = React.useState("");
+  const [payerPhone, setPayerPhone] = React.useState(phone ?? "");
+  const [payerEmail, setPayerEmail] = React.useState(email ?? "");
   const [formError, setFormError] = React.useState("");
   const [done, setDone] = React.useState(false);
 
   const [guestId, setGuestId] = React.useState(orderNo ?? "");
-  const [guestPhone, setGuestPhone] = React.useState(phone ?? "");
-  const [guestEmail, setGuestEmail] = React.useState(email ?? "");
   const [guestFile, setGuestFile] = React.useState<File>();
   const [guestPreview, setGuestPreview] = React.useState<string>();
   const [guestError, setGuestError] = React.useState("");
@@ -113,6 +109,10 @@ export function OrderPaymentStep({
     });
   }
 
+  function hasGuestContact() {
+    return Boolean(payerPhone.trim() || payerEmail.trim());
+  }
+
   async function handleSubmitTransaction() {
     setFormError("");
     if (!methodId) {
@@ -127,23 +127,30 @@ export function OrderPaymentStep({
       setFormError("Please enter the name the payment was made from.");
       return;
     }
+    if (!signedIn && !hasGuestContact()) {
+      setFormError("Enter your mobile number or email address so we can match your order.");
+      return;
+    }
 
     try {
-      const result = signedIn && orderId
-        ? await submitOwn.mutateAsync({
-            orderId,
-            methodId,
-            reference: reference.trim(),
-            payerName: payerName.trim(),
-          })
-        : await submitGuest.mutateAsync({
-            id: guestId.trim(),
-            phone: guestPhone,
-            email: guestEmail,
-            methodId,
-            reference: reference.trim(),
-            payerName: payerName.trim(),
-          });
+      const result =
+        signedIn && orderId
+          ? await submitOwn.mutateAsync({
+              orderId,
+              methodId,
+              reference: reference.trim(),
+              payerName: payerName.trim(),
+              payerPhone,
+              payerEmail,
+            })
+          : await submitGuest.mutateAsync({
+              id: guestId.trim(),
+              phone: payerPhone,
+              email: payerEmail,
+              methodId,
+              reference: reference.trim(),
+              payerName: payerName.trim(),
+            });
       if (result.error) {
         setFormError(result.error);
         return;
@@ -166,13 +173,17 @@ export function OrderPaymentStep({
       setGuestError("Please choose a receipt screenshot (JPG/JPEG/PNG).");
       return;
     }
+    if (!signedIn && !hasGuestContact()) {
+      setGuestError("Enter your mobile number or email address so we can match your order.");
+      return;
+    }
 
     try {
       const fileBase64 = await readFileAsBase64(guestFile);
       const res = await submitReceipt.mutateAsync({
         id: guestId.trim(),
-        phone: guestPhone,
-        email: guestEmail,
+        phone: payerPhone,
+        email: payerEmail,
         methodId,
         fileName: guestFile.name,
         mimeType: guestFile.type as "image/jpeg" | "image/jpg" | "image/png",
@@ -242,9 +253,8 @@ export function OrderPaymentStep({
         </div>
 
         <p className="mt-4 max-w-sm text-xs text-muted-foreground">
-          Track your order from{" "}
-          <span className="font-medium text-foreground">My Orders</span> in your patient dashboard
-          (or keep your Order ID handy — it's also your payment reference).
+          Track your order from <span className="font-medium text-foreground">My Orders</span> in
+          your patient dashboard (or keep your Order ID handy — it's also your payment reference).
         </p>
 
         <Button className="mt-6" onClick={onClose}>
@@ -253,6 +263,36 @@ export function OrderPaymentStep({
       </div>
     );
   }
+
+  const contactFields = (
+    <div className="grid gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Mobile / Phone Number">
+          <Input
+            value={payerPhone}
+            onChange={(e) => setPayerPhone(e.target.value)}
+            placeholder="03xx (optional)"
+            inputMode="tel"
+          />
+        </Field>
+        <Field label="Email Address">
+          <Input
+            value={payerEmail}
+            onChange={(e) => setPayerEmail(e.target.value)}
+            placeholder="you@email.com (optional)"
+            type="email"
+            inputMode="email"
+          />
+        </Field>
+      </div>
+      {!signedIn && (
+        <p className="text-xs text-muted-foreground">
+          Enter the mobile number or email you used at checkout — at least one is required to verify
+          your order.
+        </p>
+      )}
+    </div>
+  );
 
   return (
     <div className="py-6">
@@ -274,9 +314,10 @@ export function OrderPaymentStep({
           <div className="flex items-start gap-2 rounded-xl border border-border bg-card px-4 py-3 text-xs text-muted-foreground">
             <Truck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <span>
-              To verify your payment we need your <span className="font-semibold text-foreground">Order ID</span>{" "}
-              (shown above) plus the <span className="font-semibold text-foreground">phone or email</span> you
-              used at checkout.
+              To verify your payment we need your{" "}
+              <span className="font-semibold text-foreground">Order ID</span> (shown above) plus the{" "}
+              <span className="font-semibold text-foreground">mobile number or email</span> you used
+              at checkout.
             </span>
           </div>
         </div>
@@ -289,7 +330,9 @@ export function OrderPaymentStep({
             type="button"
             onClick={() => setVerificationMode("transaction")}
             className={`rounded-xl px-3 py-2.5 text-center transition-colors ${
-              verificationMode === "transaction" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+              verificationMode === "transaction"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground"
             }`}
           >
             Transaction ID
@@ -298,7 +341,9 @@ export function OrderPaymentStep({
             type="button"
             onClick={() => setVerificationMode("receipt")}
             className={`rounded-xl px-3 py-2.5 text-center transition-colors ${
-              verificationMode === "receipt" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+              verificationMode === "receipt"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground"
             }`}
           >
             Upload Receipt
@@ -310,15 +355,12 @@ export function OrderPaymentStep({
         {verificationMode === "transaction" ? (
           <div className="space-y-4 rounded-2xl border border-border bg-card p-5">
             {!signedIn && (
-              <div className="grid gap-3">
-                <Field label="Order ID">
-                  <Input value={guestId} onChange={(e) => setGuestId(e.target.value)} />
-                </Field>
-                <Field label="Phone / Email (used at checkout)">
-                  <Input value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} placeholder="03xx or you@email.com" />
-                </Field>
-              </div>
+              <Field label="Order ID">
+                <Input value={guestId} onChange={(e) => setGuestId(e.target.value)} />
+              </Field>
             )}
+
+            {contactFields}
 
             <Field label="Payment method">
               {methodsLoading ? (
@@ -388,15 +430,12 @@ export function OrderPaymentStep({
             className="space-y-4 rounded-2xl border border-border bg-card p-5"
           >
             {!signedIn && (
-              <div className="grid gap-3">
-                <Field label="Order ID">
-                  <Input value={guestId} onChange={(e) => setGuestId(e.target.value)} />
-                </Field>
-                <Field label="Phone / Email (used at checkout)">
-                  <Input value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} placeholder="03xx or you@email.com" />
-                </Field>
-              </div>
+              <Field label="Order ID">
+                <Input value={guestId} onChange={(e) => setGuestId(e.target.value)} />
+              </Field>
             )}
+
+            {contactFields}
 
             <Field label="Payment method">
               {methodsLoading ? (
@@ -426,7 +465,7 @@ export function OrderPaymentStep({
             <input
               ref={fileRef}
               type="file"
-              accept="image/jpeg,image/jpg,image/png"
+              accept="image/*"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
@@ -435,21 +474,35 @@ export function OrderPaymentStep({
             />
             {guestPreview ? (
               <div className="relative overflow-hidden rounded-xl border border-border">
-                <img src={guestPreview} alt="Receipt preview" className="max-h-52 w-full object-contain" />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setGuestFile(undefined);
-                    setGuestPreview((prev) => {
-                      if (prev) URL.revokeObjectURL(prev);
-                      return undefined;
-                    });
-                  }}
-                  aria-label="Remove receipt"
-                  className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-background/90 text-muted-foreground shadow-sm"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                <img
+                  src={guestPreview}
+                  alt="Receipt preview"
+                  className="max-h-52 w-full object-contain"
+                />
+                <div className="absolute right-2 top-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    aria-label="Replace receipt"
+                    className="flex h-7 w-7 items-center justify-center rounded-full bg-background/90 text-muted-foreground shadow-sm hover:text-primary"
+                  >
+                    <Upload className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGuestFile(undefined);
+                      setGuestPreview((prev) => {
+                        if (prev) URL.revokeObjectURL(prev);
+                        return undefined;
+                      });
+                    }}
+                    aria-label="Remove receipt"
+                    className="flex h-7 w-7 items-center justify-center rounded-full bg-background/90 text-muted-foreground shadow-sm hover:text-red-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             ) : (
               <button
@@ -458,7 +511,10 @@ export function OrderPaymentStep({
                 className="flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-border bg-muted/40 px-4 py-6 text-sm text-muted-foreground transition hover:border-primary/40"
               >
                 <Upload className="h-6 w-6" />
-                Upload receipt screenshot (JPG/PNG, up to 5 MB)
+                <span>
+                  Take a photo or choose from gallery
+                  <span className="block text-xs">JPG/PNG receipt, up to 5 MB</span>
+                </span>
               </button>
             )}
 
@@ -484,7 +540,9 @@ function Row({ label, value, mono = false }: { label: string; value: string; mon
   return (
     <div className="flex items-center justify-between gap-3">
       <span className="text-muted-foreground">{label}</span>
-      <span className={mono ? "font-mono font-medium text-foreground" : "font-medium text-foreground"}>
+      <span
+        className={mono ? "font-mono font-medium text-foreground" : "font-medium text-foreground"}
+      >
         {value}
       </span>
     </div>

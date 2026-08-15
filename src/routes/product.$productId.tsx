@@ -25,6 +25,13 @@ import {
 import { useCart } from "@/lib/cart";
 import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
+import { todayInClinic } from "@/lib/clinic";
+import {
+  productEffectivePrice,
+  productDiscountPercent,
+  productOfferLabel,
+  isProductOfferActive,
+} from "@/lib/product-offer-types";
 
 export const Route = createFileRoute("/product/$productId")({
   head: () => ({
@@ -36,10 +43,6 @@ export const Route = createFileRoute("/product/$productId")({
   component: ProductDetail,
 });
 
-function effectivePrice(p: { price: number; discount_price: number | null }): number {
-  return p.discount_price != null ? Number(p.discount_price) : Number(p.price);
-}
-
 function ProductDetail() {
   const { productId } = Route.useParams();
   const { data: product, isLoading, isError, error } = useProductDetail(productId);
@@ -48,6 +51,7 @@ function ProductDetail() {
   const { user } = useAuth();
   const router = useRouter();
   const submitReview = useSubmitProductReview();
+  const today = todayInClinic();
 
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
@@ -56,8 +60,8 @@ function ProductDetail() {
   const [reviewError, setReviewError] = useState("");
   const [reviewDone, setReviewDone] = useState(false);
 
-  const price = product ? effectivePrice(product) : 0;
-  const hasDiscount = product != null && product.discount_price != null;
+  const price = product ? productEffectivePrice(product, today) : 0;
+  const hasDiscount = product != null && isProductOfferActive(product, today);
 
   function handleAdd() {
     if (!product) return;
@@ -165,6 +169,17 @@ function ProductDetail() {
                     </span>
                   )}
                 </div>
+
+                {product && isProductOfferActive(product, today) && (
+                  <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-600">
+                    {productOfferLabel(product)}
+                    {productDiscountPercent(product) != null && (
+                      <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px]">
+                        {productDiscountPercent(product)}% OFF
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 {product.description && (
                   <p className="mt-4 text-sm leading-relaxed text-muted-foreground">

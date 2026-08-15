@@ -5,6 +5,8 @@ import { SiteFooter } from "@/components/site/SiteFooter";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart";
 import { usePublishedProducts } from "@/hooks/queries/useContent";
+import { todayInClinic } from "@/lib/clinic";
+import { productEffectivePrice } from "@/lib/product-offer-types";
 import type { Product } from "@/lib/admin-data";
 
 export const Route = createFileRoute("/cart")({
@@ -17,14 +19,11 @@ export const Route = createFileRoute("/cart")({
   component: CartPage,
 });
 
-function effectivePrice(p: Product): number {
-  return p.discount_price != null ? Number(p.discount_price) : Number(p.price);
-}
-
 function CartPage() {
   const cart = useCart();
   const router = useRouter();
   const { data: products, isLoading } = usePublishedProducts();
+  const today = todayInClinic();
 
   const byId = new Map((products ?? []).map((p) => [p.id, p]));
 
@@ -35,7 +34,10 @@ function CartPage() {
     })
     .filter((l): l is { product: Product; quantity: number } => l !== null);
 
-  const subtotal = lines.reduce((sum, l) => sum + effectivePrice(l.product) * l.quantity, 0);
+  const subtotal = lines.reduce(
+    (sum, l) => sum + productEffectivePrice(l.product, today) * l.quantity,
+    0,
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -96,7 +98,7 @@ function CartPage() {
                       {product.name}
                     </Link>
                     <div className="mt-0.5 text-sm font-medium text-primary">
-                      Rs. {effectivePrice(product).toLocaleString()}
+                      Rs. {productEffectivePrice(product, today).toLocaleString()}
                     </div>
                   </div>
                   <div className="flex h-9 items-center gap-1 rounded-xl border border-border bg-background px-1">
@@ -121,7 +123,7 @@ function CartPage() {
                     </button>
                   </div>
                   <div className="w-20 text-right text-sm font-bold text-foreground">
-                    Rs. {(effectivePrice(product) * quantity).toLocaleString()}
+                    Rs. {(productEffectivePrice(product, today) * quantity).toLocaleString()}
                   </div>
                   <button
                     type="button"

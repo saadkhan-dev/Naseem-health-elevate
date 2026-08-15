@@ -78,6 +78,8 @@ export interface AdminOrder {
   payment_method: string | null;
   payment_reference: string | null;
   payment_payer_name: string | null;
+  payment_payer_phone: string | null;
+  payment_payer_email: string | null;
   payment_amount: number | null;
   payment_submitted_at: string | null;
   payment_verified_at: string | null;

@@ -6,11 +6,12 @@ import { useServices } from "@/hooks/queries/useBookings";
 import { isVideoConsultationService } from "@/lib/bookings";
 import { VideoOfferCards } from "@/components/site/VideoOfferCards";
 import { useCart } from "@/lib/cart";
-import type { Product } from "@/lib/admin-data";
-
-function effectivePrice(p: Product): number {
-  return p.discount_price != null ? Number(p.discount_price) : Number(p.price);
-}
+import { todayInClinic } from "@/lib/clinic";
+import {
+  productEffectivePrice,
+  productOfferLabel,
+  isProductOfferActive,
+} from "@/lib/product-offer-types";
 
 export function ConsultationProducts() {
   const { data: products, isLoading } = usePublishedProducts();
@@ -18,6 +19,7 @@ export function ConsultationProducts() {
   const { data: services } = useServices();
   const videoServicePrice = services?.find(isVideoConsultationService)?.price;
   const cart = useCart();
+  const today = todayInClinic();
 
   return (
     <section className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
@@ -131,14 +133,19 @@ export function ConsultationProducts() {
                     )}
                     <div className="mt-1 flex items-baseline gap-2">
                       <div className="text-sm font-bold text-primary">
-                        Rs. {effectivePrice(p).toLocaleString()}
+                        Rs. {productEffectivePrice(p, today).toLocaleString()}
                       </div>
-                      {p.discount_price != null && (
+                      {isProductOfferActive(p, today) && (
                         <div className="text-xs text-muted-foreground line-through">
                           Rs. {Number(p.price).toLocaleString()}
                         </div>
                       )}
                     </div>
+                    {productOfferLabel(p) && (
+                      <div className="mt-1 inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600">
+                        {productOfferLabel(p)}
+                      </div>
+                    )}
                     <button
                       type="button"
                       onClick={(e) => {

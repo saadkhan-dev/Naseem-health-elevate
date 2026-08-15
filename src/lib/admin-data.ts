@@ -288,6 +288,11 @@ export interface Product {
   stock_quantity: number | null;
   rating_avg: number | null;
   rating_count: number;
+  offer_is_active: boolean;
+  offer_title: string | null;
+  offer_percent: number | null;
+  offer_start_date: string | null;
+  offer_end_date: string | null;
   created_at: string;
 }
 
@@ -340,6 +345,11 @@ export async function createProduct(data: {
   category?: string;
   stock_quantity?: number | null;
   discount_price?: number | null;
+  offer_is_active?: boolean;
+  offer_title?: string | null;
+  offer_percent?: number | null;
+  offer_start_date?: string | null;
+  offer_end_date?: string | null;
 }) {
   return adminCreateProduct({ data });
 }
@@ -355,6 +365,11 @@ export async function updateProduct(
     category?: string;
     stock_quantity?: number | null;
     discount_price?: number | null;
+    offer_is_active?: boolean;
+    offer_title?: string | null;
+    offer_percent?: number | null;
+    offer_start_date?: string | null;
+    offer_end_date?: string | null;
   },
 ) {
   return adminUpdateProduct({ data: { id, data } });

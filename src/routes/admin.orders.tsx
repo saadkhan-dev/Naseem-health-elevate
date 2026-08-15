@@ -368,6 +368,16 @@ function OrderPaymentBlock({
             Payer: <span className="font-medium">{order.payment_payer_name}</span>
           </span>
         )}
+        {order.payment_payer_phone && (
+          <span>
+            Payer phone: <span className="font-medium">{order.payment_payer_phone}</span>
+          </span>
+        )}
+        {order.payment_payer_email && (
+          <span>
+            Payer email: <span className="font-medium">{order.payment_payer_email}</span>
+          </span>
+        )}
         {order.payment_reference && (
           <span>
             Ref: <span className="font-mono font-medium">{order.payment_reference}</span>

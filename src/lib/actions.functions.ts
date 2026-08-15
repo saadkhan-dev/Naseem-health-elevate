@@ -53,6 +53,7 @@ import { todayInClinic, nowTimeInClinic, toMinutes } from "./clinic";
 import { intervalsOverlap } from "./slot-logic";
 import { getChatUsageStats, type ChatUsageRange, type ChatUsageStats } from "./server/chat-usage";
 import { generateAppointmentNo, generateOrderNo } from "./ids";
+import { productEffectivePrice } from "./product-offer-types";
 
 /** Max insert attempts when a freshly generated patient-facing ID collides. */
 const ID_RETRY_ATTEMPTS = 5;
@@ -803,6 +804,21 @@ const productInputSchema = z.object({
   stock_quantity: z.number().int().min(0).nullable().optional(),
   // NULL = no discount; otherwise the sale price in Rs.
   discount_price: z.number().min(0).nullable().optional(),
+  // Per-product offer (admin-controlled). discount_price is the effective sale
+  // price while the offer is active and within its optional date window.
+  offer_is_active: z.boolean().optional(),
+  offer_title: z.string().trim().max(100).nullable().optional(),
+  offer_percent: z.number().min(0).max(100).nullable().optional(),
+  offer_start_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
+  offer_end_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
 });
 
 export const adminCreateProduct = createServerFn({ method: "POST" })
@@ -1178,6 +1194,14 @@ export const submitOrderPayment = createServerFn({ method: "POST" })
         .min(3, "Enter the transaction / reference ID from your payment")
         .max(200),
       payerName: z.string().trim().min(2, "Enter the name the payment was made from").max(100),
+      payerPhone: z.string().trim().min(7, "Enter a valid phone number").max(30).optional(),
+      payerEmail: z
+        .string()
+        .trim()
+        .email("Please enter a valid email")
+        .max(200)
+        .toLowerCase()
+        .optional(),
     }),
   )
   .handler(async ({ data, context }) => {
@@ -2124,10 +2148,13 @@ export const placeOrder = createServerFn({ method: "POST" })
     const ids = data.items.map((i) => i.productId);
     const { data: products, error: productsError } = await admin
       .from("products")
-      .select("id, name, price, discount_price, in_stock, stock_quantity")
+      .select(
+        "id, name, price, discount_price, offer_is_active, offer_title, offer_percent, offer_start_date, offer_end_date, in_stock, stock_quantity",
+      )
       .in("id", ids);
     if (productsError) return { error: productsError.message, orderId: null, total: null };
     const byId = new Map((products ?? []).map((p) => [p.id, p]));
+    const today = todayInClinic();
     let total = 0;
     const itemRows: Array<{
       product_id: string;
@@ -2148,11 +2175,9 @@ export const placeOrder = createServerFn({ method: "POST" })
           total: null,
         };
       }
-      // Effective price = discounted sale price when set, otherwise the list price.
-      const price =
-        product.discount_price != null
-          ? Number(product.discount_price)
-          : Number(product.price ?? 0);
+      // Effective price = discounted sale price while the offer is active,
+      // otherwise the list price (authoritative server-side pricing).
+      const price = productEffectivePrice(product, today);
       total += price * item.quantity;
       itemRows.push({
         product_id: item.productId,
@@ -2354,9 +2379,12 @@ export const patientReorder = createServerFn({ method: "POST" })
       .filter(Boolean);
     const { data: products } = await admin
       .from("products")
-      .select("id, name, price, discount_price, in_stock, stock_quantity")
+      .select(
+        "id, name, price, discount_price, offer_is_active, offer_title, offer_percent, offer_start_date, offer_end_date, in_stock, stock_quantity",
+      )
       .in("id", ids);
     const byId = new Map((products ?? []).map((p) => [p.id, p]));
+    const today = todayInClinic();
 
     let total = 0;
     const itemRows: Array<{
@@ -2369,10 +2397,7 @@ export const patientReorder = createServerFn({ method: "POST" })
       const product = item.product_id ? byId.get(item.product_id) : undefined;
       if (!product || product.in_stock !== true) continue;
       const quantity = Math.min(item.quantity, 50);
-      const price =
-        product.discount_price != null
-          ? Number(product.discount_price)
-          : Number(product.price ?? 0);
+      const price = productEffectivePrice(product, today);
       total += price * quantity;
       itemRows.push({
         product_id: product.id,

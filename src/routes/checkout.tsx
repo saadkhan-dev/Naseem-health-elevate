@@ -10,6 +10,8 @@ import { useCart } from "@/lib/cart";
 import { usePublishedProducts } from "@/hooks/queries/useContent";
 import { submitOrder } from "@/lib/site-extra";
 import { useAuth } from "@/hooks/useAuth";
+import { todayInClinic } from "@/lib/clinic";
+import { productEffectivePrice } from "@/lib/product-offer-types";
 import { OrderPaymentStep } from "@/components/site/OrderPaymentStep";
 import type { Product } from "@/lib/admin-data";
 
@@ -23,15 +25,12 @@ export const Route = createFileRoute("/checkout")({
   component: CheckoutPage,
 });
 
-function effectivePrice(p: Product): number {
-  return p.discount_price != null ? Number(p.discount_price) : Number(p.price);
-}
-
 function CheckoutPage() {
   const cart = useCart();
   const router = useRouter();
   const { user, profile } = useAuth();
   const { data: products, isLoading } = usePublishedProducts();
+  const today = todayInClinic();
 
   const byId = new Map((products ?? []).map((p) => [p.id, p]));
   const lines = cart.items
@@ -41,7 +40,10 @@ function CheckoutPage() {
     })
     .filter((l): l is { product: Product; quantity: number } => l !== null);
 
-  const subtotal = lines.reduce((sum, l) => sum + effectivePrice(l.product) * l.quantity, 0);
+  const subtotal = lines.reduce(
+    (sum, l) => sum + productEffectivePrice(l.product, today) * l.quantity,
+    0,
+  );
 
   const [name, setName] = useState(profile?.full_name ?? "");
   const [phone, setPhone] = useState(profile?.phone ?? "");
@@ -271,7 +273,7 @@ function CheckoutPage() {
                         <div className="text-xs text-muted-foreground">× {quantity}</div>
                       </div>
                       <div className="text-sm font-semibold text-foreground">
-                        Rs. {(effectivePrice(product) * quantity).toLocaleString()}
+                        Rs. {(productEffectivePrice(product, today) * quantity).toLocaleString()}
                       </div>
                     </div>
                   ))}

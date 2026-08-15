@@ -36,6 +36,8 @@ interface OrderRow {
   payment_method: string | null;
   payment_reference: string | null;
   payment_payer_name: string | null;
+  payment_payer_phone: string | null;
+  payment_payer_email: string | null;
   payment_submitted_at: string | null;
   payment_verified_at: string | null;
   payment_receipt_url: string | null;
@@ -45,7 +47,7 @@ async function loadOrder(admin: SupabaseClient, orderId: string): Promise<OrderR
   const { data } = await admin
     .from("orders")
     .select(
-      "id, patient_id, order_no, status, payment_status, payment_amount, payment_method, payment_reference, payment_payer_name, payment_submitted_at, payment_verified_at, payment_receipt_url",
+      "id, patient_id, order_no, status, payment_status, payment_amount, payment_method, payment_reference, payment_payer_name, payment_payer_phone, payment_payer_email, payment_submitted_at, payment_verified_at, payment_receipt_url",
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -59,7 +61,14 @@ async function loadOrder(admin: SupabaseClient, orderId: string): Promise<OrderR
  */
 export async function submitOrderPaymentForOrder(
   admin: SupabaseClient,
-  input: { orderId: string; methodId: string; reference: string; payerName: string },
+  input: {
+    orderId: string;
+    methodId: string;
+    reference: string;
+    payerName: string;
+    payerPhone?: string;
+    payerEmail?: string;
+  },
 ): Promise<{ error: string | null }> {
   const order = await loadOrder(admin, input.orderId);
   if (!order) return { error: "Order not found." };
@@ -67,10 +76,7 @@ export async function submitOrderPaymentForOrder(
   if (order.payment_status === "waived") {
     return { error: "No payment is needed — this order was fully covered." };
   }
-  if (
-    order.payment_status !== "payment_pending" &&
-    order.payment_status !== "payment_failed"
-  ) {
+  if (order.payment_status !== "payment_pending" && order.payment_status !== "payment_failed") {
     return { error: "Payment has already been submitted for this order." };
   }
 
@@ -89,6 +95,8 @@ export async function submitOrderPaymentForOrder(
       payment_method: method.name,
       payment_reference: input.reference.trim(),
       payment_payer_name: input.payerName.trim(),
+      payment_payer_phone: input.payerPhone?.trim() || null,
+      payment_payer_email: input.payerEmail?.trim().toLowerCase() || null,
       payment_submitted_at: new Date().toISOString(),
       payment_amount: order.payment_amount ?? order.payment_amount,
     })
@@ -114,7 +122,7 @@ async function findOrderByIdentifier(
   let query = admin
     .from("orders")
     .select(
-      "id, patient_id, order_no, status, payment_status, payment_amount, payment_method, payment_reference, payment_payer_name, payment_submitted_at, payment_verified_at, payment_receipt_url",
+      "id, patient_id, order_no, status, payment_status, payment_amount, payment_method, payment_reference, payment_payer_name, payment_payer_phone, payment_payer_email, payment_submitted_at, payment_verified_at, payment_receipt_url",
     )
     .order("created_at", { ascending: false })
     .limit(1);
@@ -154,10 +162,7 @@ export async function submitOrderPaymentByIdentifier(
   if (order.payment_status === "waived") {
     return { error: "No payment is needed — this order was fully covered." };
   }
-  if (
-    order.payment_status !== "payment_pending" &&
-    order.payment_status !== "payment_failed"
-  ) {
+  if (order.payment_status !== "payment_pending" && order.payment_status !== "payment_failed") {
     return { error: "Payment has already been submitted for this order." };
   }
 
@@ -176,6 +181,8 @@ export async function submitOrderPaymentByIdentifier(
       payment_method: method.name,
       payment_reference: input.reference.trim(),
       payment_payer_name: input.payerName.trim(),
+      payment_payer_phone: input.phone?.trim() || null,
+      payment_payer_email: input.email?.trim().toLowerCase() || null,
       payment_submitted_at: new Date().toISOString(),
     })
     .eq("id", order.id);
@@ -216,10 +223,7 @@ export async function submitOrderPaymentReceipt(
   if (order.payment_status === "waived") {
     return { error: "No payment is needed — this order was fully covered." };
   }
-  if (
-    order.payment_status !== "payment_pending" &&
-    order.payment_status !== "payment_failed"
-  ) {
+  if (order.payment_status !== "payment_pending" && order.payment_status !== "payment_failed") {
     return { error: "Payment has already been submitted for this order." };
   }
 
@@ -260,6 +264,8 @@ export async function submitOrderPaymentReceipt(
       payment_status: "payment_submitted",
       payment_method: methodName,
       payment_receipt_url: path,
+      payment_payer_phone: input.phone?.trim() || null,
+      payment_payer_email: input.email?.trim().toLowerCase() || null,
       payment_submitted_at: new Date().toISOString(),
     })
     .eq("id", order.id);
@@ -347,7 +353,11 @@ export async function setOrderPaymentStatus(
   if (input.status === "refunded" && currentStatus !== "payment_verified") {
     return { error: "Only verified (genuinely paid) payments can be refunded." };
   }
-  if (input.status === "waived" && currentStatus !== "payment_pending" && currentStatus !== "payment_submitted") {
+  if (
+    input.status === "waived" &&
+    currentStatus !== "payment_pending" &&
+    currentStatus !== "payment_submitted"
+  ) {
     return { error: "Payment can only be waived when it is pending or has been submitted." };
   }
 
