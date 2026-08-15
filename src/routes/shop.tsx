@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Loader2, ShoppingCart, Star, Zap, PackageX, Check } from "lucide-react";
+import { Loader2, ShoppingCart, Star, Zap, PackageX, Check, Ban } from "lucide-react";
 import { Nav } from "@/components/site/Nav";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import {
   productEffectivePrice,
   productOfferLabel,
   isProductOfferActive,
+  isProductOrderable,
 } from "@/lib/product-offer-types";
 import type { Product } from "@/lib/admin-data";
 
@@ -190,30 +191,43 @@ function ShopPage() {
                       </div>
                     </Link>
                     <div className="mt-3 flex gap-2">
-                      <Button
-                        size="sm"
-                        className="flex-1 gap-1.5"
-                        onClick={() => handleAdd(p)}
-                        disabled={addedId === p.id}
-                      >
-                        {addedId === p.id ? (
-                          <Check className="h-3.5 w-3.5" />
-                        ) : (
-                          <ShoppingCart className="h-3.5 w-3.5" />
-                        )}
-                        {addedId === p.id ? "Added" : "Add"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1.5"
-                        onClick={() => {
-                          cart.add(p.id, 1);
-                          window.location.href = "/checkout";
-                        }}
-                      >
-                        <Zap className="h-3.5 w-3.5 text-primary" /> Buy
-                      </Button>
+                      {isProductOrderable(p) ? (
+                        <>
+                          <Button
+                            size="sm"
+                            className="flex-1 gap-1.5"
+                            onClick={() => handleAdd(p)}
+                            disabled={addedId === p.id}
+                          >
+                            {addedId === p.id ? (
+                              <Check className="h-3.5 w-3.5" />
+                            ) : (
+                              <ShoppingCart className="h-3.5 w-3.5" />
+                            )}
+                            {addedId === p.id ? "Added" : "Add"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5"
+                            onClick={() => {
+                              cart.add(p.id, 1);
+                              window.location.href = "/checkout";
+                            }}
+                          >
+                            <Zap className="h-3.5 w-3.5 text-primary" /> Buy
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled
+                          className="flex-1 gap-1.5 text-muted-foreground"
+                        >
+                          <Ban className="h-3.5 w-3.5" /> Out of stock
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}

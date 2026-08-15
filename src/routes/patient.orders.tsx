@@ -15,10 +15,12 @@ import {
   RotateCcw,
   AlertTriangle,
   PackageCheck,
+  Star,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Link } from "@tanstack/react-router";
 import { useMyOrders, useSubmitOrderRequest } from "@/hooks/queries/usePatient";
 import { useReorderOrder } from "@/hooks/queries/useShop";
 import { OrderPaymentStep } from "@/components/site/OrderPaymentStep";
@@ -275,8 +277,19 @@ function OrderCard({
             <span className="text-foreground">
               {item.product_name} <span className="text-muted-foreground">× {item.quantity}</span>
             </span>
-            <span className="font-medium text-foreground">
-              Rs. {(Number(item.price) * item.quantity).toLocaleString()}
+            <span className="flex items-center gap-3">
+              {order.status === "delivered" && item.product_id && (
+                <Link
+                  to="/product/$productId"
+                  params={{ productId: item.product_id }}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                >
+                  <Star className="h-3 w-3" /> Review
+                </Link>
+              )}
+              <span className="font-medium text-foreground">
+                Rs. {(Number(item.price) * item.quantity).toLocaleString()}
+              </span>
             </span>
           </div>
         ))}

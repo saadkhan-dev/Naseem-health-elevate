@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { format } from "date-fns";
 import {
@@ -11,6 +11,9 @@ import {
   Banknote,
   Ban,
   Undo2,
+  Search,
+  X,
+  FileImage,
 } from "lucide-react";
 import {
   useAdminOrders,
@@ -22,6 +25,7 @@ import { useSetOrderPaymentStatus } from "@/hooks/queries/useShop";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -29,6 +33,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { staffSupabase } from "@/lib/supabase";
 import { QueryError } from "@/components/admin/QueryError";
 import type { AdminOrder } from "@/lib/admin-extra";
 
@@ -86,6 +98,53 @@ function AdminOrders() {
   const updateRequest = useUpdateOrderRequest();
   const [message, setMessage] = useState("");
   const [notes, setNotes] = useState<Record<string, string>>({});
+
+  // Search + filters for the "All orders" list.
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("all");
+
+  const [receiptOrder, setReceiptOrder] = useState<AdminOrder | null>(null);
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [receiptLoading, setReceiptLoading] = useState(false);
+
+  const filteredOrders = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const now = new Date();
+    const dayStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const todayStart = dayStart(now);
+    const last7 = todayStart - 6 * 86400000;
+    const last30 = todayStart - 29 * 86400000;
+
+    return (orders ?? []).filter((o) => {
+      if (statusFilter !== "all" && o.status !== statusFilter) return false;
+      if (paymentFilter !== "all" && o.payment_status !== paymentFilter) return false;
+      if (dateFilter === "today" && dayStart(new Date(o.created_at)) !== todayStart) return false;
+      if (dateFilter === "7" && dayStart(new Date(o.created_at)) < last7) return false;
+      if (dateFilter === "30" && dayStart(new Date(o.created_at)) < last30) return false;
+      if (!q) return true;
+      return (
+        (o.name ?? "").toLowerCase().includes(q) ||
+        (o.phone ?? "").toLowerCase().includes(q) ||
+        (o.order_no ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [orders, search, statusFilter, paymentFilter, dateFilter]);
+
+  async function handleOpenReceipt(o: AdminOrder) {
+    setReceiptOrder(o);
+    setReceiptUrl(null);
+    setReceiptLoading(true);
+    try {
+      const { data } = await staffSupabase.storage
+        .from("payment-receipts")
+        .createSignedUrl(o.payment_receipt_url ?? "", 300);
+      setReceiptUrl(data?.signedUrl ?? null);
+    } finally {
+      setReceiptLoading(false);
+    }
+  }
 
   async function handleStatusChange(id: string, status: string) {
     setMessage("");
@@ -239,15 +298,67 @@ function AdminOrders() {
           <ShoppingBag className="h-4 w-4 text-primary" /> All orders
         </h2>
 
+        {/* Search + filters */}
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3">
+          <div className="relative min-w-[200px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by patient name, phone or Order ID…"
+              className="pl-9"
+            />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-10 w-40 text-xs">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              {["placed", "processing", "shipped", "delivered", "cancelled"].map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+            <SelectTrigger className="h-10 w-44 text-xs">
+              <SelectValue placeholder="Payment" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All payments</SelectItem>
+              {Object.entries(paymentLabels).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={dateFilter} onValueChange={setDateFilter}>
+            <SelectTrigger className="h-10 w-40 text-xs">
+              <SelectValue placeholder="Date" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All dates</SelectItem>
+              <SelectItem value="today">Today</SelectItem>
+              <SelectItem value="7">Last 7 days</SelectItem>
+              <SelectItem value="30">Last 30 days</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="mt-3 space-y-3">
           {isLoading ? (
             <div className="flex justify-center p-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : (orders ?? []).length === 0 ? (
-            <p className="p-8 text-center text-sm text-muted-foreground">No orders yet</p>
+          ) : filteredOrders.length === 0 ? (
+            <p className="p-8 text-center text-sm text-muted-foreground">
+              No orders match your search or filters.
+            </p>
           ) : (
-            (orders ?? []).map((o) => (
+            filteredOrders.map((o) => (
               <div key={o.id} className="rounded-xl border bg-card p-5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="font-medium text-foreground">
@@ -313,6 +424,7 @@ function AdminOrders() {
                   order={o}
                   onStatus={handlePaymentStatus}
                   busy={setPayment.isPending}
+                  onViewReceipt={handleOpenReceipt}
                 />
                 {o.notes ? (
                   <div className="mt-2 text-xs text-muted-foreground">Notes: {o.notes}</div>
@@ -322,6 +434,54 @@ function AdminOrders() {
           )}
         </div>
       </section>
+
+      {/* Receipt preview modal */}
+      <Dialog
+        open={!!receiptOrder}
+        onOpenChange={(open) => {
+          if (!open) setReceiptOrder(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              Payment receipt
+              {receiptOrder?.order_no ? ` — ${receiptOrder.order_no}` : ""}
+            </DialogTitle>
+            <DialogDescription>
+              Receipt uploaded by {receiptOrder?.payment_payer_name ?? "the customer"}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex max-h-[70vh] items-center justify-center overflow-hidden rounded-xl border border-border bg-muted/40">
+            {receiptLoading ? (
+              <div className="flex items-center justify-center p-16 text-sm text-muted-foreground">
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading…
+              </div>
+            ) : receiptUrl ? (
+              <img
+                src={receiptUrl}
+                alt="Payment receipt"
+                className="max-h-[70vh] w-full object-contain"
+              />
+            ) : (
+              <div className="flex flex-col items-center gap-2 p-12 text-sm text-muted-foreground">
+                <X className="h-6 w-6" />
+                Could not load the receipt.
+              </div>
+            )}
+          </div>
+          {receiptUrl && (
+            <a
+              href={receiptUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center gap-1.5 text-sm font-medium text-primary hover:underline"
+            >
+              <ExternalLink className="h-3.5 w-3.5" /> Open in new tab
+            </a>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -330,6 +490,7 @@ function OrderPaymentBlock({
   order,
   onStatus,
   busy,
+  onViewReceipt,
 }: {
   order: AdminOrder;
   onStatus: (
@@ -337,6 +498,7 @@ function OrderPaymentBlock({
     status: "payment_verified" | "payment_failed" | "refunded" | "waived",
   ) => void;
   busy: boolean;
+  onViewReceipt: (o: AdminOrder) => void;
 }) {
   const submitted = order.payment_status === "payment_submitted";
 
@@ -400,14 +562,13 @@ function OrderPaymentBlock({
           </span>
         )}
         {order.payment_receipt_url && (
-          <a
-            href={order.payment_receipt_url}
-            target="_blank"
-            rel="noreferrer"
+          <button
+            type="button"
+            onClick={() => onViewReceipt(order)}
             className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
           >
-            <ExternalLink className="h-3 w-3" /> Receipt
-          </a>
+            <FileImage className="h-3 w-3" /> Receipt
+          </button>
         )}
       </div>
       {submitted && (

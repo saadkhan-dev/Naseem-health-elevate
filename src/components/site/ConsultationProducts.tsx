@@ -1,4 +1,4 @@
-import { Check, Video, ShoppingCart, Loader2, ArrowRight } from "lucide-react";
+import { Check, Video, ShoppingCart, Loader2, ArrowRight, Ban } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import consultationImg from "@/assets/consultation.jpg";
 import { usePublishedProducts, usePublicVideoOffers } from "@/hooks/queries/useContent";
@@ -11,6 +11,7 @@ import {
   productEffectivePrice,
   productOfferLabel,
   isProductOfferActive,
+  isProductOrderable,
 } from "@/lib/product-offer-types";
 
 export function ConsultationProducts() {
@@ -146,17 +147,23 @@ export function ConsultationProducts() {
                         {productOfferLabel(p)}
                       </div>
                     )}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        cart.add(p.id, 1);
-                      }}
-                      className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary-soft py-2 text-xs font-semibold text-primary transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary hover:text-primary-foreground hover:shadow-sm active:scale-95"
-                    >
-                      <ShoppingCart className="h-3.5 w-3.5" /> Add to Cart
-                    </button>
+                    {isProductOrderable(p) ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          cart.add(p.id, 1);
+                        }}
+                        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary-soft py-2 text-xs font-semibold text-primary transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary hover:text-primary-foreground hover:shadow-sm active:scale-95"
+                      >
+                        <ShoppingCart className="h-3.5 w-3.5" /> Add to Cart
+                      </button>
+                    ) : (
+                      <div className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-muted py-2 text-xs font-semibold text-muted-foreground">
+                        <Ban className="h-3.5 w-3.5" /> Out of stock
+                      </div>
+                    )}
                   </div>
                 </Link>
               ))}

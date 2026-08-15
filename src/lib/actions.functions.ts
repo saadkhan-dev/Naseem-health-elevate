@@ -2201,7 +2201,7 @@ export const placeOrder = createServerFn({ method: "POST" })
         total,
         payment_amount: total,
         payment_status: "payment_pending",
-        status: "pending",
+        status: "placed",
         notes: data.notes ?? "",
       });
       if (!orderError) {
@@ -2213,21 +2213,31 @@ export const placeOrder = createServerFn({ method: "POST" })
           return { error: itemsError.message, orderId: null, total: null };
         }
 
-        // Decrement literal stock counts (best-effort; NULL = unlimited).
+        // Decrement literal stock counts atomically (NULL = unlimited). A
+        // guarded update prevents negative/overselling when orders race.
         for (const item of itemRows) {
           const product = byId.get(item.product_id);
-          if (typeof product?.stock_quantity === "number") {
-            await admin
-              .from("products")
-              .update({ stock_quantity: product.stock_quantity - item.quantity })
-              .eq("id", item.product_id);
+          if (typeof product?.stock_quantity !== "number") continue;
+          const { data: updated, error: stockError } = await admin
+            .from("products")
+            .update({ stock_quantity: product.stock_quantity - item.quantity })
+            .eq("id", item.product_id)
+            .gte("stock_quantity", item.quantity)
+            .select("id");
+          if (stockError || !updated || updated.length === 0) {
+            await admin.from("orders").delete().eq("id", orderId);
+            return {
+              error: `Only ${product.stock_quantity} of "${product.name}" is in stock.`,
+              orderId: null,
+              total: null,
+            };
           }
         }
 
         // Seed the immutable timeline so the patient sees the placement event.
         await admin.from("order_status_history").insert({
           order_id: orderId,
-          status: "pending",
+          status: "placed",
           note: "Order placed",
         });
 
@@ -2395,8 +2405,14 @@ export const patientReorder = createServerFn({ method: "POST" })
     }> = [];
     for (const item of order.order_items ?? []) {
       const product = item.product_id ? byId.get(item.product_id) : undefined;
+      // Skip products that are disabled or have zero remaining stock.
       if (!product || product.in_stock !== true) continue;
-      const quantity = Math.min(item.quantity, 50);
+      if (typeof product.stock_quantity === "number" && product.stock_quantity <= 0) continue;
+      const quantity = Math.min(
+        item.quantity,
+        50,
+        typeof product.stock_quantity === "number" ? product.stock_quantity : 50,
+      );
       const price = productEffectivePrice(product, today);
       total += price * quantity;
       itemRows.push({
@@ -2427,7 +2443,7 @@ export const patientReorder = createServerFn({ method: "POST" })
         total,
         payment_amount: total,
         payment_status: "payment_pending",
-        status: "pending",
+        status: "placed",
         notes: `Reordered from ${order.order_no ?? "a previous order"}.`,
       });
       if (!orderError) {
@@ -2439,19 +2455,28 @@ export const patientReorder = createServerFn({ method: "POST" })
           return { error: itemsError.message, orderNo: null };
         }
 
+        // Atomic stock decrement (NULL = unlimited); guarded against oversell.
         for (const item of itemRows) {
           const product = byId.get(item.product_id);
-          if (typeof product?.stock_quantity === "number") {
-            await admin
-              .from("products")
-              .update({ stock_quantity: product.stock_quantity - item.quantity })
-              .eq("id", item.product_id);
+          if (typeof product?.stock_quantity !== "number") continue;
+          const { data: updated, error: stockError } = await admin
+            .from("products")
+            .update({ stock_quantity: product.stock_quantity - item.quantity })
+            .eq("id", item.product_id)
+            .gte("stock_quantity", item.quantity)
+            .select("id");
+          if (stockError || !updated || updated.length === 0) {
+            await admin.from("orders").delete().eq("id", orderId);
+            return {
+              error: `Only ${product.stock_quantity} of "${product.name}" is in stock.`,
+              orderNo: null,
+            };
           }
         }
 
         await admin.from("order_status_history").insert({
           order_id: orderId,
-          status: "pending",
+          status: "placed",
           note: "Order placed (reorder)",
         });
 

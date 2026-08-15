@@ -79,3 +79,18 @@ export function productOfferLabel(product: ProductOfferFields): string | null {
   const percent = productDiscountPercent(product);
   return product.offer_title?.trim() || (percent != null ? `${percent}% OFF` : "Sale") || null;
 }
+
+/**
+ * True when a product can currently be ordered: it is marked in stock AND has
+ * remaining stock quantity (a NULL quantity means unlimited). Used to gate the
+ * "Add to Cart" / "Buy Now" controls so stock-0 products are treated as out of
+ * stock across the shop, product page, cart and checkout.
+ */
+export function isProductOrderable(product: {
+  in_stock: boolean;
+  stock_quantity: number | null;
+}): boolean {
+  if (product.in_stock !== true) return false;
+  if (typeof product.stock_quantity === "number" && product.stock_quantity <= 0) return false;
+  return true;
+}

@@ -11,7 +11,7 @@ import { usePublishedProducts } from "@/hooks/queries/useContent";
 import { submitOrder } from "@/lib/site-extra";
 import { useAuth } from "@/hooks/useAuth";
 import { todayInClinic } from "@/lib/clinic";
-import { productEffectivePrice } from "@/lib/product-offer-types";
+import { productEffectivePrice, isProductOrderable } from "@/lib/product-offer-types";
 import { OrderPaymentStep } from "@/components/site/OrderPaymentStep";
 import type { Product } from "@/lib/admin-data";
 
@@ -45,6 +45,15 @@ function CheckoutPage() {
     0,
   );
 
+  // Client-side stock guard: block placing when an item is out of stock or the
+  // requested quantity exceeds what's available.
+  const stockProblem = lines.find(
+    (l) =>
+      !isProductOrderable(l.product) ||
+      (typeof l.product.stock_quantity === "number" && l.quantity > l.product.stock_quantity),
+  );
+  const stockBlocked = !!stockProblem;
+
   const [name, setName] = useState(profile?.full_name ?? "");
   const [phone, setPhone] = useState(profile?.phone ?? "");
   const [email, setEmail] = useState("");
@@ -65,6 +74,12 @@ function CheckoutPage() {
     setFormError("");
     if (lines.length === 0) {
       setFormError("Your cart is empty.");
+      return;
+    }
+    if (stockProblem) {
+      setFormError(
+        `"${stockProblem.product.name}" is out of stock or exceeds available stock. Adjust your cart to continue.`,
+      );
       return;
     }
     setPlacing(true);
@@ -242,7 +257,19 @@ function CheckoutPage() {
 
                 {formError && <p className="text-sm font-medium text-destructive">{formError}</p>}
 
-                <Button type="submit" size="lg" className="w-full gap-2" disabled={placing}>
+                {stockBlocked && (
+                  <p className="text-sm font-medium text-destructive">
+                    One or more items are out of stock or exceed available stock. Please adjust your
+                    cart before placing the order.
+                  </p>
+                )}
+
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="w-full gap-2"
+                  disabled={placing || stockBlocked}
+                >
                   {placing && <Loader2 className="h-4 w-4 animate-spin" />}
                   <ShoppingBag className="h-4 w-4" />
                   Place Order — Rs. {subtotal.toLocaleString()}

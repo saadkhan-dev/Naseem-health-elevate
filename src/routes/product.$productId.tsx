@@ -31,6 +31,7 @@ import {
   productDiscountPercent,
   productOfferLabel,
   isProductOfferActive,
+  isProductOrderable,
 } from "@/lib/product-offer-types";
 
 export const Route = createFileRoute("/product/$productId")({
@@ -62,6 +63,11 @@ function ProductDetail() {
 
   const price = product ? productEffectivePrice(product, today) : 0;
   const hasDiscount = product != null && isProductOfferActive(product, today);
+  const orderable = product != null && isProductOrderable(product);
+  const maxQty =
+    product && typeof product.stock_quantity === "number"
+      ? Math.max(1, Math.min(50, product.stock_quantity))
+      : 50;
 
   function handleAdd() {
     if (!product) return;
@@ -199,7 +205,7 @@ function ProductDetail() {
                   </div>
                 )}
 
-                {product.in_stock ? (
+                {orderable ? (
                   <div className="mt-6 space-y-3">
                     <div className="flex items-center gap-3">
                       <div className="flex h-11 items-center gap-1 rounded-xl border border-border bg-card px-1">
@@ -216,7 +222,7 @@ function ProductDetail() {
                         </span>
                         <button
                           type="button"
-                          onClick={() => setQty((q) => Math.min(50, q + 1))}
+                          onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
                           aria-label="Increase quantity"
                           className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
                         >

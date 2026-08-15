@@ -161,6 +161,7 @@ export function useMyOrders(enabled = true) {
     queryKey: ["patient", "orders"],
     queryFn: getMyOrders,
     enabled,
+    refetchInterval: 60000,
   });
 }
 

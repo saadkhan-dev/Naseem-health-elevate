@@ -1,12 +1,12 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { Loader2, Minus, Plus, Trash2, ShoppingCart, ArrowLeft, PackageX } from "lucide-react";
+import { Loader2, Minus, Plus, Trash2, ShoppingCart, ArrowLeft, PackageX, Ban } from "lucide-react";
 import { Nav } from "@/components/site/Nav";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart";
 import { usePublishedProducts } from "@/hooks/queries/useContent";
 import { todayInClinic } from "@/lib/clinic";
-import { productEffectivePrice } from "@/lib/product-offer-types";
+import { productEffectivePrice, isProductOrderable } from "@/lib/product-offer-types";
 import type { Product } from "@/lib/admin-data";
 
 export const Route = createFileRoute("/cart")({
@@ -38,6 +38,16 @@ function CartPage() {
     (sum, l) => sum + productEffectivePrice(l.product, today) * l.quantity,
     0,
   );
+
+  // Insufficient-stock lines block checkout until corrected.
+  const unavailable = lines.filter((l) => !isProductOrderable(l.product));
+  const overStock = lines.filter(
+    (l) =>
+      isProductOrderable(l.product) &&
+      typeof l.product.stock_quantity === "number" &&
+      l.quantity > l.product.stock_quantity,
+  );
+  const blocked = unavailable.length > 0 || overStock.length > 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -117,11 +127,27 @@ function CartPage() {
                       type="button"
                       onClick={() => cart.updateQuantity(product.id, quantity + 1)}
                       aria-label="Increase quantity"
-                      className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                      disabled={
+                        typeof product.stock_quantity === "number" &&
+                        quantity >= product.stock_quantity
+                      }
+                      className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <Plus className="h-3.5 w-3.5" />
                     </button>
                   </div>
+                  {!isProductOrderable(product) && (
+                    <div className="flex w-full items-center gap-1 text-xs font-medium text-destructive">
+                      <Ban className="h-3 w-3" /> This product is currently out of stock.
+                    </div>
+                  )}
+                  {isProductOrderable(product) &&
+                    typeof product.stock_quantity === "number" &&
+                    quantity > product.stock_quantity && (
+                      <div className="flex w-full items-center gap-1 text-xs font-medium text-destructive">
+                        <Ban className="h-3 w-3" /> Only {product.stock_quantity} available.
+                      </div>
+                    )}
                   <div className="w-20 text-right text-sm font-bold text-foreground">
                     Rs. {(productEffectivePrice(product, today) * quantity).toLocaleString()}
                   </div>
@@ -147,9 +173,16 @@ function CartPage() {
                   Delivery charges and final total are confirmed by the clinic after your payment is
                   verified.
                 </p>
+                {blocked && (
+                  <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                    One or more items are out of stock or exceed available stock. Adjust your cart
+                    to continue.
+                  </p>
+                )}
                 <Button
                   className="mt-4 w-full gap-2"
                   size="lg"
+                  disabled={blocked}
                   onClick={() => router.navigate({ to: "/checkout" })}
                 >
                   <ShoppingCart className="h-4 w-4" /> Proceed to Checkout
