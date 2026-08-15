@@ -73,7 +73,7 @@ export interface AdminOrder {
   email: string | null;
   address: string;
   total: number;
-  status: "placed" | "processing" | "shipped" | "delivered" | "cancelled";
+  status: "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
   payment_status: string;
   payment_method: string | null;
   payment_reference: string | null;

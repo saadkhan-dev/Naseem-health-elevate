@@ -82,7 +82,7 @@ export interface PatientOrderRequest {
 export interface PatientOrder {
   id: string;
   order_no: string | null;
-  status: "placed" | "processing" | "shipped" | "delivered" | "cancelled";
+  status: "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
   name: string;
   phone: string;
   email: string | null;

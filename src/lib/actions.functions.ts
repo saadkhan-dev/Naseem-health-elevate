@@ -2201,7 +2201,7 @@ export const placeOrder = createServerFn({ method: "POST" })
         total,
         payment_amount: total,
         payment_status: "payment_pending",
-        status: "placed",
+        status: "pending",
         notes: data.notes ?? "",
       });
       if (!orderError) {
@@ -2237,7 +2237,7 @@ export const placeOrder = createServerFn({ method: "POST" })
         // Seed the immutable timeline so the patient sees the placement event.
         await admin.from("order_status_history").insert({
           order_id: orderId,
-          status: "placed",
+          status: "pending",
           note: "Order placed",
         });
 
@@ -2331,7 +2331,7 @@ export const patientSubmitOrderRequest = createServerFn({ method: "POST" })
     if (order.patient_id !== context.patientId) return { error: "Forbidden" };
 
     if (data.kind === "cancel") {
-      if (order.status !== "placed" && order.status !== "processing") {
+      if (order.status !== "pending" && order.status !== "confirmed") {
         return {
           error:
             "This order can no longer be cancelled online (it is already shipped or delivered). Please contact the clinic.",
@@ -2443,7 +2443,7 @@ export const patientReorder = createServerFn({ method: "POST" })
         total,
         payment_amount: total,
         payment_status: "payment_pending",
-        status: "placed",
+        status: "pending",
         notes: `Reordered from ${order.order_no ?? "a previous order"}.`,
       });
       if (!orderError) {
@@ -2476,7 +2476,7 @@ export const patientReorder = createServerFn({ method: "POST" })
 
         await admin.from("order_status_history").insert({
           order_id: orderId,
-          status: "placed",
+          status: "pending",
           note: "Order placed (reorder)",
         });
 
@@ -2948,7 +2948,7 @@ export const adminUpdateOrderStatus = createServerFn({ method: "POST" })
   .validator(
     z.object({
       id: uuidSchema,
-      status: z.enum(["placed", "processing", "shipped", "delivered", "cancelled"]),
+      status: z.enum(["pending", "confirmed", "shipped", "delivered", "cancelled"]),
       note: z.string().trim().max(1000).optional().default(""),
     }),
   )

@@ -49,8 +49,8 @@ export const Route = createFileRoute("/admin/orders")({
 });
 
 const statusStyles: Record<string, string> = {
-  placed: "bg-blue-100 text-blue-700",
-  processing: "bg-amber-100 text-amber-700",
+  pending: "bg-blue-100 text-blue-700",
+  confirmed: "bg-amber-100 text-amber-700",
   shipped: "bg-purple-100 text-purple-700",
   delivered: "bg-green-100 text-green-700",
   cancelled: "bg-red-100 text-red-700",
@@ -315,7 +315,7 @@ function AdminOrders() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
-              {["placed", "processing", "shipped", "delivered", "cancelled"].map((s) => (
+              {["pending", "confirmed", "shipped", "delivered", "cancelled"].map((s) => (
                 <SelectItem key={s} value={s}>
                   {s}
                 </SelectItem>
@@ -369,7 +369,7 @@ function AdminOrders() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge
-                      className={`capitalize ${statusStyles[o.status] ?? statusStyles.placed}`}
+                      className={`capitalize ${statusStyles[o.status] ?? statusStyles.pending}`}
                     >
                       {o.status}
                     </Badge>
@@ -385,7 +385,7 @@ function AdminOrders() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {["placed", "processing", "shipped", "delivered", "cancelled"].map((s) => (
+                        {["pending", "confirmed", "shipped", "delivered", "cancelled"].map((s) => (
                           <SelectItem key={s} value={s}>
                             {s}
                           </SelectItem>

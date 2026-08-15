@@ -33,8 +33,8 @@ export const Route = createFileRoute("/patient/orders")({
 });
 
 const statusStyles: Record<string, string> = {
-  placed: "bg-blue-100 text-blue-700",
-  processing: "bg-amber-100 text-amber-700",
+  pending: "bg-blue-100 text-blue-700",
+  confirmed: "bg-amber-100 text-amber-700",
   shipped: "bg-purple-100 text-purple-700",
   delivered: "bg-green-100 text-green-700",
   cancelled: "bg-red-100 text-red-700",
@@ -230,7 +230,7 @@ function OrderCard({
   onBuyAgain,
   onPay,
 }: OrderCardProps) {
-  const canCancel = order.status === "placed" || order.status === "processing";
+  const canCancel = order.status === "pending" || order.status === "confirmed";
   const canReturn = order.status === "delivered";
   const canReorder = order.status === "delivered";
   const needsPayment =
@@ -244,7 +244,7 @@ function OrderCard({
           {order.order_no ?? "Order"}
         </div>
         <div className="flex items-center gap-2">
-          <Badge className={`capitalize ${statusStyles[order.status] ?? statusStyles.placed}`}>
+          <Badge className={`capitalize ${statusStyles[order.status] ?? statusStyles.pending}`}>
             {order.status}
           </Badge>
           <Badge
