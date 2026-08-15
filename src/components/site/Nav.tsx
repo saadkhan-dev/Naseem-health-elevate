@@ -9,11 +9,13 @@ import {
   UserRound,
   Menu,
   X,
+  ShoppingCart,
 } from "lucide-react";
 import { Link, useRouter } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { SectionLink } from "@/components/site/SectionLink";
+import { useCart } from "@/lib/cart";
 
 const links = [
   { href: "#home", label: "Home" },
@@ -39,6 +41,7 @@ export function Nav() {
   const router = useRouter();
   const [authOpen, setAuthOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const cart = useCart();
 
   const displayName = profile?.full_name ?? user?.email?.split("@")[0] ?? "My Account";
 
@@ -93,6 +96,9 @@ export function Nav() {
           <Link to="/faq" className={desktopLinkClass}>
             FAQ
           </Link>
+          <Link to="/shop" className={desktopLinkClass}>
+            Shop
+          </Link>
           <Link to="/search" className={desktopLinkClass}>
             <Search className="h-4 w-4" /> Search
           </Link>
@@ -103,6 +109,18 @@ export function Nav() {
 
         {/* Desktop actions — aligned right */}
         <div className="hidden shrink-0 items-center justify-end gap-1.5 xl:flex">
+          <Link
+            to="/cart"
+            aria-label="Shopping cart"
+            className={`relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-card text-foreground transition-colors hover:border-primary/40 ${focusRing}`}
+          >
+            <ShoppingCart className="h-4 w-4" />
+            {cart.count > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                {cart.count > 99 ? "99+" : cart.count}
+              </span>
+            )}
+          </Link>
           <Link
             to="/appointment-status"
             aria-label="Appointment status"
@@ -142,6 +160,18 @@ export function Nav() {
 
         {/* Mobile actions — hamburger + account */}
         <div className="flex shrink-0 items-center gap-2 xl:hidden">
+          <Link
+            to="/cart"
+            aria-label="Shopping cart"
+            className={`relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-card text-foreground transition-colors hover:border-primary/40 ${focusRing}`}
+          >
+            <ShoppingCart className="h-4 w-4" />
+            {cart.count > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                {cart.count > 99 ? "99+" : cart.count}
+              </span>
+            )}
+          </Link>
           {user && (
             <Link
               to="/patient"
@@ -196,6 +226,15 @@ export function Nav() {
                   className={`block rounded-lg px-3 py-2.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-primary ${focusRing}`}
                 >
                   FAQ
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/shop"
+                  onClick={closeMenu}
+                  className={`block rounded-lg px-3 py-2.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-primary ${focusRing}`}
+                >
+                  Shop
                 </Link>
               </li>
               <li>

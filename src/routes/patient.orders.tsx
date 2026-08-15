@@ -11,11 +11,17 @@ import {
   MessageSquare,
   X,
   History,
+  CreditCard,
+  RotateCcw,
+  AlertTriangle,
+  PackageCheck,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useMyOrders, useSubmitOrderRequest } from "@/hooks/queries/usePatient";
+import { useReorderOrder } from "@/hooks/queries/useShop";
+import { OrderPaymentStep } from "@/components/site/OrderPaymentStep";
 import type { PatientOrder } from "@/lib/patient-data";
 import { QueryError } from "@/components/admin/QueryError";
 import { cn } from "@/lib/utils";
@@ -32,22 +38,54 @@ const statusStyles: Record<string, string> = {
   cancelled: "bg-red-100 text-red-700",
 };
 
+const paymentStatusStyles: Record<string, string> = {
+  payment_pending: "bg-amber-100 text-amber-700",
+  payment_submitted: "bg-sky-100 text-sky-700",
+  payment_verified: "bg-green-100 text-green-700",
+  payment_failed: "bg-red-100 text-red-700",
+  refunded: "bg-slate-100 text-slate-600",
+  waived: "bg-emerald-100 text-emerald-700",
+};
+
+const paymentLabels: Record<string, string> = {
+  payment_pending: "Payment pending",
+  payment_submitted: "Payment submitted",
+  payment_verified: "Payment verified",
+  payment_failed: "Payment failed",
+  refunded: "Refunded",
+  waived: "Fee waived",
+};
+
 const requestKindStyles: Record<string, string> = {
   query: "bg-sky-100 text-sky-700",
   cancel: "bg-red-100 text-red-700",
   return: "bg-orange-100 text-orange-700",
+  complaint: "bg-purple-100 text-purple-700",
+  replacement: "bg-teal-100 text-teal-700",
 };
+
+const requestKindLabels: Record<string, string> = {
+  query: "Query",
+  cancel: "Cancellation",
+  return: "Return",
+  complaint: "Complaint",
+  replacement: "Replacement",
+};
+
+type RequestKind = "query" | "cancel" | "return" | "complaint" | "replacement";
 
 function PatientOrders() {
   const { data: orders, isLoading, isError, error } = useMyOrders();
   const submitRequest = useSubmitOrderRequest();
+  const reorder = useReorderOrder();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [requestFor, setRequestFor] = useState<{
     orderId: string;
-    kind: "query" | "cancel" | "return";
+    kind: RequestKind;
   } | null>(null);
   const [requestMessage, setRequestMessage] = useState("");
   const [requestError, setRequestError] = useState("");
+  const [payFor, setPayFor] = useState<PatientOrder | null>(null);
 
   function toggle(id: string) {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -74,13 +112,27 @@ function PatientOrders() {
     }
   }
 
+  async function handleBuyAgain(orderId: string) {
+    try {
+      const result = await reorder.mutateAsync(orderId);
+      if (result.error) {
+        setRequestError(result.error);
+        return;
+      }
+      setExpanded({});
+      setRequestFor(null);
+    } catch (err) {
+      setRequestError(err instanceof Error ? err.message : "Could not reorder.");
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">My Orders</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Track medicines and products ordered from the clinic. Cancellation or return requests are
-          reviewed by the clinic.
+          Track medicines and products ordered from the clinic. Cancellation, return, complaint or
+          replacement requests are reviewed by the clinic.
         </p>
       </div>
 
@@ -110,16 +162,35 @@ function PatientOrders() {
               setRequestMessage={setRequestMessage}
               requestError={requestError}
               submitting={submitRequest.isPending}
+              reordering={reorder.isPending}
               onRequest={(kind) => {
                 setRequestError("");
                 setRequestFor({ orderId: o.id, kind });
               }}
               onCancelRequest={() => setRequestFor(null)}
               onSubmitRequest={handleSubmitRequest}
+              onBuyAgain={() => handleBuyAgain(o.id)}
+              onPay={() => setPayFor(o)}
             />
           ))
         )}
       </div>
+
+      {payFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-soft">
+            <OrderPaymentStep
+              orderId={payFor.id}
+              orderNo={payFor.order_no}
+              amount={Number(payFor.payment_amount ?? payFor.total)}
+              signedIn
+              phone={payFor.phone}
+              email={payFor.email ?? ""}
+              onClose={() => setPayFor(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -128,14 +199,17 @@ interface OrderCardProps {
   order: PatientOrder;
   expanded: boolean;
   onToggle: () => void;
-  requestFor: { orderId: string; kind: "query" | "cancel" | "return" } | null;
+  requestFor: { orderId: string; kind: RequestKind } | null;
   requestMessage: string;
   setRequestMessage: (v: string) => void;
   requestError: string;
   submitting: boolean;
-  onRequest: (kind: "query" | "cancel" | "return") => void;
+  reordering: boolean;
+  onRequest: (kind: RequestKind) => void;
   onCancelRequest: () => void;
   onSubmitRequest: (e: React.FormEvent) => void;
+  onBuyAgain: () => void;
+  onPay: () => void;
 }
 
 function OrderCard({
@@ -147,12 +221,18 @@ function OrderCard({
   setRequestMessage,
   requestError,
   submitting,
+  reordering,
   onRequest,
   onCancelRequest,
   onSubmitRequest,
+  onBuyAgain,
+  onPay,
 }: OrderCardProps) {
   const canCancel = order.status === "placed" || order.status === "processing";
   const canReturn = order.status === "delivered";
+  const canReorder = order.status === "delivered";
+  const needsPayment =
+    order.payment_status === "payment_pending" || order.payment_status === "payment_failed";
   const timeline = (order.status_history ?? []).slice().reverse();
 
   return (
@@ -164,6 +244,13 @@ function OrderCard({
         <div className="flex items-center gap-2">
           <Badge className={`capitalize ${statusStyles[order.status] ?? statusStyles.placed}`}>
             {order.status}
+          </Badge>
+          <Badge
+            className={`capitalize ${
+              paymentStatusStyles[order.payment_status] ?? paymentStatusStyles.payment_pending
+            }`}
+          >
+            {paymentLabels[order.payment_status] ?? order.payment_status}
           </Badge>
           <button
             type="button"
@@ -205,6 +292,26 @@ function OrderCard({
 
       {expanded && (
         <div className="mt-4 space-y-4 border-t border-border pt-4">
+          {needsPayment && (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <div className="flex-1 text-sm text-amber-800">
+                <span className="font-semibold">Payment pending.</span>{" "}
+                <span className="text-amber-700">
+                  Complete your payment so the clinic can start processing your order.
+                </span>
+              </div>
+              <Button size="sm" className="gap-1.5" onClick={onPay}>
+                <CreditCard className="h-3.5 w-3.5" /> Pay Now
+              </Button>
+            </div>
+          )}
+          {order.payment_status === "payment_submitted" && (
+            <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-800">
+              Your payment has been submitted and is awaiting verification by the clinic. The clinic
+              will confirm it shortly.
+            </div>
+          )}
+
           {timeline.length > 0 && (
             <div>
               <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -245,11 +352,7 @@ function OrderCard({
                   <div key={r.id} className="rounded-lg border border-border bg-muted/30 px-3 py-2">
                     <div className="flex flex-wrap items-center gap-2 text-sm">
                       <Badge className={`capitalize ${requestKindStyles[r.kind] ?? ""}`}>
-                        {r.kind === "cancel"
-                          ? "Cancellation"
-                          : r.kind === "return"
-                            ? "Return"
-                            : "Query"}
+                        {requestKindLabels[r.kind] ?? r.kind}
                       </Badge>
                       <span
                         className={`rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${
@@ -286,7 +389,11 @@ function OrderCard({
                     ? "Ask about this order"
                     : requestFor.kind === "cancel"
                       ? "Request cancellation"
-                      : "Request a return"}
+                      : requestFor.kind === "return"
+                        ? "Request a return"
+                        : requestFor.kind === "complaint"
+                          ? "File a complaint"
+                          : "Request a replacement"}
                 </span>
                 <button
                   type="button"
@@ -306,7 +413,11 @@ function OrderCard({
                     ? "Your question about this order..."
                     : requestFor.kind === "cancel"
                       ? "Reason for cancelling (e.g. changed my mind)..."
-                      : "Reason for returning (e.g. received a damaged item)..."
+                      : requestFor.kind === "return"
+                        ? "Reason for returning (e.g. received a damaged item)..."
+                        : requestFor.kind === "complaint"
+                          ? "Describe your complaint..."
+                          : "Reason for replacement (e.g. wrong item received)..."
                 }
               />
               {requestError && (
@@ -345,6 +456,42 @@ function OrderCard({
                   onClick={() => onRequest("return")}
                 >
                   Request a return
+                </Button>
+              )}
+              {canReturn && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 text-teal-700"
+                  onClick={() => onRequest("replacement")}
+                >
+                  <PackageCheck className="h-3.5 w-3.5" /> Request replacement
+                </Button>
+              )}
+              {order.status === "delivered" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 text-purple-700"
+                  onClick={() => onRequest("complaint")}
+                >
+                  <AlertTriangle className="h-3.5 w-3.5" /> File complaint
+                </Button>
+              )}
+              {canReorder && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 text-blue-700"
+                  onClick={onBuyAgain}
+                  disabled={reordering}
+                >
+                  {reordering ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  )}
+                  Buy again
                 </Button>
               )}
             </div>

@@ -71,7 +71,7 @@ export interface PatientOrderStatusHistory {
 
 export interface PatientOrderRequest {
   id: string;
-  kind: "query" | "cancel" | "return";
+  kind: "query" | "cancel" | "return" | "complaint" | "replacement";
   message: string;
   status: "new" | "in_progress" | "resolved" | "closed";
   admin_notes: string | null;
@@ -88,6 +88,13 @@ export interface PatientOrder {
   email: string | null;
   address: string;
   total: number;
+  payment_status: string;
+  payment_method: string | null;
+  payment_reference: string | null;
+  payment_payer_name: string | null;
+  payment_amount: number | null;
+  payment_submitted_at: string | null;
+  payment_verified_at: string | null;
   notes: string | null;
   created_at: string;
   order_items: PatientOrderItem[];
@@ -182,7 +189,7 @@ export async function getMyOrderDetail(
 
 export async function submitOrderRequest(data: {
   orderId: string;
-  kind: "query" | "cancel" | "return";
+  kind: "query" | "cancel" | "return" | "complaint" | "replacement";
   message: string;
 }): Promise<{ error: string | null }> {
   return patientSubmitOrderRequest({ data });

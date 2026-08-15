@@ -1,17 +1,23 @@
-import { Check, Video, ShoppingCart, Loader2 } from "lucide-react";
+import { Check, Video, ShoppingCart, Loader2, ArrowRight } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import consultationImg from "@/assets/consultation.jpg";
-import { whatsappUrl } from "@/lib/contact";
 import { usePublishedProducts, usePublicVideoOffers } from "@/hooks/queries/useContent";
 import { useServices } from "@/hooks/queries/useBookings";
 import { isVideoConsultationService } from "@/lib/bookings";
 import { VideoOfferCards } from "@/components/site/VideoOfferCards";
+import { useCart } from "@/lib/cart";
+import type { Product } from "@/lib/admin-data";
+
+function effectivePrice(p: Product): number {
+  return p.discount_price != null ? Number(p.discount_price) : Number(p.price);
+}
 
 export function ConsultationProducts() {
   const { data: products, isLoading } = usePublishedProducts();
   const { data: offers } = usePublicVideoOffers();
   const { data: services } = useServices();
   const videoServicePrice = services?.find(isVideoConsultationService)?.price;
+  const cart = useCart();
 
   return (
     <section className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
@@ -78,6 +84,12 @@ export function ConsultationProducts() {
                 Safe, natural & effective products for better health.
               </p>
             </div>
+            <Link
+              to="/shop"
+              className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80"
+            >
+              View all <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
           {isLoading ? (
             <div className="flex justify-center py-8">
@@ -88,8 +100,10 @@ export function ConsultationProducts() {
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               {products?.map((p) => (
-                <div
+                <Link
                   key={p.id}
+                  to="/product/$productId"
+                  params={{ productId: p.id }}
                   className="group rounded-2xl border border-border bg-background p-3 transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-soft active:scale-[0.99]"
                 >
                   <div className="aspect-square overflow-hidden rounded-xl bg-muted">
@@ -115,17 +129,29 @@ export function ConsultationProducts() {
                     {p.description && (
                       <div className="text-xs text-muted-foreground">{p.description}</div>
                     )}
-                    <div className="mt-1 text-sm font-bold text-primary">Rs. {p.price}</div>
-                    <a
-                      href={whatsappUrl(`Hi, I'd like to order: ${p.name} — Rs. ${p.price}`)}
-                      target="_blank"
-                      rel="noreferrer"
+                    <div className="mt-1 flex items-baseline gap-2">
+                      <div className="text-sm font-bold text-primary">
+                        Rs. {effectivePrice(p).toLocaleString()}
+                      </div>
+                      {p.discount_price != null && (
+                        <div className="text-xs text-muted-foreground line-through">
+                          Rs. {Number(p.price).toLocaleString()}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        cart.add(p.id, 1);
+                      }}
                       className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary-soft py-2 text-xs font-semibold text-primary transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary hover:text-primary-foreground hover:shadow-sm active:scale-95"
                     >
                       <ShoppingCart className="h-3.5 w-3.5" /> Add to Cart
-                    </a>
+                    </button>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}

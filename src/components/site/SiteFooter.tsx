@@ -63,6 +63,7 @@ export function SiteFooter() {
             { label: "About Us", href: "/#about" },
             { label: "Services", href: "/#services" },
             { label: "Products", href: "/#products" },
+            { label: "Shop Online", href: "/shop" },
             { label: "Book Appointment", href: "/booking" },
             { label: "Check Appointment Status", href: "/appointment-status" },
           ]}

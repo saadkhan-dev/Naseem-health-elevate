@@ -1,4 +1,4 @@
-import { staffSupabase } from "@/lib/supabase";
+import { supabase, staffSupabase } from "@/lib/supabase";
 import { todayInClinic } from "@/lib/clinic";
 import {
   adminUpdateAppointmentStatus,
@@ -281,14 +281,19 @@ export interface Product {
   name: string;
   description: string | null;
   price: number;
+  discount_price: number | null;
   image_url: string | null;
+  category: string | null;
   in_stock: boolean;
+  stock_quantity: number | null;
+  rating_avg: number | null;
+  rating_count: number;
   created_at: string;
 }
 
 export async function getProducts(): Promise<Product[]> {
   const { data } = await staffSupabase.from("products").select("*").order("name");
-  return data ?? [];
+  return (data ?? []) as Product[];
 }
 
 export async function getPublishedProducts(): Promise<Product[]> {
@@ -297,7 +302,33 @@ export async function getPublishedProducts(): Promise<Product[]> {
     .select("*")
     .eq("in_stock", true)
     .order("name");
-  return data ?? [];
+  return (data ?? []) as Product[];
+}
+
+export async function getProductById(id: string): Promise<Product | null> {
+  const { data } = await staffSupabase.from("products").select("*").eq("id", id).maybeSingle();
+  return (data ?? null) as Product | null;
+}
+
+export async function getPublishedProductReviews(
+  productId: string,
+): Promise<
+  Array<{ id: string; name: string; rating: number; comment: string; created_at: string }>
+> {
+  const { data } = await supabase
+    .from("product_reviews")
+    .select("id, name, rating, comment, created_at")
+    .eq("product_id", productId)
+    .eq("is_active", true)
+    .eq("status", "approved")
+    .order("created_at", { ascending: false });
+  return (data ?? []) as Array<{
+    id: string;
+    name: string;
+    rating: number;
+    comment: string;
+    created_at: string;
+  }>;
 }
 
 export async function createProduct(data: {
@@ -306,6 +337,9 @@ export async function createProduct(data: {
   price: number;
   image_url?: string;
   in_stock?: boolean;
+  category?: string;
+  stock_quantity?: number | null;
+  discount_price?: number | null;
 }) {
   return adminCreateProduct({ data });
 }
@@ -318,6 +352,9 @@ export async function updateProduct(
     price?: number;
     image_url?: string;
     in_stock?: boolean;
+    category?: string;
+    stock_quantity?: number | null;
+    discount_price?: number | null;
   },
 ) {
   return adminUpdateProduct({ data: { id, data } });

@@ -175,8 +175,11 @@ export function useMyOrderDetail(orderId: string | null) {
 export function useSubmitOrderRequest() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { orderId: string; kind: "query" | "cancel" | "return"; message: string }) =>
-      submitOrderRequest(data),
+    mutationFn: (data: {
+      orderId: string;
+      kind: "query" | "cancel" | "return" | "complaint" | "replacement";
+      message: string;
+    }) => submitOrderRequest(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["patient", "orders"] });
       qc.invalidateQueries({ queryKey: ["patient", "order"] });

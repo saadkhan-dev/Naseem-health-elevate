@@ -1,13 +1,24 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { Loader2, ShoppingBag, MessageSquare, Send, CheckCircle2 } from "lucide-react";
+import {
+  Loader2,
+  ShoppingBag,
+  MessageSquare,
+  CheckCircle2,
+  ExternalLink,
+  CreditCard,
+  Banknote,
+  Ban,
+  Undo2,
+} from "lucide-react";
 import {
   useAdminOrders,
   useUpdateOrderStatus,
   useAdminOrderRequests,
   useUpdateOrderRequest,
 } from "@/hooks/queries/useAdminExtra";
+import { useSetOrderPaymentStatus } from "@/hooks/queries/useShop";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { QueryError } from "@/components/admin/QueryError";
+import type { AdminOrder } from "@/lib/admin-extra";
 
 export const Route = createFileRoute("/admin/orders")({
   component: AdminOrders,
@@ -32,15 +44,44 @@ const statusStyles: Record<string, string> = {
   cancelled: "bg-red-100 text-red-700",
 };
 
+const paymentStatusStyles: Record<string, string> = {
+  payment_pending: "bg-amber-100 text-amber-700",
+  payment_submitted: "bg-sky-100 text-sky-700",
+  payment_verified: "bg-green-100 text-green-700",
+  payment_failed: "bg-red-100 text-red-700",
+  refunded: "bg-slate-100 text-slate-600",
+  waived: "bg-emerald-100 text-emerald-700",
+};
+
+const paymentLabels: Record<string, string> = {
+  payment_pending: "Payment pending",
+  payment_submitted: "Payment submitted",
+  payment_verified: "Payment verified",
+  payment_failed: "Payment failed",
+  refunded: "Refunded",
+  waived: "Fee waived",
+};
+
 const requestKindStyles: Record<string, string> = {
   query: "bg-sky-100 text-sky-700",
   cancel: "bg-red-100 text-red-700",
   return: "bg-orange-100 text-orange-700",
+  complaint: "bg-purple-100 text-purple-700",
+  replacement: "bg-teal-100 text-teal-700",
+};
+
+const requestKindLabels: Record<string, string> = {
+  query: "Query",
+  cancel: "Cancellation",
+  return: "Return",
+  complaint: "Complaint",
+  replacement: "Replacement",
 };
 
 function AdminOrders() {
   const { data: orders, isLoading, isError, error } = useAdminOrders();
   const updateStatus = useUpdateOrderStatus();
+  const setPayment = useSetOrderPaymentStatus();
   const { data: requests, isLoading: reqLoading } = useAdminOrderRequests();
   const updateRequest = useUpdateOrderRequest();
   const [message, setMessage] = useState("");
@@ -49,6 +90,15 @@ function AdminOrders() {
   async function handleStatusChange(id: string, status: string) {
     setMessage("");
     const result = await updateStatus.mutateAsync({ id, status: status as never });
+    if (result.error) setMessage(result.error);
+  }
+
+  async function handlePaymentStatus(
+    orderId: string,
+    status: "payment_verified" | "payment_failed" | "refunded" | "waived",
+  ) {
+    setMessage("");
+    const result = await setPayment.mutateAsync({ orderId, status });
     if (result.error) setMessage(result.error);
   }
 
@@ -111,11 +161,7 @@ function AdminOrders() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge className={`capitalize ${requestKindStyles[r.kind] ?? ""}`}>
-                      {r.kind === "cancel"
-                        ? "Cancellation"
-                        : r.kind === "return"
-                          ? "Return"
-                          : "Query"}
+                      {requestKindLabels[r.kind] ?? r.kind}
                     </Badge>
                     <span className="text-sm font-medium text-foreground">
                       {r.patient?.full_name ?? "Patient"} · {r.order?.order_no ?? "Order"}
@@ -216,6 +262,13 @@ function AdminOrders() {
                     >
                       {o.status}
                     </Badge>
+                    <Badge
+                      className={`capitalize ${
+                        paymentStatusStyles[o.payment_status] ?? paymentStatusStyles.payment_pending
+                      }`}
+                    >
+                      {paymentLabels[o.payment_status] ?? o.payment_status}
+                    </Badge>
                     <Select value={o.status} onValueChange={(v) => handleStatusChange(o.id, v)}>
                       <SelectTrigger className="h-8 w-32 text-xs">
                         <SelectValue />
@@ -256,6 +309,11 @@ function AdminOrders() {
                     Rs. {Number(o.total).toLocaleString()}
                   </span>
                 </div>
+                <OrderPaymentBlock
+                  order={o}
+                  onStatus={handlePaymentStatus}
+                  busy={setPayment.isPending}
+                />
                 {o.notes ? (
                   <div className="mt-2 text-xs text-muted-foreground">Notes: {o.notes}</div>
                 ) : null}
@@ -264,6 +322,137 @@ function AdminOrders() {
           )}
         </div>
       </section>
+    </div>
+  );
+}
+
+function OrderPaymentBlock({
+  order,
+  onStatus,
+  busy,
+}: {
+  order: AdminOrder;
+  onStatus: (
+    orderId: string,
+    status: "payment_verified" | "payment_failed" | "refunded" | "waived",
+  ) => void;
+  busy: boolean;
+}) {
+  const submitted = order.payment_status === "payment_submitted";
+
+  if (order.payment_status === "payment_pending" && !order.payment_reference) {
+    return (
+      <div className="mt-2 rounded-lg bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+        <CreditCard className="mr-1 inline h-3.5 w-3.5" /> No payment submitted yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 rounded-lg border border-sky-100 bg-sky-50/60 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-foreground">
+        <span className="inline-flex items-center gap-1">
+          <Banknote className="h-3.5 w-3.5 text-primary" />
+          Amount:{" "}
+          <span className="font-semibold">
+            Rs. {Number(order.payment_amount ?? order.total).toLocaleString()}
+          </span>
+        </span>
+        {order.payment_method && (
+          <span>
+            Method: <span className="font-medium capitalize">{order.payment_method}</span>
+          </span>
+        )}
+        {order.payment_payer_name && (
+          <span>
+            Payer: <span className="font-medium">{order.payment_payer_name}</span>
+          </span>
+        )}
+        {order.payment_reference && (
+          <span>
+            Ref: <span className="font-mono font-medium">{order.payment_reference}</span>
+          </span>
+        )}
+        {order.payment_submitted_at && (
+          <span>
+            Submitted:{" "}
+            <span className="font-medium">
+              {format(new Date(order.payment_submitted_at), "MMM d, h:mm a")}
+            </span>
+          </span>
+        )}
+        {order.payment_verified_at && (
+          <span>
+            Verified:{" "}
+            <span className="font-medium">
+              {format(new Date(order.payment_verified_at), "MMM d, h:mm a")}
+            </span>
+          </span>
+        )}
+        {order.payment_receipt_url && (
+          <a
+            href={order.payment_receipt_url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+          >
+            <ExternalLink className="h-3 w-3" /> Receipt
+          </a>
+        )}
+      </div>
+      {submitted && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            className="gap-1.5"
+            onClick={() => onStatus(order.id, "payment_verified")}
+            disabled={busy}
+          >
+            {busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <CheckCircle2 className="h-3.5 w-3.5" />
+            )}
+            Verify payment
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 text-red-600"
+            onClick={() => onStatus(order.id, "payment_failed")}
+            disabled={busy}
+          >
+            {busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Ban className="h-3.5 w-3.5" />
+            )}
+            Mark failed
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 text-slate-600"
+            onClick={() => onStatus(order.id, "refunded")}
+            disabled={busy}
+          >
+            <Undo2 className="h-3.5 w-3.5" /> Refund
+          </Button>
+        </div>
+      )}
+      {order.payment_status === "payment_pending" && order.payment_reference && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 text-emerald-700"
+            onClick={() => onStatus(order.id, "waived")}
+            disabled={busy}
+          >
+            <CreditCard className="h-3.5 w-3.5" /> Waive fee
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

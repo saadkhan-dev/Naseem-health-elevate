@@ -9,6 +9,13 @@ import {
   verifyVideoPaymentForAppointment,
   submitVideoPaymentReceipt,
 } from "./server/video-payments";
+import {
+  submitOrderPaymentForOrder,
+  submitOrderPaymentByIdentifier,
+  submitOrderPaymentReceipt as submitOrderReceipt,
+  verifyOrderPaymentByIdentifier,
+  setOrderPaymentStatus as setOrderPayment,
+} from "./server/order-payments";
 import { resolveVideoOffer, recordOfferUsage, releaseOfferUsage } from "./server/video-offers";
 import {
   createVideoSessionForAppointment,
@@ -791,6 +798,11 @@ const productInputSchema = z.object({
   price: z.number().min(0),
   image_url: z.string().max(1000).optional(),
   in_stock: z.boolean().optional(),
+  category: z.string().trim().max(100).optional(),
+  // NULL = unlimited/unknown quantity; otherwise the literal stock count.
+  stock_quantity: z.number().int().min(0).nullable().optional(),
+  // NULL = no discount; otherwise the sale price in Rs.
+  discount_price: z.number().min(0).nullable().optional(),
 });
 
 export const adminCreateProduct = createServerFn({ method: "POST" })
@@ -1147,6 +1159,166 @@ export const adminSetVideoPaymentStatus = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const result = await setVideoPaymentStatus(getSupabaseAdmin(), data);
+    return { error: result.error };
+  });
+
+// ---------------------------------------------------------------------------
+// Public — submit payment proof for a signed-in patient's own order
+// ---------------------------------------------------------------------------
+
+export const submitOrderPayment = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator(
+    z.object({
+      orderId: uuidSchema,
+      methodId: uuidSchema,
+      reference: z
+        .string()
+        .trim()
+        .min(3, "Enter the transaction / reference ID from your payment")
+        .max(200),
+      payerName: z.string().trim().min(2, "Enter the name the payment was made from").max(100),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const admin = getSupabaseAdmin();
+    const { data: order } = await admin
+      .from("orders")
+      .select("id, patient_id")
+      .eq("id", data.orderId)
+      .maybeSingle();
+    if (!order) return { error: "Order not found." };
+    if (order.patient_id !== context.patientId) return { error: "Forbidden" };
+
+    const result = await submitOrderPaymentForOrder(admin, data);
+    if (!result.error && order.patient_id) {
+      await createPatientNotification(admin, {
+        userId: order.patient_id,
+        type: "payment",
+        title: "Payment proof received",
+        body: "Your order payment was submitted. The clinic will verify it.",
+        link: "/patient/orders",
+      });
+    }
+    return { error: result.error };
+  });
+
+// ---------------------------------------------------------------------------
+// Public — guest order payment (Order ID + contact lookup, no login needed)
+// ---------------------------------------------------------------------------
+
+export const submitGuestOrderPayment = createServerFn({ method: "POST" })
+  .middleware([optionalAuthMiddleware])
+  .validator(
+    z
+      .object({
+        id: z.string().trim().min(1, "Enter your Order ID").max(200),
+        phone: z.string().trim().min(7).max(30).optional(),
+        email: z
+          .string()
+          .trim()
+          .email("Please enter a valid email")
+          .max(200)
+          .toLowerCase()
+          .optional(),
+        methodId: z.string().uuid("Invalid payment method"),
+        reference: z
+          .string()
+          .trim()
+          .min(3, "Enter the transaction / reference ID from your payment")
+          .max(200),
+        payerName: z.string().trim().min(2, "Enter the name the payment was made from").max(100),
+      })
+      .refine((v) => v.phone || v.email, {
+        message: "Enter your phone number or email used at checkout.",
+      }),
+  )
+  .handler(async ({ data }) => {
+    const result = await submitOrderPaymentByIdentifier(getSupabaseAdmin(), data);
+    return { error: result.error };
+  });
+
+// ---------------------------------------------------------------------------
+// Public — guest order payment receipt upload (JPG/JPEG/PNG)
+// ---------------------------------------------------------------------------
+
+export const submitGuestOrderReceipt = createServerFn({ method: "POST" })
+  .middleware([optionalAuthMiddleware])
+  .validator(
+    z
+      .object({
+        id: z.string().trim().min(1, "Enter your Order ID").max(200),
+        phone: z.string().trim().min(7).max(30).optional(),
+        email: z
+          .string()
+          .trim()
+          .email("Please enter a valid email")
+          .max(200)
+          .toLowerCase()
+          .optional(),
+        methodId: z.string().uuid("Invalid payment method").optional(),
+        fileName: z.string().trim().min(1).max(200),
+        mimeType: z.enum(["image/jpeg", "image/jpg", "image/png"]),
+        fileBase64: z.string().min(1, "Please choose a receipt image"),
+        fileSize: z
+          .number()
+          .int()
+          .positive()
+          .max(5 * 1024 * 1024),
+      })
+      .refine((v) => v.phone || v.email, {
+        message: "Enter your phone number or email used at checkout.",
+      }),
+  )
+  .handler(async ({ data }) => {
+    const result = await submitOrderReceipt(getSupabaseAdmin(), data);
+    return { error: result.error };
+  });
+
+// ---------------------------------------------------------------------------
+// Public — order payment status lookup (Order ID + contact, no login needed)
+// ---------------------------------------------------------------------------
+
+export const verifyGuestOrderPayment = createServerFn({ method: "POST" })
+  .middleware([optionalAuthMiddleware])
+  .validator(
+    z
+      .object({
+        id: z.string().trim().min(1, "Enter your Order ID").max(200),
+        phone: z.string().trim().min(7).max(30).optional(),
+        email: z
+          .string()
+          .trim()
+          .email("Please enter a valid email")
+          .max(200)
+          .toLowerCase()
+          .optional(),
+      })
+      .refine((v) => v.phone || v.email, {
+        message: "Enter your phone number or email.",
+      }),
+  )
+  .handler(async ({ data }) => {
+    const result = await verifyOrderPaymentByIdentifier(getSupabaseAdmin(), data);
+    return result.error
+      ? { error: result.error, result: null }
+      : { error: null, result: result.result };
+  });
+
+// ---------------------------------------------------------------------------
+// Admin — verify / reject / refund / waive an order payment
+// ---------------------------------------------------------------------------
+
+export const adminSetOrderPaymentStatus = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(
+    z.object({
+      orderId: uuidSchema,
+      status: z.enum(["payment_verified", "payment_failed", "refunded", "waived"]),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const result = await setOrderPayment(getSupabaseAdmin(), data);
     return { error: result.error };
   });
 
@@ -1952,10 +2124,9 @@ export const placeOrder = createServerFn({ method: "POST" })
     const ids = data.items.map((i) => i.productId);
     const { data: products, error: productsError } = await admin
       .from("products")
-      .select("id, name, price, in_stock")
+      .select("id, name, price, discount_price, in_stock, stock_quantity")
       .in("id", ids);
-    if (productsError) return { error: productsError.message };
-
+    if (productsError) return { error: productsError.message, orderId: null };
     const byId = new Map((products ?? []).map((p) => [p.id, p]));
     let total = 0;
     const itemRows: Array<{
@@ -1966,9 +2137,20 @@ export const placeOrder = createServerFn({ method: "POST" })
     }> = [];
     for (const item of data.items) {
       const product = byId.get(item.productId);
-      if (!product) return { error: "One of the products is no longer available." };
-      if (product.in_stock !== true) return { error: `"${product.name}" is out of stock.` };
-      const price = Number(product.price ?? 0);
+      if (!product) return { error: "One of the products is no longer available.", orderId: null };
+      if (product.in_stock !== true)
+        return { error: `"${product.name}" is out of stock.`, orderId: null };
+      if (typeof product.stock_quantity === "number" && product.stock_quantity < item.quantity) {
+        return {
+          error: `Only ${product.stock_quantity} of "${product.name}" is in stock.`,
+          orderId: null,
+        };
+      }
+      // Effective price = discounted sale price when set, otherwise the list price.
+      const price =
+        product.discount_price != null
+          ? Number(product.discount_price)
+          : Number(product.price ?? 0);
       total += price * item.quantity;
       itemRows.push({
         product_id: item.productId,
@@ -1990,6 +2172,8 @@ export const placeOrder = createServerFn({ method: "POST" })
         email: data.email ?? null,
         address: data.address,
         total,
+        payment_amount: total,
+        payment_status: "payment_pending",
         status: "placed",
         notes: data.notes ?? null,
       });
@@ -1999,24 +2183,46 @@ export const placeOrder = createServerFn({ method: "POST" })
           .insert(itemRows.map((r) => ({ order_id: orderId, ...r })));
         if (itemsError) {
           await admin.from("orders").delete().eq("id", orderId);
-          return { error: itemsError.message };
+          return { error: itemsError.message, orderId: null };
         }
+
+        // Decrement literal stock counts (best-effort; NULL = unlimited).
+        for (const item of itemRows) {
+          const product = byId.get(item.product_id);
+          if (typeof product?.stock_quantity === "number") {
+            await admin
+              .from("products")
+              .update({ stock_quantity: product.stock_quantity - item.quantity })
+              .eq("id", item.product_id);
+          }
+        }
+
+        // Seed the immutable timeline so the patient sees the placement event.
+        await admin.from("order_status_history").insert({
+          order_id: orderId,
+          status: "placed",
+          note: "Order placed",
+        });
 
         if (patientId) {
           await createPatientNotification(admin, {
             userId: patientId,
-            type: "appointment_status",
+            type: "order",
             title: "Order placed",
-            body: `Your order ${orderNo} has been placed. We will contact you to confirm delivery.`,
+            body: `Your order ${orderNo} has been placed. Complete your payment so we can start processing it.`,
             link: "/patient/orders",
           });
         }
-        return { error: null, orderNo };
+        return { error: null, orderNo, orderId };
       }
       const isCodeCollision = orderError.code === "23505" && /order_no/i.test(orderError.message);
-      if (!isCodeCollision) return { error: orderError.message, orderNo: null };
+      if (!isCodeCollision) return { error: orderError.message, orderNo: null, orderId: null };
     }
-    return { error: "Could not generate a unique order number. Please try again.", orderNo: null };
+    return {
+      error: "Could not generate a unique order number. Please try again.",
+      orderNo: null,
+      orderId: null,
+    };
   });
 
 export const patientGetMyOrders = createServerFn({ method: "POST" })
@@ -2067,7 +2273,7 @@ export const patientSubmitOrderRequest = createServerFn({ method: "POST" })
   .validator(
     z.object({
       orderId: uuidSchema,
-      kind: z.enum(["query", "cancel", "return"]),
+      kind: z.enum(["query", "cancel", "return", "complaint", "replacement"]),
       message: z
         .string()
         .trim()
@@ -2093,9 +2299,14 @@ export const patientSubmitOrderRequest = createServerFn({ method: "POST" })
         };
       }
     }
-    if (data.kind === "return") {
+    if (data.kind === "return" || data.kind === "replacement") {
       if (order.status !== "delivered") {
-        return { error: "A return can only be requested after the order is delivered." };
+        return {
+          error:
+            data.kind === "return"
+              ? "A return can only be requested after the order is delivered."
+              : "A replacement can only be requested after the order is delivered.",
+        };
       }
     }
 
@@ -2106,6 +2317,211 @@ export const patientSubmitOrderRequest = createServerFn({ method: "POST" })
       message: data.message,
       status: "new",
     });
+    return { error: error?.message ?? null };
+  });
+
+// ---------------------------------------------------------------------------
+// Patient — Buy Again (reorder a delivered order's items as a new order)
+// ---------------------------------------------------------------------------
+
+export const patientReorder = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator(z.object({ orderId: uuidSchema }))
+  .handler(async ({ data, context }) => {
+    const admin = getSupabaseAdmin();
+
+    const { data: order } = await admin
+      .from("orders")
+      .select(
+        "id, patient_id, status, order_no, name, phone, email, address, order_items:order_items (product_id, product_name, price, quantity)",
+      )
+      .eq("id", data.orderId)
+      .maybeSingle();
+    if (!order) return { error: "Order not found.", orderNo: null };
+    if (order.patient_id !== context.patientId) return { error: "Forbidden", orderNo: null };
+    if (order.status !== "delivered") {
+      return { error: "You can only reorder items from a delivered order.", orderNo: null };
+    }
+
+    // Only include products that still exist and are in stock; re-snapshot
+    // current prices (the new order always uses today's pricing).
+    const ids = (order.order_items ?? [])
+      .map((i: { product_id?: string | null }) => i.product_id)
+      .filter(Boolean);
+    const { data: products } = await admin
+      .from("products")
+      .select("id, name, price, discount_price, in_stock, stock_quantity")
+      .in("id", ids);
+    const byId = new Map((products ?? []).map((p) => [p.id, p]));
+
+    let total = 0;
+    const itemRows: Array<{
+      product_id: string;
+      product_name: string;
+      price: number;
+      quantity: number;
+    }> = [];
+    for (const item of order.order_items ?? []) {
+      const product = item.product_id ? byId.get(item.product_id) : undefined;
+      if (!product || product.in_stock !== true) continue;
+      const quantity = Math.min(item.quantity, 50);
+      const price =
+        product.discount_price != null
+          ? Number(product.discount_price)
+          : Number(product.price ?? 0);
+      total += price * quantity;
+      itemRows.push({
+        product_id: product.id,
+        product_name: product.name as string,
+        price,
+        quantity,
+      });
+    }
+    if (itemRows.length === 0) {
+      return {
+        error: "None of the items from that order are available to reorder right now.",
+        orderNo: null,
+      };
+    }
+
+    const orderId = crypto.randomUUID();
+    for (let attempt = 0; attempt < ID_RETRY_ATTEMPTS; attempt++) {
+      const orderNo = generateOrderNo();
+      const { error: orderError } = await admin.from("orders").insert({
+        id: orderId,
+        order_no: orderNo,
+        patient_id: context.patientId,
+        name: order.name,
+        phone: order.phone,
+        email: order.email,
+        address: order.address,
+        total,
+        payment_amount: total,
+        payment_status: "payment_pending",
+        status: "placed",
+        notes: `Reordered from ${order.order_no ?? "a previous order"}.`,
+      });
+      if (!orderError) {
+        const { error: itemsError } = await admin
+          .from("order_items")
+          .insert(itemRows.map((r) => ({ order_id: orderId, ...r })));
+        if (itemsError) {
+          await admin.from("orders").delete().eq("id", orderId);
+          return { error: itemsError.message, orderNo: null };
+        }
+
+        for (const item of itemRows) {
+          const product = byId.get(item.product_id);
+          if (typeof product?.stock_quantity === "number") {
+            await admin
+              .from("products")
+              .update({ stock_quantity: product.stock_quantity - item.quantity })
+              .eq("id", item.product_id);
+          }
+        }
+
+        await admin.from("order_status_history").insert({
+          order_id: orderId,
+          status: "placed",
+          note: "Order placed (reorder)",
+        });
+
+        await createPatientNotification(admin, {
+          userId: context.patientId,
+          type: "order",
+          title: "Order placed",
+          body: `Your reorder ${orderNo} has been placed. Complete your payment so we can start processing it.`,
+          link: "/patient/orders",
+        });
+        return { error: null, orderNo };
+      }
+      const isCodeCollision = orderError.code === "23505" && /order_no/i.test(orderError.message);
+      if (!isCodeCollision) return { error: orderError.message, orderNo: null };
+    }
+    return { error: "Could not generate a unique order number. Please try again.", orderNo: null };
+  });
+
+// ---------------------------------------------------------------------------
+// Patient — submit a product review (lands in the moderation queue)
+// ---------------------------------------------------------------------------
+
+export const patientSubmitProductReview = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator(
+    z.object({
+      productId: uuidSchema,
+      rating: z.number().int().min(1).max(5),
+      comment: z.string().trim().min(1, "Please write your review").max(2000),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const admin = getSupabaseAdmin();
+
+    const { data: product } = await admin
+      .from("products")
+      .select("id")
+      .eq("id", data.productId)
+      .maybeSingle();
+    if (!product) return { error: "Product not found." };
+
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("full_name")
+      .eq("id", context.patientId)
+      .maybeSingle();
+
+    const { error } = await admin.from("product_reviews").insert({
+      product_id: data.productId,
+      patient_id: context.patientId,
+      name: profile?.full_name ?? "Patient",
+      rating: data.rating,
+      comment: data.comment,
+      status: "pending",
+      is_active: false,
+    });
+    return { error: error?.message ?? null };
+  });
+
+// ---------------------------------------------------------------------------
+// Admin — product review moderation queue
+// ---------------------------------------------------------------------------
+
+export const adminGetProductReviews = createServerFn({ method: "GET" })
+  .middleware([adminMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async () => {
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin
+      .from("product_reviews")
+      .select("*, products:product_id (id, name), profiles:patient_id (full_name, phone)")
+      .order("created_at", { ascending: false })
+      .limit(500);
+    return { error: error?.message ?? null, reviews: data ?? [] };
+  });
+
+export const adminUpdateProductReview = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(
+    z.object({
+      id: uuidSchema,
+      status: z.enum(["pending", "approved", "rejected"]),
+      isActive: z.boolean().optional(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const admin = getSupabaseAdmin();
+    const { data: review } = await admin
+      .from("product_reviews")
+      .select("id, status")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!review) return { error: "Review not found." };
+
+    const isActive = data.status === "approved" ? true : (data.isActive ?? false);
+    const { error } = await admin
+      .from("product_reviews")
+      .update({ status: data.status, is_active: isActive })
+      .eq("id", data.id);
     return { error: error?.message ?? null };
   });
 
@@ -2467,7 +2883,7 @@ export const adminGetOrders = createServerFn({ method: "GET" })
     const admin = getSupabaseAdmin();
     const { data, error } = await admin
       .from("orders")
-      .select("*, order_items:order_items (product_name, price, quantity)")
+      .select("*, payment_receipt_url, order_items:order_items (product_name, price, quantity)")
       .order("created_at", { ascending: false })
       .limit(500);
     return { error: error?.message ?? null, orders: data ?? [] };
@@ -2610,7 +3026,15 @@ export const adminUpdateOrderRequest = createServerFn({ method: "POST" })
 
     if (req.patient_id) {
       const kindLabel =
-        req.kind === "query" ? "Query" : req.kind === "cancel" ? "Cancellation" : "Return";
+        req.kind === "query"
+          ? "Query"
+          : req.kind === "cancel"
+            ? "Cancellation"
+            : req.kind === "return"
+              ? "Return"
+              : req.kind === "replacement"
+                ? "Replacement"
+                : "Complaint";
       await createPatientNotification(admin, {
         userId: req.patient_id,
         type: "order",

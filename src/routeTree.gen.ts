@@ -14,11 +14,14 @@ import { Route as AboutRouteImport } from './routes/about'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AppointmentStatusRouteImport } from './routes/appointment-status'
 import { Route as BookingRouteImport } from './routes/booking'
+import { Route as CartRouteImport } from './routes/cart'
+import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as ConditionsRouteImport } from './routes/conditions'
 import { Route as FaqRouteImport } from './routes/faq'
 import { Route as PatientRouteImport } from './routes/patient'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SearchRouteImport } from './routes/search'
+import { Route as ShopRouteImport } from './routes/shop'
 import { Route as SupportRouteImport } from './routes/support'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
@@ -32,6 +35,7 @@ import { Route as AdminLoginRouteImport } from './routes/admin.login'
 import { Route as AdminOffersRouteImport } from './routes/admin.offers'
 import { Route as AdminOrdersRouteImport } from './routes/admin.orders'
 import { Route as AdminPaymentsRouteImport } from './routes/admin.payments'
+import { Route as AdminProductReviewsRouteImport } from './routes/admin.product-reviews'
 import { Route as AdminProductsRouteImport } from './routes/admin.products'
 import { Route as AdminRemindersRouteImport } from './routes/admin.reminders'
 import { Route as AdminReviewsRouteImport } from './routes/admin.reviews'
@@ -42,6 +46,7 @@ import { Route as PatientIndexRouteImport } from './routes/patient.index'
 import { Route as PatientDocumentsRouteImport } from './routes/patient.documents'
 import { Route as PatientOrdersRouteImport } from './routes/patient.orders'
 import { Route as PatientProfileRouteImport } from './routes/patient.profile'
+import { Route as ProductProductIdRouteImport } from './routes/product.$productId'
 import { Route as VideoVcNoRouteImport } from './routes/video.$vcNo'
 
 const IndexRoute = IndexRouteImport.update({
@@ -69,6 +74,16 @@ const BookingRoute = BookingRouteImport.update({
   path: '/booking',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CartRoute = CartRouteImport.update({
+  id: '/cart',
+  path: '/cart',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CheckoutRoute = CheckoutRouteImport.update({
+  id: '/checkout',
+  path: '/checkout',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ConditionsRoute = ConditionsRouteImport.update({
   id: '/conditions',
   path: '/conditions',
@@ -92,6 +107,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
 const SearchRoute = SearchRouteImport.update({
   id: '/search',
   path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShopRoute = ShopRouteImport.update({
+  id: '/shop',
+  path: '/shop',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SupportRoute = SupportRouteImport.update({
@@ -159,6 +179,11 @@ const AdminPaymentsRoute = AdminPaymentsRouteImport.update({
   path: '/payments',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminProductReviewsRoute = AdminProductReviewsRouteImport.update({
+  id: '/product-reviews',
+  path: '/product-reviews',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminProductsRoute = AdminProductsRouteImport.update({
   id: '/products',
   path: '/products',
@@ -209,6 +234,11 @@ const PatientProfileRoute = PatientProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => PatientRoute,
 } as any)
+const ProductProductIdRoute = ProductProductIdRouteImport.update({
+  id: '/product/$productId',
+  path: '/product/$productId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VideoVcNoRoute = VideoVcNoRouteImport.update({
   id: '/video/$vcNo',
   path: '/video/$vcNo',
@@ -221,11 +251,14 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRouteWithChildren
   '/appointment-status': typeof AppointmentStatusRoute
   '/booking': typeof BookingRoute
+  '/cart': typeof CartRoute
+  '/checkout': typeof CheckoutRoute
   '/conditions': typeof ConditionsRoute
   '/faq': typeof FaqRoute
   '/patient': typeof PatientRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
+  '/shop': typeof ShopRoute
   '/support': typeof SupportRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
@@ -238,6 +271,7 @@ export interface FileRoutesByFullPath {
   '/admin/offers': typeof AdminOffersRoute
   '/admin/orders': typeof AdminOrdersRoute
   '/admin/payments': typeof AdminPaymentsRoute
+  '/admin/product-reviews': typeof AdminProductReviewsRoute
   '/admin/products': typeof AdminProductsRoute
   '/admin/reminders': typeof AdminRemindersRoute
   '/admin/reviews': typeof AdminReviewsRoute
@@ -247,6 +281,7 @@ export interface FileRoutesByFullPath {
   '/patient/documents': typeof PatientDocumentsRoute
   '/patient/orders': typeof PatientOrdersRoute
   '/patient/profile': typeof PatientProfileRoute
+  '/product/$productId': typeof ProductProductIdRoute
   '/video/$vcNo': typeof VideoVcNoRoute
   '/admin/': typeof AdminIndexRoute
   '/patient/': typeof PatientIndexRoute
@@ -256,10 +291,13 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/appointment-status': typeof AppointmentStatusRoute
   '/booking': typeof BookingRoute
+  '/cart': typeof CartRoute
+  '/checkout': typeof CheckoutRoute
   '/conditions': typeof ConditionsRoute
   '/faq': typeof FaqRoute
   '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
+  '/shop': typeof ShopRoute
   '/support': typeof SupportRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
@@ -272,6 +310,7 @@ export interface FileRoutesByTo {
   '/admin/offers': typeof AdminOffersRoute
   '/admin/orders': typeof AdminOrdersRoute
   '/admin/payments': typeof AdminPaymentsRoute
+  '/admin/product-reviews': typeof AdminProductReviewsRoute
   '/admin/products': typeof AdminProductsRoute
   '/admin/reminders': typeof AdminRemindersRoute
   '/admin/reviews': typeof AdminReviewsRoute
@@ -281,6 +320,7 @@ export interface FileRoutesByTo {
   '/patient/documents': typeof PatientDocumentsRoute
   '/patient/orders': typeof PatientOrdersRoute
   '/patient/profile': typeof PatientProfileRoute
+  '/product/$productId': typeof ProductProductIdRoute
   '/video/$vcNo': typeof VideoVcNoRoute
   '/admin': typeof AdminIndexRoute
   '/patient': typeof PatientIndexRoute
@@ -292,11 +332,14 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/appointment-status': typeof AppointmentStatusRoute
   '/booking': typeof BookingRoute
+  '/cart': typeof CartRoute
+  '/checkout': typeof CheckoutRoute
   '/conditions': typeof ConditionsRoute
   '/faq': typeof FaqRoute
   '/patient': typeof PatientRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
+  '/shop': typeof ShopRoute
   '/support': typeof SupportRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
@@ -309,6 +352,7 @@ export interface FileRoutesById {
   '/admin/offers': typeof AdminOffersRoute
   '/admin/orders': typeof AdminOrdersRoute
   '/admin/payments': typeof AdminPaymentsRoute
+  '/admin/product-reviews': typeof AdminProductReviewsRoute
   '/admin/products': typeof AdminProductsRoute
   '/admin/reminders': typeof AdminRemindersRoute
   '/admin/reviews': typeof AdminReviewsRoute
@@ -318,6 +362,7 @@ export interface FileRoutesById {
   '/patient/documents': typeof PatientDocumentsRoute
   '/patient/orders': typeof PatientOrdersRoute
   '/patient/profile': typeof PatientProfileRoute
+  '/product/$productId': typeof ProductProductIdRoute
   '/video/$vcNo': typeof VideoVcNoRoute
   '/admin/': typeof AdminIndexRoute
   '/patient/': typeof PatientIndexRoute
@@ -330,11 +375,14 @@ export interface FileRouteTypes {
     | '/admin'
     | '/appointment-status'
     | '/booking'
+    | '/cart'
+    | '/checkout'
     | '/conditions'
     | '/faq'
     | '/patient'
     | '/reset-password'
     | '/search'
+    | '/shop'
     | '/support'
     | '/admin/analytics'
     | '/admin/appointments'
@@ -347,6 +395,7 @@ export interface FileRouteTypes {
     | '/admin/offers'
     | '/admin/orders'
     | '/admin/payments'
+    | '/admin/product-reviews'
     | '/admin/products'
     | '/admin/reminders'
     | '/admin/reviews'
@@ -356,6 +405,7 @@ export interface FileRouteTypes {
     | '/patient/documents'
     | '/patient/orders'
     | '/patient/profile'
+    | '/product/$productId'
     | '/video/$vcNo'
     | '/admin/'
     | '/patient/'
@@ -365,10 +415,13 @@ export interface FileRouteTypes {
     | '/about'
     | '/appointment-status'
     | '/booking'
+    | '/cart'
+    | '/checkout'
     | '/conditions'
     | '/faq'
     | '/reset-password'
     | '/search'
+    | '/shop'
     | '/support'
     | '/admin/analytics'
     | '/admin/appointments'
@@ -381,6 +434,7 @@ export interface FileRouteTypes {
     | '/admin/offers'
     | '/admin/orders'
     | '/admin/payments'
+    | '/admin/product-reviews'
     | '/admin/products'
     | '/admin/reminders'
     | '/admin/reviews'
@@ -390,6 +444,7 @@ export interface FileRouteTypes {
     | '/patient/documents'
     | '/patient/orders'
     | '/patient/profile'
+    | '/product/$productId'
     | '/video/$vcNo'
     | '/admin'
     | '/patient'
@@ -400,11 +455,14 @@ export interface FileRouteTypes {
     | '/admin'
     | '/appointment-status'
     | '/booking'
+    | '/cart'
+    | '/checkout'
     | '/conditions'
     | '/faq'
     | '/patient'
     | '/reset-password'
     | '/search'
+    | '/shop'
     | '/support'
     | '/admin/analytics'
     | '/admin/appointments'
@@ -417,6 +475,7 @@ export interface FileRouteTypes {
     | '/admin/offers'
     | '/admin/orders'
     | '/admin/payments'
+    | '/admin/product-reviews'
     | '/admin/products'
     | '/admin/reminders'
     | '/admin/reviews'
@@ -426,6 +485,7 @@ export interface FileRouteTypes {
     | '/patient/documents'
     | '/patient/orders'
     | '/patient/profile'
+    | '/product/$productId'
     | '/video/$vcNo'
     | '/admin/'
     | '/patient/'
@@ -437,12 +497,16 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRouteWithChildren
   AppointmentStatusRoute: typeof AppointmentStatusRoute
   BookingRoute: typeof BookingRoute
+  CartRoute: typeof CartRoute
+  CheckoutRoute: typeof CheckoutRoute
   ConditionsRoute: typeof ConditionsRoute
   FaqRoute: typeof FaqRoute
   PatientRoute: typeof PatientRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
   SearchRoute: typeof SearchRoute
+  ShopRoute: typeof ShopRoute
   SupportRoute: typeof SupportRoute
+  ProductProductIdRoute: typeof ProductProductIdRoute
   VideoVcNoRoute: typeof VideoVcNoRoute
 }
 
@@ -483,6 +547,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BookingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cart': {
+      id: '/cart'
+      path: '/cart'
+      fullPath: '/cart'
+      preLoaderRoute: typeof CartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/checkout': {
+      id: '/checkout'
+      path: '/checkout'
+      fullPath: '/checkout'
+      preLoaderRoute: typeof CheckoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/conditions': {
       id: '/conditions'
       path: '/conditions'
@@ -516,6 +594,13 @@ declare module '@tanstack/react-router' {
       path: '/search'
       fullPath: '/search'
       preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shop': {
+      id: '/shop'
+      path: '/shop'
+      fullPath: '/shop'
+      preLoaderRoute: typeof ShopRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/support': {
@@ -609,6 +694,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPaymentsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/product-reviews': {
+      id: '/admin/product-reviews'
+      path: '/product-reviews'
+      fullPath: '/admin/product-reviews'
+      preLoaderRoute: typeof AdminProductReviewsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/products': {
       id: '/admin/products'
       path: '/products'
@@ -679,6 +771,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PatientProfileRouteImport
       parentRoute: typeof PatientRoute
     }
+    '/product/$productId': {
+      id: '/product/$productId'
+      path: '/product/$productId'
+      fullPath: '/product/$productId'
+      preLoaderRoute: typeof ProductProductIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/video/$vcNo': {
       id: '/video/$vcNo'
       path: '/video/$vcNo'
@@ -701,6 +800,7 @@ interface AdminRouteChildren {
   AdminOffersRoute: typeof AdminOffersRoute
   AdminOrdersRoute: typeof AdminOrdersRoute
   AdminPaymentsRoute: typeof AdminPaymentsRoute
+  AdminProductReviewsRoute: typeof AdminProductReviewsRoute
   AdminProductsRoute: typeof AdminProductsRoute
   AdminRemindersRoute: typeof AdminRemindersRoute
   AdminReviewsRoute: typeof AdminReviewsRoute
@@ -722,6 +822,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminOffersRoute: AdminOffersRoute,
   AdminOrdersRoute: AdminOrdersRoute,
   AdminPaymentsRoute: AdminPaymentsRoute,
+  AdminProductReviewsRoute: AdminProductReviewsRoute,
   AdminProductsRoute: AdminProductsRoute,
   AdminRemindersRoute: AdminRemindersRoute,
   AdminReviewsRoute: AdminReviewsRoute,
@@ -756,12 +857,16 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRouteWithChildren,
   AppointmentStatusRoute: AppointmentStatusRoute,
   BookingRoute: BookingRoute,
+  CartRoute: CartRoute,
+  CheckoutRoute: CheckoutRoute,
   ConditionsRoute: ConditionsRoute,
   FaqRoute: FaqRoute,
   PatientRoute: PatientRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
   SearchRoute: SearchRoute,
+  ShopRoute: ShopRoute,
   SupportRoute: SupportRoute,
+  ProductProductIdRoute: ProductProductIdRoute,
   VideoVcNoRoute: VideoVcNoRoute,
 }
 export const routeTree = rootRouteImport

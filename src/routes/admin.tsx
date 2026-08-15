@@ -38,6 +38,7 @@ const navItems = [
   { href: "/admin/offers", label: "Offers", Icon: BadgePercent, exact: false },
   { href: "/admin/products", label: "Products", Icon: Package, exact: false },
   { href: "/admin/orders", label: "Orders", Icon: Package, exact: false },
+  { href: "/admin/product-reviews", label: "Product Reviews", Icon: Star, exact: false },
   { href: "/admin/documents", label: "Reports", Icon: FileText, exact: false },
   { href: "/admin/reminders", label: "Reminders", Icon: BellRing, exact: false },
   { href: "/admin/videos", label: "Videos", Icon: Video, exact: false },

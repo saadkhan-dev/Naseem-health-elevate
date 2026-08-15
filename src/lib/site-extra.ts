@@ -81,7 +81,7 @@ export async function submitOrder(data: {
   email?: string;
   address: string;
   notes?: string;
-}): Promise<{ error: string | null; orderNo?: string | null }> {
+}): Promise<{ error: string | null; orderNo?: string | null; orderId?: string | null }> {
   return placeOrder({ data });
 }
 

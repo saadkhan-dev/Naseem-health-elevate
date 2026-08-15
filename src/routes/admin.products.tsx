@@ -27,7 +27,16 @@ export const Route = createFileRoute("/admin/products")({
   component: AdminProducts,
 });
 
-const emptyForm = { name: "", description: "", price: 0, image_url: "", in_stock: true };
+const emptyForm = {
+  name: "",
+  description: "",
+  price: 0,
+  category: "",
+  discount_price: null as number | null,
+  stock_quantity: null as number | null,
+  image_url: "",
+  in_stock: true,
+};
 
 function AdminProducts() {
   const { data: products, isLoading, isError, error } = useAdminProducts();
@@ -54,6 +63,9 @@ function AdminProducts() {
       name: p.name,
       description: p.description ?? "",
       price: p.price,
+      category: p.category ?? "",
+      discount_price: p.discount_price ?? null,
+      stock_quantity: p.stock_quantity ?? null,
       image_url: p.image_url ?? "",
       in_stock: p.in_stock,
     });
@@ -122,7 +134,15 @@ function AdminProducts() {
                 <div>
                   <div className="font-medium text-foreground">{p.name}</div>
                   <div className="text-xs text-muted-foreground">
-                    Rs. {p.price} {!p.in_stock && "(out of stock)"}
+                    Rs. {p.discount_price != null ? p.discount_price : p.price}
+                    {p.discount_price != null && (
+                      <span className="ml-1 line-through">Rs. {p.price}</span>
+                    )}
+                    {p.category && <span className="ml-1 capitalize">· {p.category}</span>}
+                    {typeof p.stock_quantity === "number" && (
+                      <span className="ml-1">· {p.stock_quantity} in stock</span>
+                    )}
+                    {!p.in_stock && <span className="ml-1 text-red-600">(out of stock)</span>}
                   </div>
                 </div>
               </div>
@@ -172,6 +192,42 @@ function AdminProducts() {
                   type="number"
                   value={form.price}
                   onChange={(e) => setForm({ ...form, price: +e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground">Discount price (Rs.)</label>
+                <Input
+                  type="number"
+                  value={form.discount_price ?? ""}
+                  placeholder="Leave empty for no discount"
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      discount_price: e.target.value === "" ? null : +e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground">Category</label>
+                <Input
+                  value={form.category}
+                  placeholder="e.g. Drops, Tablets, Ointment…"
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground">Stock quantity</label>
+                <Input
+                  type="number"
+                  value={form.stock_quantity ?? ""}
+                  placeholder="Empty = unlimited"
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      stock_quantity: e.target.value === "" ? null : +e.target.value,
+                    })
+                  }
                 />
               </div>
               <div>
