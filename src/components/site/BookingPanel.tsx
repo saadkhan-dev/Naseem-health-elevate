@@ -138,7 +138,7 @@ export function BookingPanel() {
   }
 
   return (
-      <section id="booking" className="relative -mt-10 px-4 md:-mt-16 md:px-8">
+    <section id="booking" className="relative -mt-10 px-4 md:-mt-16 md:px-8">
       <div className="mx-auto max-w-7xl">
         <div className="rounded-3xl border border-border bg-card p-5 shadow-soft md:p-8">
           <div className="text-center">
@@ -189,7 +189,11 @@ export function BookingPanel() {
                     <CalendarIcon className="ml-2 h-4 w-4 text-primary" />
                   </button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                <PopoverContent
+                  className="w-auto max-w-[calc(100vw-2rem)] p-0"
+                  align="start"
+                  sideOffset={4}
+                >
                   <Calendar
                     mode="single"
                     selected={date}
@@ -201,7 +205,7 @@ export function BookingPanel() {
                       isDateBeforeTodayClinic(d) || (!isHomeVisit && !openDays.has(d.getDay()))
                     }
                     initialFocus
-                    className="p-3 pointer-events-auto"
+                    className="p-3 pointer-events-auto [--cell-size:1.75rem] min-[360px]:[--cell-size:2rem]"
                   />
                 </PopoverContent>
               </Popover>

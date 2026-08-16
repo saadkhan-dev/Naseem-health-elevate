@@ -30,12 +30,12 @@ export function ConsultationProducts() {
           className="rounded-3xl border border-border bg-card p-6 shadow-card transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-soft active:scale-[0.99] md:p-8"
         >
           <div className="grid items-center gap-5 sm:grid-cols-2">
-            <div>
+            <div className="text-center sm:text-left">
               <h3 className="font-display text-2xl font-bold text-red-600">Video Consultation</h3>
               <p className="mt-2 text-sm text-muted-foreground">
                 Consult with Dr. Naseem Ahmed Khan from the comfort of your home.
               </p>
-              <ul className="mt-4 space-y-2 text-sm">
+              <ul className="mt-4 space-y-2 text-sm text-left">
                 {[
                   "Secure & private sessions",
                   "One-on-one video consultation",
@@ -51,14 +51,14 @@ export function ConsultationProducts() {
               <Link
                 to="/booking"
                 search={{ mode: "video" }}
-                className="mt-5 inline-flex items-center gap-2 rounded-xl bg-gradient-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:brightness-[1.05] hover:shadow-soft active:scale-95"
+                className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:brightness-[1.05] hover:shadow-soft active:scale-95"
               >
                 <Video className="h-4 w-4" /> Consult Now
               </Link>
               <VideoOfferCards
                 offers={offers ?? []}
                 basePrice={videoServicePrice}
-                className="mt-4"
+                className="mt-4 text-left"
               />
             </div>
             <div className="group overflow-hidden rounded-2xl bg-primary-soft">
@@ -78,7 +78,7 @@ export function ConsultationProducts() {
           id="products"
           className="rounded-3xl border border-border bg-card p-6 shadow-card transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-soft active:scale-[0.99] md:p-8"
         >
-          <div className="mb-5 flex items-end justify-between gap-3">
+          <div className="mb-5 flex flex-col items-center gap-3 text-center sm:flex-row sm:items-end sm:justify-between sm:gap-3 sm:text-left">
             <div>
               <h3 className="font-display text-2xl font-bold text-red-600">
                 Our Homeopathic Products

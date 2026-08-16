@@ -51,8 +51,8 @@ export function VideoOfferCards({ offers, basePrice, className }: VideoOfferCard
               active ? "border-primary/40 bg-primary-soft/60" : "border-border bg-muted/50",
             )}
           >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-semibold text-foreground">{o.title}</span>
+            <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+              <span className="min-w-0 text-sm font-semibold text-foreground">{o.title}</span>
               <span
                 className={cn(
                   "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",

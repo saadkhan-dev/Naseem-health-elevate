@@ -231,7 +231,7 @@ function BookingPage() {
               <h2 className="mt-6 font-display text-lg font-semibold text-primary">
                 2. Pick a Date
               </h2>
-              <div className="mt-3 rounded-2xl border border-border bg-background p-2">
+              <div className="mt-3 overflow-x-auto rounded-2xl border border-border bg-background p-2">
                 <Calendar
                   mode="single"
                   selected={date}
@@ -243,7 +243,7 @@ function BookingPage() {
                     isDateBeforeTodayClinic(d) || (!isHomeVisit && !openDays.has(d.getDay()))
                   }
                   initialFocus
-                  className="mx-auto"
+                  className="mx-auto [--cell-size:1.75rem] min-[360px]:[--cell-size:2rem]"
                 />
               </div>
               <p className="mt-3 text-xs text-muted-foreground">

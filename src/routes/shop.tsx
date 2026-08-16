@@ -68,9 +68,11 @@ function ShopPage() {
       <Nav />
       <main className="px-4 py-12 md:px-8">
         <div className="mx-auto max-w-6xl">
-          <div className="flex items-end justify-between gap-3">
+          <div className="flex flex-col items-center gap-3 text-center md:flex-row md:items-end md:justify-between md:gap-3 md:text-left">
             <div>
-              <h1 className="font-display text-3xl font-bold text-foreground">Products & Homeopathic Medicine</h1>
+              <h1 className="font-display text-3xl font-bold text-foreground">
+                Products & Homeopathic Medicine
+              </h1>
               <p className="mt-1 text-sm text-muted-foreground">
                 Safe, natural & effective products for better health — order online.
               </p>

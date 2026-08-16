@@ -448,16 +448,18 @@ export function VideoPaymentStep({
             <Button
               onClick={handleSubmit}
               disabled={submit.isPending}
-              className="mt-4 h-12 w-full rounded-xl"
+              className="mt-4 h-auto min-h-12 w-full rounded-xl px-4 py-3 text-left whitespace-normal"
             >
               {submit.isPending ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Submitting...
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> Submitting...
                 </>
               ) : (
                 <>
-                  <ShieldCheck className="h-4 w-4" /> I've made the payment — submit for
-                  verification
+                  <ShieldCheck className="h-4 w-4 shrink-0" />
+                  <span className="whitespace-normal text-left">
+                    I've made the payment — submit for verification
+                  </span>
                 </>
               )}
             </Button>
@@ -685,9 +687,14 @@ function hasMethodDetails(m: {
 
 function DetailRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="flex justify-between gap-3">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={cn("font-medium text-foreground", mono && "font-mono break-all")}>
+    <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      <span
+        className={cn(
+          "min-w-0 break-words text-right font-medium text-foreground",
+          mono && "font-mono",
+        )}
+      >
         {value}
       </span>
     </div>
@@ -696,9 +703,14 @@ function DetailRow({ label, value, mono }: { label: string; value: string; mono?
 
 function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="flex justify-between gap-3">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={cn("font-medium text-foreground", mono && "font-mono break-all")}>
+    <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      <span
+        className={cn(
+          "min-w-0 break-words text-right font-medium text-foreground",
+          mono && "font-mono",
+        )}
+      >
         {value}
       </span>
     </div>

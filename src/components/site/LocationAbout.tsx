@@ -16,7 +16,9 @@ export function LocationAbout() {
       <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-2">
         {/* Location */}
         <div className="rounded-3xl border border-border bg-card p-6 shadow-card transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-soft active:scale-[0.99] md:p-8">
-          <h3 className="font-display text-2xl font-bold text-red-600">Contact & Our Location</h3>
+          <h3 className="text-center font-display text-2xl font-bold text-red-600 md:text-left">
+            Contact & Our Location
+          </h3>
           <div className="mt-4 rounded-2xl bg-primary-soft p-4">
             <div className="flex items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-card text-primary">
@@ -69,7 +71,7 @@ export function LocationAbout() {
           id="about"
           className="rounded-3xl border border-border bg-card p-6 shadow-card transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-soft active:scale-[0.99] md:p-8"
         >
-          <h3 className="font-display text-2xl font-bold text-red-600">
+          <h3 className="text-center font-display text-2xl font-bold text-red-600 md:text-left">
             About Dr. Naseem Ahmed Khan
           </h3>
           <div className="mt-5 grid items-start gap-5 sm:grid-cols-[1.4fr_1fr]">

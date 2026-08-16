@@ -19,24 +19,24 @@ export function Hero() {
       <div className="absolute inset-0 -z-10 opacity-60 [background:radial-gradient(60%_60%_at_80%_20%,oklch(0.88_0.08_195/0.5),transparent_60%)]" />
       <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 pt-5 pb-8 md:px-8 md:pt-8 md:pb-10 lg:grid-cols-[1.15fr_1fr] lg:pt-8 lg:pb-12">
         {/* Left */}
-        <div>
+        <div className="text-center lg:text-left">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary-soft px-3.5 py-1.5 text-xs font-medium text-primary">
             <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
             Now accepting new patients in Karachi
           </div>
-          <h1 className="font-display text-4xl font-semibold leading-[1.05] text-[#0015ff] md:text-5xl lg:text-6xl">
+          <h1 className="mx-auto max-w-2xl font-display text-4xl font-semibold leading-[1.05] text-[#0015ff] md:text-5xl lg:mx-0 lg:text-6xl">
             Rahat Homeopathic & <span className="text-primary">Physiotherapy Clinic</span>{" "}
           </h1>
 
           <h2 className="mt-2 text-3xl font-bold text-[#ff0000] italic">
             Healing Naturally, Living Better.
           </h2>
-          <p className="mt-4 max-w-xl text-base text-muted-foreground md:text-lg">
+          <p className="mx-auto mt-4 max-w-xl text-base text-muted-foreground md:text-lg lg:mx-0">
             Natural healing. Pain relief. Better health. Personalized, patient-first care from Dr.
             Naseem Ahmed Khan — for you and your family.
           </p>
 
-          <div className="mt-5 flex flex-wrap items-center gap-2.5 xl:flex-nowrap">
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5 lg:justify-start xl:flex-nowrap">
             <SectionLink
               hash="booking"
               className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-soft transition-all duration-300 hover:-translate-y-0.5 hover:brightness-[1.05] hover:shadow-glass active:scale-[0.97]"
@@ -57,17 +57,20 @@ export function Hero() {
             </a>
           </div>
 
-          <div className="mt-8 grid max-w-lg grid-cols-1 gap-4 min-[420px]:grid-cols-3">
+          <div className="mt-8 grid max-w-lg grid-cols-1 gap-4 min-[420px]:grid-cols-3 lg:mx-0 mx-auto">
             {[
               { Icon: UserRound, t: "Experienced Doctor", s: "20 Years of expertise" },
               { Icon: ShieldCheck, t: "Natural & Safe", s: "Gentle & Effective" },
               { Icon: HeartPulse, t: "Personalized Care", s: "Patient First" },
             ].map(({ Icon, t, s }) => (
-              <div key={t} className="group flex items-start gap-2.5">
+              <div
+                key={t}
+                className="group flex items-start justify-center gap-2.5 lg:justify-start"
+              >
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110">
                   <Icon className="h-4 w-4" />
                 </div>
-                <div className="min-w-0 leading-tight">
+                <div className="min-w-0 text-left leading-tight">
                   <div className="text-xs font-semibold text-foreground transition-colors duration-300 group-hover:text-primary">
                     {t}
                   </div>

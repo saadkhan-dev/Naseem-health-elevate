@@ -8,11 +8,11 @@ export function VideoGallery() {
     <section id="videos" className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
       <div className="mx-auto max-w-7xl rounded-3xl border border-border bg-card p-6 shadow-card md:p-8">
         <div className="grid items-start gap-6 lg:grid-cols-[1fr_3fr]">
-          <div>
+          <div className="text-center lg:text-left">
             <h3 className="font-display text-2xl font-bold text-red-600">
               Health Awareness Videos
             </h3>
-            <p className="mt-2 text-sm text-muted-foreground">
+            <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground lg:mx-0">
               Informative videos by Dr. Naseem Ahmed Khan on health, fitness & natural healing.
             </p>
           </div>

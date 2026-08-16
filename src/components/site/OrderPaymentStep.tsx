@@ -325,7 +325,7 @@ export function OrderPaymentStep({
 
       <div className="mx-auto mt-6 w-full max-w-md">
         <div className="text-sm font-semibold text-foreground">Payment Verification</div>
-        <div className="mt-2 grid grid-cols-2 gap-2 rounded-2xl bg-muted p-1">
+        <div className="mt-2 grid grid-cols-1 gap-2 rounded-2xl bg-muted p-1 min-[400px]:grid-cols-2">
           <button
             type="button"
             onClick={() => setVerificationMode("transaction")}
@@ -538,10 +538,14 @@ export function OrderPaymentStep({
 
 function Row({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-muted-foreground">{label}</span>
+    <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+      <span className="shrink-0 text-muted-foreground">{label}</span>
       <span
-        className={mono ? "font-mono font-medium text-foreground" : "font-medium text-foreground"}
+        className={
+          mono
+            ? "min-w-0 break-words text-right font-mono font-medium text-foreground"
+            : "min-w-0 break-words text-right font-medium text-foreground"
+        }
       >
         {value}
       </span>
