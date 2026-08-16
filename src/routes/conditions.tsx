@@ -13,13 +13,14 @@ export const Route = createFileRoute("/conditions")({
   }),
   head: () => ({
     meta: [
-      { title: "Diseases & Conditions — Dr. Naseem Ahmed Khan" },
+      { title: "Diseases & Conditions Treated in Karachi | Rahat Homeo Physio Clinic" },
       {
         name: "description",
         content:
-          "Learn about the diseases and conditions treated by Dr. Naseem Ahmed Khan with homeopathy and physiotherapy.",
+          "Learn about the diseases and conditions treated with homeopathy and physiotherapy by Dr. Naseem Ahmed Khan at Rahat Homeo Physio Clinic in Karachi.",
       },
     ],
+    links: [{ rel: "canonical", href: "https://rahathomeophysioclinic.com/conditions" }],
   }),
   component: ConditionsPage,
 });

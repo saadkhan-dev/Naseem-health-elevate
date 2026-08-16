@@ -12,6 +12,9 @@ import { formatTimeDisplay } from "@/lib/bookings";
 const JOIN_TIMEOUT_MS = 20000;
 
 export const Route = createFileRoute("/video/$vcNo")({
+  head: () => ({
+    meta: [{ name: "robots", content: "noindex, nofollow" }],
+  }),
   validateSearch: z.object({
     /** "doctor" opens the call in doctor mode (session completion reporting). */
     as: z.string().optional(),

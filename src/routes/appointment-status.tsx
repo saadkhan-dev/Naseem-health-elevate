@@ -28,13 +28,14 @@ export const Route = createFileRoute("/appointment-status")({
   }),
   head: () => ({
     meta: [
-      { title: "Check Appointment Status — Dr. Naseem Ahmed Khan" },
+      { title: "Check Appointment Status | Rahat Homeo Physio Clinic Karachi" },
       {
         name: "description",
         content:
-          "Check the status of your appointment with Dr. Naseem Ahmed Khan using your Appointment ID and phone number or email. Forgot your ID? Find your appointment with the details you used when booking.",
+          "Check your appointment status at Rahat Homeo Physio Clinic in Karachi using your Appointment ID and phone or email. Verify video consultation payments and upload receipts.",
       },
     ],
+    links: [{ rel: "canonical", href: "https://rahathomeophysioclinic.com/appointment-status" }],
   }),
   component: AppointmentStatusPage,
 });

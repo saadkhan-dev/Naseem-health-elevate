@@ -16,6 +16,9 @@ import { Nav } from "@/components/site/Nav";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
 export const Route = createFileRoute("/patient")({
+  head: () => ({
+    meta: [{ name: "robots", content: "noindex, nofollow" }],
+  }),
   component: PatientLayout,
 });
 

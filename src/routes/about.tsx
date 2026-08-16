@@ -8,13 +8,33 @@ import { QueryError } from "@/components/admin/QueryError";
 export const Route = createFileRoute("/about")({
   head: () => ({
     meta: [
-      { title: "About — Dr. Naseem Ahmed Khan" },
+      {
+        title: "About Dr. Naseem Ahmed Khan | Homeopath & Physiotherapist in Karachi",
+      },
       {
         name: "description",
         content:
-          "Meet Dr. Naseem Ahmed Khan, homeopath and physiotherapist in Karachi, and learn about his approach to natural, patient-centred care.",
+          "Meet Dr. Naseem Ahmed Khan, homeopath and physiotherapist at Rahat Homeo Physio Clinic in Karachi, and learn about his education, experience and patient-centred approach.",
+      },
+      {
+        "script:ld+json": {
+          "@context": "https://schema.org",
+          "@type": "Person",
+          "@id": "https://rahathomeophysioclinic.com/#doctor",
+          name: "Dr. Naseem Ahmed Khan",
+          jobTitle: "Homeopath & Physiotherapist",
+          url: "https://rahathomeophysioclinic.com/about",
+          telephone: "+92 315 2968384",
+          email: "rahatphysio9@gmail.com",
+          worksFor: {
+            "@type": "MedicalClinic",
+            name: "Rahat Homeo Physio Clinic",
+            url: "https://rahathomeophysioclinic.com/",
+          },
+        },
       },
     ],
+    links: [{ rel: "canonical", href: "https://rahathomeophysioclinic.com/about" }],
   }),
   component: AboutPage,
 });

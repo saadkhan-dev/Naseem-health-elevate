@@ -76,27 +76,29 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Naseem Health Elevate | Dr. Naseem Ahmed" },
+      { title: "Rahat Homeo Physio Clinic | Homeopathic & Physiotherapy Care in Karachi" },
       {
         name: "description",
         content:
-          "Naseem Health Elevate by Dr. Naseem Ahmed provides expert homeopathic and physiotherapy care, online appointments, video consultations, and personalized healthcare services in Karachi.",
+          "Rahat Homeo Physio Clinic in Karachi — homeopathic and physiotherapy care by Dr. Naseem Ahmed Khan. Book appointments, video consultations and personalized treatment online.",
       },
-      { name: "author", content: "Dr. Naseem Ahmed" },
-      { property: "og:title", content: "Naseem Health Elevate | Dr. Naseem Ahmed" },
+      { name: "author", content: "Dr. Naseem Ahmed Khan" },
+      {
+        property: "og:title",
+        content: "Rahat Homeo Physio Clinic | Homeopathic & Physiotherapy Care in Karachi",
+      },
       {
         property: "og:description",
         content:
-          "Naseem Health Elevate by Dr. Naseem Ahmed provides expert homeopathic and physiotherapy care, online appointments, video consultations, and personalized healthcare services in Karachi.",
+          "Rahat Homeo Physio Clinic in Karachi — homeopathic and physiotherapy care by Dr. Naseem Ahmed Khan. Book appointments, video consultations and personalized treatment online.",
       },
       { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
-      { name: "twitter:title", content: "Naseem Health Elevate" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Rahat Homeo Physio Clinic | Karachi" },
       {
         name: "twitter:description",
         content:
-          "Naseem Health Elevate by Dr. Naseem Ahmed provides expert homeopathic and physiotherapy care, online appointments, video consultations, and personalized healthcare services in Karachi.",
+          "Homeopathic and physiotherapy care in Karachi by Dr. Naseem Ahmed Khan. Book appointments and video consultations online.",
       },
       {
         property: "og:image",
@@ -117,6 +119,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Fraunces:ital,wght@0,500;0,600;0,700;1,500&display=swap",
       },
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
     ],
   }),
   shellComponent: RootShell,

@@ -43,13 +43,14 @@ export const Route = createFileRoute("/booking")({
   }),
   head: () => ({
     meta: [
-      { title: "Book a Slot — Dr. Naseem Ahmed Khan" },
+      { title: "Book an Appointment Online in Karachi | Rahat Homeo Physio Clinic" },
       {
         name: "description",
         content:
-          "Check live availability and book your appointment slot with Dr. Naseem Ahmed Khan in Karachi.",
+          "Check live availability and book an appointment or video consultation with Dr. Naseem Ahmed Khan at Rahat Homeo Physio Clinic in Karachi.",
       },
     ],
+    links: [{ rel: "canonical", href: "https://rahathomeophysioclinic.com/booking" }],
   }),
   component: BookingPage,
 });

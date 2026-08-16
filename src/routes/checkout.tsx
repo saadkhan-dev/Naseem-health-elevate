@@ -18,8 +18,8 @@ import type { Product } from "@/lib/admin-data";
 export const Route = createFileRoute("/checkout")({
   head: () => ({
     meta: [
-      { title: "Checkout — Dr. Naseem Ahmed Khan" },
-      { name: "description", content: "Complete your product order and payment." },
+      { name: "robots", content: "noindex, nofollow" },
+      { title: "Checkout | Rahat Homeo Physio Clinic" },
     ],
   }),
   component: CheckoutPage,

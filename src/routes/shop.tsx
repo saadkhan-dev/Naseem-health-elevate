@@ -19,9 +19,14 @@ import type { Product } from "@/lib/admin-data";
 export const Route = createFileRoute("/shop")({
   head: () => ({
     meta: [
-      { title: "Shop Products — Dr. Naseem Ahmed Khan" },
-      { name: "description", content: "Browse and order homeopathic products online." },
+      { title: "Homeopathic Products Shop in Karachi | Rahat Homeo Physio Clinic" },
+      {
+        name: "description",
+        content:
+          "Shop homeopathic medicines and health products online from Rahat Homeo Physio Clinic in Karachi. Safe, natural products for better health.",
+      },
     ],
+    links: [{ rel: "canonical", href: "https://rahathomeophysioclinic.com/shop" }],
   }),
   component: ShopPage,
 });

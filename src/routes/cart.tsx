@@ -12,8 +12,8 @@ import type { Product } from "@/lib/admin-data";
 export const Route = createFileRoute("/cart")({
   head: () => ({
     meta: [
-      { title: "Your Cart — Dr. Naseem Ahmed Khan" },
-      { name: "description", content: "Review your cart and proceed to checkout." },
+      { name: "robots", content: "noindex, nofollow" },
+      { title: "Your Cart | Rahat Homeo Physio Clinic" },
     ],
   }),
   component: CartPage,

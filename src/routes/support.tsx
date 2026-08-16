@@ -11,13 +11,14 @@ import { useSubmitSupportMessage } from "@/hooks/queries/useSiteExtra";
 export const Route = createFileRoute("/support")({
   head: () => ({
     meta: [
-      { title: "Contact & Support — Dr. Naseem Ahmed Khan" },
+      { title: "Contact & Support | Rahat Homeo Physio Clinic Karachi" },
       {
         name: "description",
         content:
-          "Get in touch with Dr. Naseem Ahmed Khan's clinic for appointments, orders or any questions.",
+          "Get in touch with Rahat Homeo Physio Clinic in Karachi for appointments, orders, video consultations or any questions.",
       },
     ],
+    links: [{ rel: "canonical", href: "https://rahathomeophysioclinic.com/support" }],
   }),
   component: SupportPage,
 });

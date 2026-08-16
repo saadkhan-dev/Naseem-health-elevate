@@ -37,8 +37,12 @@ import {
 export const Route = createFileRoute("/product/$productId")({
   head: () => ({
     meta: [
-      { title: "Product — Dr. Naseem Ahmed Khan" },
-      { name: "description", content: "View product details and order online." },
+      { title: "Homeopathic Products in Karachi | Rahat Homeo Physio Clinic" },
+      {
+        name: "description",
+        content:
+          "View homeopathic product details, prices and availability, and order online from Rahat Homeo Physio Clinic in Karachi.",
+      },
     ],
   }),
   component: ProductDetail,

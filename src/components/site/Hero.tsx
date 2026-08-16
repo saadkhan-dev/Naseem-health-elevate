@@ -7,7 +7,7 @@ import {
   Award,
   Stethoscope,
 } from "lucide-react";
-import homeSectionImg from "@/assets/home-section.jpg";
+import homeSectionImg from "@/assets/home-section.webp";
 import { SectionLink } from "@/components/site/SectionLink";
 
 export function Hero() {

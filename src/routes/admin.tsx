@@ -24,6 +24,9 @@ import { staffSupabase } from "@/lib/supabase";
 import { useStaffAuth } from "@/hooks/useStaffAuth";
 
 export const Route = createFileRoute("/admin")({
+  head: () => ({
+    meta: [{ name: "robots", content: "noindex, nofollow" }],
+  }),
   component: AdminLayout,
 });
 

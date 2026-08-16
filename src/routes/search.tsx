@@ -9,10 +9,11 @@ import { useSearch } from "@/hooks/queries/useSiteExtra";
 export const Route = createFileRoute("/search")({
   head: () => ({
     meta: [
-      { title: "Search Products — Dr. Naseem Ahmed Khan" },
+      { name: "robots", content: "noindex, nofollow" },
+      { title: "Search | Rahat Homeo Physio Clinic" },
       {
         name: "description",
-        content: "Search the products available at Dr. Naseem Ahmed Khan's clinic.",
+        content: "Search the products and services at Rahat Homeo Physio Clinic in Karachi.",
       },
     ],
   }),

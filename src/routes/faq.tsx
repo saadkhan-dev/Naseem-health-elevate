@@ -8,13 +8,14 @@ import { QueryError } from "@/components/admin/QueryError";
 export const Route = createFileRoute("/faq")({
   head: () => ({
     meta: [
-      { title: "FAQ — Dr. Naseem Ahmed Khan" },
+      { title: "Frequently Asked Questions | Rahat Homeo Physio Clinic Karachi" },
       {
         name: "description",
         content:
-          "Answers to common questions about appointments, video consultations, payments and more with Dr. Naseem Ahmed Khan.",
+          "Answers to common questions about appointments, video consultations, payments and services at Rahat Homeo Physio Clinic in Karachi.",
       },
     ],
+    links: [{ rel: "canonical", href: "https://rahathomeophysioclinic.com/faq" }],
   }),
   component: FaqPage,
 });
