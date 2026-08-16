@@ -33,18 +33,48 @@ import {
   isProductOfferActive,
   isProductOrderable,
 } from "@/lib/product-offer-types";
+import { getProductById } from "@/lib/admin-data";
 
 export const Route = createFileRoute("/product/$productId")({
-  head: () => ({
-    meta: [
-      { title: "Homeopathic Products in Karachi | Rahat Homeo Physio Clinic" },
-      {
-        name: "description",
-        content:
-          "View homeopathic product details, prices and availability, and order online from Rahat Homeo Physio Clinic in Karachi.",
-      },
-    ],
-  }),
+  head: async ({ params }) => {
+    let productName: string | null = null;
+    let productDesc: string | null = null;
+    let productImage: string | null = null;
+    try {
+      const product = await getProductById(params.productId);
+      productName = product?.name ?? null;
+      productDesc = product?.description ?? null;
+      productImage = product?.image_url ?? null;
+    } catch {
+      // Fall back to the generic title below if the product lookup fails.
+    }
+    const title = productName
+      ? `${productName} | Buy Online in Karachi | Rahat Homeo Physio Clinic`
+      : "Homeopathic Products in Karachi | Rahat Homeo Physio Clinic";
+    const description = productDesc
+      ? `${productDesc} Order ${productName} online from Rahat Homeo Physio Clinic in Karachi with home delivery.`
+      : "View homeopathic product details, prices and availability, and order online from Rahat Homeo Physio Clinic in Karachi.";
+
+    return {
+      meta: [
+        { title },
+        { name: "description", content: description },
+        { property: "og:title", content: title },
+        { property: "og:description", content: description },
+        ...(productImage ? [{ property: "og:image", content: productImage }] : []),
+        { property: "og:type", content: "product" },
+        { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:title", content: title },
+        { name: "twitter:description", content: description },
+      ],
+      links: [
+        {
+          rel: "canonical",
+          href: `https://rahathomeophysioclinic.com/product/${params.productId}`,
+        },
+      ],
+    };
+  },
   component: ProductDetail,
 });
 

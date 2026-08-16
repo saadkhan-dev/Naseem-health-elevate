@@ -2,11 +2,10 @@ import { Facebook, Instagram, MessageCircle, Phone, Mail, MapPin, Stethoscope } 
 import { Link } from "@tanstack/react-router";
 import { PHONE, EMAIL, telUrl, whatsappUrl } from "@/lib/contact";
 import { SectionLink } from "@/components/site/SectionLink";
-import { useFooterClearance } from "@/hooks/useFooterClearance";
+import { useFloatingControls } from "@/hooks/useFloatingControls";
 
 export function SiteFooter() {
-  const { clearance, hidden } = useFooterClearance();
-  const whatsappBottom = `calc(${clearance}px + 1.25rem)`;
+  const { hidden } = useFloatingControls();
   return (
     <footer className="bg-[color:var(--footer)] text-[color:var(--footer-foreground)]">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 md:grid-cols-2 md:px-8 lg:grid-cols-5">
@@ -135,17 +134,18 @@ export function SiteFooter() {
         rel="noreferrer"
         aria-label="Chat on WhatsApp"
         data-floating-control="true"
-        className={`group fixed right-5 z-50 flex items-center gap-3 rounded-full bg-[color:var(--whatsapp)] py-2 pl-2 pr-5 text-white shadow-soft transition-[transform,box-shadow,opacity] duration-300 hover:-translate-y-1 hover:shadow-glass active:scale-95 ${
+        className={`group fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] z-50 flex items-center gap-2 rounded-full bg-[color:var(--whatsapp)] py-1 pl-1 pr-3 text-white shadow-soft transition-[transform,box-shadow,opacity] duration-300 hover:-translate-y-1 hover:shadow-glass active:scale-95 sm:right-5 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] sm:gap-3 sm:py-2 sm:pl-2 sm:pr-5 ${
           hidden ? "pointer-events-none opacity-0" : ""
         }`}
-        style={{ bottom: whatsappBottom }}
       >
-        <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20 shadow-inner transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105">
-          <MessageCircle className="h-5 w-5" />
+        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 shadow-inner transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105 sm:h-10 sm:w-10">
+          <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5" />
         </span>
         <span className="text-left leading-tight">
-          <span className="block font-display text-sm font-semibold">WhatsApp</span>
-          <span className="block text-[11px] text-white/85">Chat with us</span>
+          <span className="block font-display text-xs font-semibold sm:text-sm">WhatsApp</span>
+          <span className="hidden text-[10px] text-white/85 sm:block sm:text-[11px]">
+            Chat with us
+          </span>
         </span>
       </a>
     </footer>

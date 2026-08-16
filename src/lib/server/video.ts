@@ -55,7 +55,3 @@ export async function updateVideoSessionStatus(
   const { error } = await supabase.from("video_sessions").update(updates).eq("id", sessionId);
   return { error: error?.message ?? null };
 }
-
-export function getJitsiUrl(roomName: string, userName: string): string {
-  return `https://meet.jit.si/${encodeURIComponent(roomName)}#config.subject=${encodeURIComponent("Dr. Naseem Ahmed Khan - Video Consultation")}&userInfo.displayName=${encodeURIComponent(userName)}`;
-}

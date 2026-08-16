@@ -83,7 +83,3 @@ export interface VideoJoinResult {
 export async function getVideoJoinByVcNo(vcNo: string): Promise<VideoJoinResult> {
   return getVideoJoinByVcNoServer({ data: { vcNo } });
 }
-
-export function getJitsiUrl(roomName: string, userName: string): string {
-  return `https://meet.jit.si/${encodeURIComponent(roomName)}#config.subject=${encodeURIComponent("Dr. Naseem Ahmed Khan - Video Consultation")}&userInfo.displayName=${encodeURIComponent(userName)}`;
-}

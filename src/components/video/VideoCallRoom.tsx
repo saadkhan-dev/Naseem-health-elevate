@@ -16,6 +16,9 @@ declare global {
   }
 }
 
+/** If no conference event arrives within this window, show a distinct timeout message. */
+const CONNECT_TIMEOUT_MS = 30000;
+
 interface VideoCallRoomProps {
   roomName: string;
   /**
@@ -91,6 +94,8 @@ export function VideoCallRoom({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [connectError, setConnectError] = useState(false);
+  const [connectTimedOut, setConnectTimedOut] = useState(false);
+  const [permissionError, setPermissionError] = useState(false);
   const [timeLeft, setTimeLeft] = useState(durationMinutes * 60);
   const [ended, setEnded] = useState(false);
   const [captions, setCaptions] = useState(captionsEnabled);
@@ -105,6 +110,8 @@ export function VideoCallRoom({
     setLoading(true);
     setLoadError(false);
     setConnectError(false);
+    setConnectTimedOut(false);
+    setPermissionError(false);
     joinedReportedRef.current = false;
     leftReportedRef.current = false;
     startTimeRef.current = Date.now();
@@ -168,6 +175,8 @@ export function VideoCallRoom({
         api.addListener("videoConferenceJoined", () => {
           setLoading(false);
           setConnectError(false);
+          setConnectTimedOut(false);
+          setPermissionError(false);
           if (connectTimeout) window.clearTimeout(connectTimeout);
           if (!joinedReportedRef.current && onConferenceJoinedRef.current) {
             joinedReportedRef.current = true;
@@ -185,6 +194,15 @@ export function VideoCallRoom({
         api.addListener("conferenceFailed", handleError);
         api.addListener("connectionFailed", handleError);
 
+        // Camera/mic failure (e.g. the browser blocked permission) is a
+        // different problem from a broken connection — tell the user what to fix.
+        const handleMediaError = () => {
+          setLoading(false);
+          setPermissionError(true);
+        };
+        api.addListener("micError", handleMediaError);
+        api.addListener("cameraError", handleMediaError);
+
         const handleLeft = () => {
           setLoading(false);
           if (connectTimeout) window.clearTimeout(connectTimeout);
@@ -199,14 +217,16 @@ export function VideoCallRoom({
         // Fallback so the spinner never hangs if no conference event fires.
         fallback = window.setTimeout(() => setLoading(false), 8000);
 
-        // Give the meeting time to establish; if nothing joins within 45s show a
-        // visible error + Retry instead of a silent black room.
+        // Give the meeting time to establish; if nothing joins within the
+        // timeout show a visible timeout message + Try Again instead of a
+        // silent black room. Kept separate from a hard connection error so the
+        // user knows the provider simply may be slow/unreachable right now.
         connectTimeout = window.setTimeout(() => {
           if (!joinedReportedRef.current) {
             setLoading(false);
-            setConnectError(true);
+            setConnectTimedOut(true);
           }
-        }, 45000);
+        }, CONNECT_TIMEOUT_MS);
       })
       .catch(() => {
         if (!disposed) setLoadError(true);
@@ -277,7 +297,7 @@ export function VideoCallRoom({
 
   return (
     <div className="relative flex h-full flex-col">
-      {loading && !loadError && !connectError && (
+      {loading && !loadError && !connectError && !connectTimedOut && !permissionError && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-background">
           <div className="text-center">
             <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
@@ -309,7 +329,52 @@ export function VideoCallRoom({
         </div>
       )}
 
-      {connectError && !loadError && (
+      {connectTimedOut && !loadError && !permissionError && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background p-8 text-center">
+          <div className="max-w-sm">
+            <AlertTriangle className="mx-auto h-8 w-8 text-amber-500" />
+            <h2 className="mt-4 text-xl font-semibold text-foreground">Still connecting</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              The video call is taking longer than expected to connect. Check your internet
+              connection and try again.
+            </p>
+            <div className="mt-6 flex justify-center gap-3">
+              <Button onClick={() => setRetryKey((k) => k + 1)} className="gap-1.5">
+                <Loader2 className="h-4 w-4" /> Try Again
+              </Button>
+              <Button variant="outline" onClick={handleLeave}>
+                Go Back
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {permissionError && !loadError && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background p-8 text-center">
+          <div className="max-w-sm">
+            <AlertTriangle className="mx-auto h-8 w-8 text-amber-500" />
+            <h2 className="mt-4 text-xl font-semibold text-foreground">
+              Camera or microphone blocked
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              To join the call, allow your browser to use the camera and microphone, then click Try
+              Again. If you previously blocked access, change it in your browser's site settings.
+              Make sure no other app is using the camera or microphone.
+            </p>
+            <div className="mt-6 flex justify-center gap-3">
+              <Button onClick={() => setRetryKey((k) => k + 1)} className="gap-1.5">
+                <Loader2 className="h-4 w-4" /> Try Again
+              </Button>
+              <Button variant="outline" onClick={handleLeave}>
+                Go Back
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {connectError && !loadError && !permissionError && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-background p-8 text-center">
           <div className="max-w-sm">
             <AlertTriangle className="mx-auto h-8 w-8 text-red-600" />

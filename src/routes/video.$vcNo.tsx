@@ -164,7 +164,7 @@ function VideoCallPage() {
 
   if (joined) {
     return (
-      <div className="flex h-screen flex-col bg-black">
+      <div className="flex h-[100dvh] flex-col bg-black">
         <VideoCallRoom
           roomName={session.roomName}
           domain={session.jitsiDomain}

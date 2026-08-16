@@ -28,9 +28,9 @@ export function Hero() {
             Rahat Homeopathic & <span className="text-primary">Physiotherapy Clinic</span>{" "}
           </h1>
 
-          <h3 className="mt-2 text-3xl font-bold text-[#ff0000] italic">
+          <h2 className="mt-2 text-3xl font-bold text-[#ff0000] italic">
             Healing Naturally, Living Better.
-          </h3>
+          </h2>
           <p className="mt-4 max-w-xl text-base text-muted-foreground md:text-lg">
             Natural healing. Pain relief. Better health. Personalized, patient-first care from Dr.
             Naseem Ahmed Khan — for you and your family.

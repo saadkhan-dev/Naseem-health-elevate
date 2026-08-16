@@ -103,6 +103,19 @@ Features include:
 - Admin **Copy Link** functionality
 - Notification support for video consultation links
 
+### Jitsi Meet instance
+
+Video rooms use the public `meet.jit.si` instance by default. If it is unreachable from your
+region (it is sometimes blocked or overloaded), point the call at a reliable instance with the
+server-only `JITSI_DOMAIN` env var (e.g. a self-hosted Jitsi server):
+
+```
+JITSI_DOMAIN=meet.your-domain.com
+```
+
+This value is read on the server only and returned to the join page through the server function —
+it is never exposed as a `VITE_*` variable.
+
 Video Consultation is intentionally **not shown as a normal service inside the regular Book Appointment dropdown**.
 
 ---
