@@ -227,15 +227,25 @@ function ProductDetail() {
                   </p>
                 )}
 
-                {typeof product.stock_quantity === "number" && (
+                {product && (
                   <div
-                    className={`mt-3 text-[13px] font-medium sm:text-xs ${
-                      product.stock_quantity > 0 ? "text-emerald-600" : "text-destructive"
+                    className={`mt-3 inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-full px-3 py-1 text-[13px] font-semibold sm:text-xs ${
+                      isProductOrderable(product)
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-red-50 text-red-600"
                     }`}
                   >
-                    {product.stock_quantity > 0
-                      ? `${product.stock_quantity} in stock`
-                      : "Currently out of stock"}
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        isProductOrderable(product) ? "bg-emerald-500" : "bg-red-500"
+                      }`}
+                    />
+                    {isProductOrderable(product) ? "In Stock" : "Out of Stock"}
+                    {isProductOrderable(product) && typeof product.stock_quantity === "number" && (
+                      <span className="text-emerald-700/70">
+                        · {product.stock_quantity} available
+                      </span>
+                    )}
                   </div>
                 )}
 
