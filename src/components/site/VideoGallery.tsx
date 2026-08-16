@@ -12,7 +12,7 @@ export function VideoGallery() {
             <h3 className="font-display text-2xl font-bold text-red-600">
               Health Awareness Videos
             </h3>
-            <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground lg:mx-0">
+            <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-muted-foreground sm:text-sm lg:mx-0">
               Informative videos by Dr. Naseem Ahmed Khan on health, fitness & natural healing.
             </p>
           </div>
@@ -60,7 +60,7 @@ export function VideoGallery() {
                       </span>
                     )}
                   </div>
-                  <div className="mt-2.5 text-xs font-medium leading-snug text-foreground transition-colors duration-300 group-hover:text-primary">
+                  <div className="mt-2.5 text-[13px] font-medium leading-snug text-foreground transition-colors duration-300 group-hover:text-primary sm:text-xs">
                     {v.title}
                   </div>
                 </a>

@@ -32,10 +32,10 @@ export function ConsultationProducts() {
           <div className="grid items-center gap-5 sm:grid-cols-2">
             <div className="text-center sm:text-left">
               <h3 className="font-display text-2xl font-bold text-red-600">Video Consultation</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
+              <p className="mt-2 text-[15px] text-muted-foreground sm:text-sm">
                 Consult with Dr. Naseem Ahmed Khan from the comfort of your home.
               </p>
-              <ul className="mt-4 space-y-2 text-sm text-left">
+              <ul className="mt-4 space-y-2 text-[15px] text-left sm:text-sm">
                 {[
                   "Secure & private sessions",
                   "One-on-one video consultation",
@@ -51,7 +51,7 @@ export function ConsultationProducts() {
               <Link
                 to="/booking"
                 search={{ mode: "video" }}
-                className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:brightness-[1.05] hover:shadow-soft active:scale-95"
+                className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary px-5 py-2.5 text-[15px] font-semibold text-primary-foreground shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:brightness-[1.05] hover:shadow-soft active:scale-95 sm:text-sm"
               >
                 <Video className="h-4 w-4" /> Consult Now
               </Link>
@@ -83,13 +83,13 @@ export function ConsultationProducts() {
               <h3 className="font-display text-2xl font-bold text-red-600">
                 Our Homeopathic Products
               </h3>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-[15px] text-muted-foreground sm:text-sm">
                 Safe, natural & effective products for better health.
               </p>
             </div>
             <Link
               to="/shop"
-              className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80"
+              className="inline-flex shrink-0 items-center gap-1 text-[15px] font-semibold text-primary transition-colors hover:text-primary/80 sm:text-sm"
             >
               View all <ArrowRight className="h-4 w-4" />
             </Link>
@@ -126,14 +126,16 @@ export function ConsultationProducts() {
                     )}
                   </div>
                   <div className="mt-3">
-                    <div className="text-sm font-semibold text-foreground transition-colors duration-300 group-hover:text-primary">
+                    <div className="text-[15px] font-semibold text-foreground transition-colors duration-300 group-hover:text-primary sm:text-sm">
                       {p.name}
                     </div>
                     {p.description && (
-                      <div className="text-xs text-muted-foreground">{p.description}</div>
+                      <div className="text-[13px] leading-relaxed text-muted-foreground sm:text-xs">
+                        {p.description}
+                      </div>
                     )}
                     <div className="mt-1 flex items-baseline gap-2">
-                      <div className="text-sm font-bold text-primary">
+                      <div className="text-[15px] font-bold text-primary sm:text-sm">
                         Rs. {productEffectivePrice(p, today).toLocaleString()}
                       </div>
                       {isProductOfferActive(p, today) && (
@@ -143,7 +145,7 @@ export function ConsultationProducts() {
                       )}
                     </div>
                     {productOfferLabel(p) && (
-                      <div className="mt-1 inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600">
+                      <div className="mt-1 inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600 sm:text-[10px]">
                         {productOfferLabel(p)}
                       </div>
                     )}
@@ -155,12 +157,12 @@ export function ConsultationProducts() {
                           e.stopPropagation();
                           cart.add(p.id, 1);
                         }}
-                        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary-soft py-2 text-xs font-semibold text-primary transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary hover:text-primary-foreground hover:shadow-sm active:scale-95"
+                        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary-soft py-2 text-[13px] font-semibold text-primary transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary hover:text-primary-foreground hover:shadow-sm active:scale-95 sm:text-xs"
                       >
                         <ShoppingCart className="h-3.5 w-3.5" /> Add to Cart
                       </button>
                     ) : (
-                      <div className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-muted py-2 text-xs font-semibold text-muted-foreground">
+                      <div className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-muted py-2 text-[13px] font-semibold text-muted-foreground sm:text-xs">
                         <Ban className="h-3.5 w-3.5" /> Out of stock
                       </div>
                     )}

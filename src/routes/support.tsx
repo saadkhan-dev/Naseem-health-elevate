@@ -64,7 +64,7 @@ function SupportPage() {
             </div>
             <div>
               <h1 className="font-display text-3xl font-bold text-foreground">Contact & Support</h1>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-[15px] text-muted-foreground sm:text-sm">
                 Send us a message and we'll get back to you
               </p>
             </div>
@@ -74,7 +74,7 @@ function SupportPage() {
             <div className="mt-8 flex flex-col items-center gap-3 rounded-3xl border border-green-200 bg-green-50 p-10 text-center">
               <CheckCircle2 className="h-10 w-10 text-green-600" />
               <p className="font-semibold text-foreground">Message received!</p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-[15px] text-muted-foreground sm:text-sm">
                 Thank you for contacting us. We'll reply as soon as possible.
               </p>
             </div>
@@ -82,7 +82,9 @@ function SupportPage() {
             <div className="mt-8 rounded-3xl border border-border bg-card p-6 shadow-soft">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="text-sm font-medium text-foreground">Your Name</label>
+                  <label className="text-[15px] font-medium text-foreground sm:text-sm">
+                    Your Name
+                  </label>
                   <Input
                     className="mt-1"
                     value={form.name}
@@ -91,7 +93,9 @@ function SupportPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-foreground">Email (optional)</label>
+                  <label className="text-[15px] font-medium text-foreground sm:text-sm">
+                    Email (optional)
+                  </label>
                   <Input
                     type="email"
                     className="mt-1"
@@ -101,7 +105,9 @@ function SupportPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-foreground">Phone (optional)</label>
+                  <label className="text-[15px] font-medium text-foreground sm:text-sm">
+                    Phone (optional)
+                  </label>
                   <Input
                     className="mt-1"
                     value={form.phone}
@@ -110,7 +116,9 @@ function SupportPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-foreground">Subject (optional)</label>
+                  <label className="text-[15px] font-medium text-foreground sm:text-sm">
+                    Subject (optional)
+                  </label>
                   <Input
                     className="mt-1"
                     value={form.subject}
@@ -119,7 +127,9 @@ function SupportPage() {
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="text-sm font-medium text-foreground">Message</label>
+                  <label className="text-[15px] font-medium text-foreground sm:text-sm">
+                    Message
+                  </label>
                   <Textarea
                     className="mt-1"
                     rows={5}
@@ -130,7 +140,9 @@ function SupportPage() {
                 </div>
               </div>
               {formError && (
-                <p className="mt-3 text-sm font-medium text-destructive">{formError}</p>
+                <p className="mt-3 text-[15px] font-medium text-destructive sm:text-sm">
+                  {formError}
+                </p>
               )}
               <Button
                 onClick={handleSubmit}

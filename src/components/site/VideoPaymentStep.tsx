@@ -200,7 +200,7 @@ export function VideoPaymentStep({
   }
 
   const bookingRows = (
-    <div className="mx-auto mt-3 w-full max-w-sm space-y-2 rounded-xl bg-muted p-4 text-left text-sm">
+    <div className="mx-auto mt-3 w-full max-w-sm space-y-2 rounded-xl bg-muted p-4 text-left text-[15px] sm:text-sm">
       <Row label="Appointment ID" value={appointmentNo ?? "—"} mono />
       <Row label="Patient" value={patientName} />
       <Row label="Date" value={format(date, "EEEE, MMMM d, yyyy")} />
@@ -218,19 +218,19 @@ export function VideoPaymentStep({
           No Payment Needed — Your Consultation is FREE
         </h3>
         {offerTitle ? (
-          <p className="mt-2 max-w-md text-sm text-muted-foreground">
+          <p className="mt-2 max-w-md text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
             <span className="font-semibold text-foreground">{offerTitle}</span> covered the full
             consultation fee.
           </p>
         ) : (
-          <p className="mt-2 max-w-md text-sm text-muted-foreground">
+          <p className="mt-2 max-w-md text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
             Your consultation fee was fully covered. Nothing to pay.
           </p>
         )}
 
         {bookingRows}
 
-        <p className="mt-4 max-w-sm text-xs text-muted-foreground">
+        <p className="mt-4 max-w-sm text-[13px] leading-relaxed text-muted-foreground sm:text-xs">
           The clinic will confirm your appointment and unlock the video call. You'll be able to join
           with your Video Consultation ID once confirmed.
         </p>
@@ -251,7 +251,7 @@ export function VideoPaymentStep({
         <h3 className="mt-4 font-display text-xl font-semibold text-foreground">
           Payment Submitted for Verification
         </h3>
-        <p className="mt-2 max-w-md text-sm text-muted-foreground">
+        <p className="mt-2 max-w-md text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
           Thank you! The clinic will verify your payment of{" "}
           <span className="font-semibold text-foreground">Rs. {amount}</span> manually. Your video
           consultation stays locked until then — you'll be able to join once it's marked{" "}
@@ -261,7 +261,7 @@ export function VideoPaymentStep({
           .
         </p>
 
-        <div className="mt-5 w-full max-w-sm space-y-2 rounded-xl bg-muted p-4 text-left text-sm">
+        <div className="mt-5 w-full max-w-sm space-y-2 rounded-xl bg-muted p-4 text-left text-[15px] sm:text-sm">
           <Row label="Appointment ID" value={appointmentNo ?? "—"} mono />
           <Row label="Patient" value={patientName} />
           <Row label="Service" value="Online Video Consultation" />
@@ -271,7 +271,7 @@ export function VideoPaymentStep({
           <Row label="Payment status" value={PAYMENT_STATUS_LABELS.payment_submitted} />
         </div>
 
-        <p className="mt-4 max-w-sm text-xs text-muted-foreground">
+        <p className="mt-4 max-w-sm text-[13px] leading-relaxed text-muted-foreground sm:text-xs">
           Once verified, use the video consultation link you were sent (or ask the clinic for it) to
           join the call with your Video Consultation ID.
         </p>
@@ -292,12 +292,12 @@ export function VideoPaymentStep({
         <h3 className="mt-4 font-display text-xl font-semibold text-foreground">
           Complete Your Prepaid Payment
         </h3>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-[15px] text-muted-foreground sm:text-sm">
           Online Video Consultation —{" "}
           <span className="font-bold text-foreground">Rs. {amount}</span>
         </p>
         {offerTitle && (
-          <div className="mx-auto mt-3 flex max-w-sm items-start gap-2 rounded-xl border border-primary/30 bg-primary-soft px-3 py-2 text-left text-xs text-primary">
+          <div className="mx-auto mt-3 flex max-w-sm items-start gap-2 rounded-xl border border-primary/30 bg-primary-soft px-3 py-2 text-left text-[13px] text-primary sm:text-xs">
             <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>
               Offer applied: <span className="font-semibold">{offerTitle}</span> — you pay{" "}
@@ -309,7 +309,9 @@ export function VideoPaymentStep({
       </div>
 
       <div className="mx-auto mt-6 w-full max-w-md">
-        <div className="text-sm font-semibold text-foreground">Payment Verification</div>
+        <div className="text-[15px] font-semibold text-foreground sm:text-sm">
+          Payment Verification
+        </div>
         <div className="mt-2 grid grid-cols-1 gap-2 rounded-2xl bg-muted p-1 min-[400px]:grid-cols-2">
           <button
             type="button"
@@ -321,7 +323,7 @@ export function VideoPaymentStep({
             }`}
           >
             <div className="text-[11px] font-semibold">Option 1</div>
-            <div className="text-sm font-medium">Enter Transaction ID</div>
+            <div className="text-[15px] font-medium sm:text-sm">Enter Transaction ID</div>
           </button>
           <button
             type="button"
@@ -333,22 +335,22 @@ export function VideoPaymentStep({
             }`}
           >
             <div className="text-[11px] font-semibold">Option 2</div>
-            <div className="text-sm font-medium">Upload Payment Receipt</div>
+            <div className="text-[15px] font-medium sm:text-sm">Upload Payment Receipt</div>
           </button>
         </div>
 
         {verificationMode === "transaction" ? (
           <>
-            <div className="mt-6 text-sm font-semibold text-foreground">
+            <div className="mt-6 text-[15px] font-semibold text-foreground sm:text-sm">
               1. Choose a payment method
             </div>
 
             {methodsLoading ? (
-              <div className="mt-2 flex items-center gap-2 py-4 text-sm text-muted-foreground">
+              <div className="mt-2 flex items-center gap-2 py-4 text-[15px] text-muted-foreground sm:text-sm">
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading payment methods...
               </div>
             ) : !methods || methods.length === 0 ? (
-              <div className="mt-2 rounded-xl border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
+              <div className="mt-2 rounded-xl border border-dashed border-border bg-background p-4 text-[15px] text-muted-foreground sm:text-sm">
                 Payment methods are being configured by the clinic. Please contact Dr. Naseem to
                 complete your payment.
               </div>
@@ -366,9 +368,13 @@ export function VideoPaymentStep({
                         : "border-border bg-background hover:bg-muted",
                     )}
                   >
-                    <div className="text-sm font-semibold text-foreground">{m.name}</div>
+                    <div className="text-[15px] font-semibold text-foreground sm:text-sm">
+                      {m.name}
+                    </div>
                     {m.description && (
-                      <div className="mt-0.5 text-xs text-muted-foreground">{m.description}</div>
+                      <div className="mt-0.5 text-[13px] leading-relaxed text-muted-foreground sm:text-xs">
+                        {m.description}
+                      </div>
                     )}
                   </button>
                 ))}
@@ -377,15 +383,17 @@ export function VideoPaymentStep({
 
             {selectedMethod &&
               (selectedMethod.instructions || hasMethodDetails(selectedMethod)) && (
-                <div className="mt-3 rounded-xl border border-dashed border-primary/40 bg-primary-soft/60 p-3 text-sm">
-                  <div className="text-xs font-semibold text-primary">Payment instructions</div>
+                <div className="mt-3 rounded-xl border border-dashed border-primary/40 bg-primary-soft/60 p-3 text-[15px] sm:text-sm">
+                  <div className="text-[13px] font-semibold text-primary sm:text-xs">
+                    Payment instructions
+                  </div>
                   {selectedMethod.instructions && (
-                    <div className="mt-1 whitespace-pre-wrap text-muted-foreground">
+                    <div className="mt-1 whitespace-pre-wrap leading-relaxed text-muted-foreground">
                       {selectedMethod.instructions}
                     </div>
                   )}
                   {hasMethodDetails(selectedMethod) && (
-                    <dl className="mt-2 space-y-1 text-xs">
+                    <dl className="mt-2 space-y-1 text-[13px] sm:text-xs">
                       {selectedMethod.account_holder_name && (
                         <DetailRow
                           label="Account holder"
@@ -409,12 +417,12 @@ export function VideoPaymentStep({
                 </div>
               )}
 
-            <div className="mt-6 text-sm font-semibold text-foreground">
+            <div className="mt-6 text-[15px] font-semibold text-foreground sm:text-sm">
               2. Enter your payment details
             </div>
             <div className="mt-2 space-y-3">
               <div>
-                <div className="mb-1.5 text-xs font-medium text-foreground">
+                <div className="mb-1.5 text-[13px] font-medium text-foreground sm:text-xs">
                   Transaction / Reference ID
                 </div>
                 <Input
@@ -425,7 +433,9 @@ export function VideoPaymentStep({
                 />
               </div>
               <div>
-                <div className="mb-1.5 text-xs font-medium text-foreground">Payer Name</div>
+                <div className="mb-1.5 text-[13px] font-medium text-foreground sm:text-xs">
+                  Payer Name
+                </div>
                 <Input
                   value={payerName}
                   onChange={(e) => setPayerName(e.target.value)}
@@ -435,9 +445,13 @@ export function VideoPaymentStep({
               </div>
             </div>
 
-            {formError && <p className="mt-3 text-sm font-medium text-destructive">{formError}</p>}
+            {formError && (
+              <p className="mt-3 text-[15px] font-medium text-destructive sm:text-sm">
+                {formError}
+              </p>
+            )}
 
-            <div className="mt-4 flex items-start gap-2 rounded-xl border border-border bg-background p-3 text-xs text-muted-foreground">
+            <div className="mt-4 flex items-start gap-2 rounded-xl border border-border bg-background p-3 text-[13px] leading-relaxed text-muted-foreground sm:text-xs">
               <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
               <p>
                 The clinic verifies prepaid payments manually before the video call is unlocked.
@@ -467,7 +481,7 @@ export function VideoPaymentStep({
             <button
               type="button"
               onClick={onClose}
-              className="mt-3 flex w-full items-center justify-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+              className="mt-3 flex w-full items-center justify-center gap-1.5 text-[15px] font-medium text-muted-foreground transition-colors hover:text-primary sm:text-sm"
             >
               <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Skip for now (book another)
             </button>
@@ -475,14 +489,16 @@ export function VideoPaymentStep({
         ) : (
           <form onSubmit={handleUploadReceipt} className="mt-6 space-y-4">
             <div>
-              <div className="text-sm font-semibold text-foreground">Choose a payment method</div>
+              <div className="text-[15px] font-semibold text-foreground sm:text-sm">
+                Choose a payment method
+              </div>
 
               {methodsLoading ? (
-                <div className="mt-2 flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                <div className="mt-2 flex items-center gap-2 py-4 text-[15px] text-muted-foreground sm:text-sm">
                   <Loader2 className="h-4 w-4 animate-spin" /> Loading payment methods...
                 </div>
               ) : !methods || methods.length === 0 ? (
-                <div className="mt-2 rounded-xl border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
+                <div className="mt-2 rounded-xl border border-dashed border-border bg-background p-4 text-[15px] text-muted-foreground sm:text-sm">
                   Payment methods are being configured by the clinic. Please contact Dr. Naseem to
                   complete your payment.
                 </div>
@@ -500,9 +516,13 @@ export function VideoPaymentStep({
                           : "border-border bg-background hover:bg-muted",
                       )}
                     >
-                      <div className="text-sm font-semibold text-foreground">{m.name}</div>
+                      <div className="text-[15px] font-semibold text-foreground sm:text-sm">
+                        {m.name}
+                      </div>
                       {m.description && (
-                        <div className="mt-0.5 text-xs text-muted-foreground">{m.description}</div>
+                        <div className="mt-0.5 text-[13px] leading-relaxed text-muted-foreground sm:text-xs">
+                          {m.description}
+                        </div>
                       )}
                     </button>
                   ))}
@@ -511,7 +531,7 @@ export function VideoPaymentStep({
             </div>
 
             <div>
-              <div className="mb-1.5 text-xs font-medium text-foreground">
+              <div className="mb-1.5 text-[13px] font-medium text-foreground sm:text-xs">
                 Receipt ID / Patient ID
               </div>
               <Input
@@ -523,7 +543,9 @@ export function VideoPaymentStep({
             </div>
 
             <div>
-              <div className="mb-1.5 text-xs font-medium text-foreground">Phone Number</div>
+              <div className="mb-1.5 text-[13px] font-medium text-foreground sm:text-xs">
+                Phone Number
+              </div>
               <Input
                 value={upPhone}
                 onChange={(e) => setUpPhone(e.target.value)}
@@ -532,10 +554,12 @@ export function VideoPaymentStep({
               />
             </div>
 
-            <div className="text-center text-xs text-muted-foreground">or</div>
+            <div className="text-center text-[13px] text-muted-foreground sm:text-xs">or</div>
 
             <div>
-              <div className="mb-1.5 text-xs font-medium text-foreground">Email Address</div>
+              <div className="mb-1.5 text-[13px] font-medium text-foreground sm:text-xs">
+                Email Address
+              </div>
               <Input
                 type="email"
                 value={upEmail}
@@ -546,7 +570,7 @@ export function VideoPaymentStep({
             </div>
 
             <div>
-              <div className="mb-1.5 text-xs font-medium text-foreground">
+              <div className="mb-1.5 text-[13px] font-medium text-foreground sm:text-xs">
                 Payment receipt screenshot
               </div>
               <input
@@ -620,7 +644,9 @@ export function VideoPaymentStep({
                     className="flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-dashed border-border bg-background px-4 py-4 text-left transition-colors hover:border-primary/40"
                   >
                     <Camera className="h-5 w-5 shrink-0 text-muted-foreground" />
-                    <span className="text-sm font-medium text-foreground">Take Photo</span>
+                    <span className="text-[15px] font-medium text-foreground sm:text-sm">
+                      Take Photo
+                    </span>
                     <span className="text-[11px] text-muted-foreground">Use the camera</span>
                   </label>
                   <label
@@ -628,14 +654,18 @@ export function VideoPaymentStep({
                     className="flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-dashed border-border bg-background px-4 py-4 text-left transition-colors hover:border-primary/40"
                   >
                     <ImageIcon className="h-5 w-5 shrink-0 text-muted-foreground" />
-                    <span className="text-sm font-medium text-foreground">Choose from Gallery</span>
+                    <span className="text-[15px] font-medium text-foreground sm:text-sm">
+                      Choose from Gallery
+                    </span>
                     <span className="text-[11px] text-muted-foreground">JPG / PNG · max 5 MB</span>
                   </label>
                 </div>
               )}
             </div>
 
-            {upError && <p className="text-sm font-medium text-destructive">{upError}</p>}
+            {upError && (
+              <p className="text-[15px] font-medium text-destructive sm:text-sm">{upError}</p>
+            )}
 
             <Button
               type="submit"
@@ -654,7 +684,7 @@ export function VideoPaymentStep({
             </Button>
 
             {submitReceipt.isPending && (
-              <p className="text-center text-xs text-muted-foreground">
+              <p className="text-center text-[13px] text-muted-foreground sm:text-xs">
                 Uploading your receipt, please keep this screen open…
               </p>
             )}
@@ -662,7 +692,7 @@ export function VideoPaymentStep({
             <button
               type="button"
               onClick={onClose}
-              className="flex w-full items-center justify-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+              className="flex w-full items-center justify-center gap-1.5 text-[15px] font-medium text-muted-foreground transition-colors hover:text-primary sm:text-sm"
             >
               <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Skip for now (book another)
             </button>

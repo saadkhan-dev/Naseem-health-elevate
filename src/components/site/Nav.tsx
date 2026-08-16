@@ -34,7 +34,7 @@ const desktopLinkClass =
   "after:absolute after:inset-x-1 after:-bottom-1 after:h-0.5 after:origin-left after:scale-x-0 after:rounded-full after:bg-primary after:transition-transform after:duration-300 hover:after:scale-x-100 " +
   focusRing;
 
-const mobileLinkClass = `block rounded-lg px-3 py-2.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-primary ${focusRing}`;
+const mobileLinkClass = `block rounded-lg px-3 py-2.5 text-[15px] font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-primary ${focusRing}`;
 
 export function Nav() {
   const { user, profile, logout } = useAuth();
@@ -223,7 +223,7 @@ export function Nav() {
                 <Link
                   to="/faq"
                   onClick={closeMenu}
-                  className={`block rounded-lg px-3 py-2.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-primary ${focusRing}`}
+                  className={`block rounded-lg px-3 py-2.5 text-[15px] font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-primary ${focusRing}`}
                 >
                   FAQ
                 </Link>
@@ -232,7 +232,7 @@ export function Nav() {
                 <Link
                   to="/shop"
                   onClick={closeMenu}
-                  className={`block rounded-lg px-3 py-2.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-primary ${focusRing}`}
+                  className={`block rounded-lg px-3 py-2.5 text-[15px] font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-primary ${focusRing}`}
                 >
                   Shop
                 </Link>
@@ -241,7 +241,7 @@ export function Nav() {
                 <Link
                   to="/search"
                   onClick={closeMenu}
-                  className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-primary ${focusRing}`}
+                  className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-[15px] font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-primary ${focusRing}`}
                 >
                   <Search className="h-4 w-4 text-primary" /> Search
                 </Link>
@@ -250,7 +250,7 @@ export function Nav() {
                 <div onClick={closeMenu}>
                   <SectionLink
                     hash="#reviews"
-                    className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-primary ${focusRing}`}
+                    className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-[15px] font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-primary ${focusRing}`}
                   >
                     <Star className="h-4 w-4 text-primary" /> Reviews
                   </SectionLink>

@@ -201,7 +201,7 @@ export function OrderPaymentStep({
   }
 
   const orderRows = (
-    <div className="mx-auto mt-3 w-full max-w-sm space-y-2 rounded-xl bg-muted p-4 text-left text-sm">
+    <div className="mx-auto mt-3 w-full max-w-sm space-y-2 rounded-xl bg-muted p-4 text-left text-[15px] sm:text-sm">
       <Row label="Order ID" value={orderNo ?? "—"} mono />
       <Row label="Amount" value={`Rs. ${amount}`} />
     </div>
@@ -216,7 +216,7 @@ export function OrderPaymentStep({
         <h3 className="mt-4 font-display text-xl font-semibold text-foreground">
           No Payment Needed
         </h3>
-        <p className="mt-2 max-w-md text-sm text-muted-foreground">
+        <p className="mt-2 max-w-md text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
           Your order was fully covered — nothing to pay.
         </p>
         {orderRows}
@@ -236,7 +236,7 @@ export function OrderPaymentStep({
         <h3 className="mt-4 font-display text-xl font-semibold text-foreground">
           Payment Submitted for Verification
         </h3>
-        <p className="mt-2 max-w-md text-sm text-muted-foreground">
+        <p className="mt-2 max-w-md text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
           Thank you! The clinic will verify your payment of{" "}
           <span className="font-semibold text-foreground">Rs. {amount}</span> manually. Your order
           starts processing once it's marked{" "}
@@ -246,13 +246,13 @@ export function OrderPaymentStep({
           .
         </p>
 
-        <div className="mt-5 w-full max-w-sm space-y-2 rounded-xl bg-muted p-4 text-left text-sm">
+        <div className="mt-5 w-full max-w-sm space-y-2 rounded-xl bg-muted p-4 text-left text-[15px] sm:text-sm">
           <Row label="Order ID" value={orderNo ?? "—"} mono />
           <Row label="Amount" value={`Rs. ${amount}`} />
           <Row label="Payment status" value={PAYMENT_STATUS_LABELS.payment_submitted} />
         </div>
 
-        <p className="mt-4 max-w-sm text-xs text-muted-foreground">
+        <p className="mt-4 max-w-sm text-[13px] leading-relaxed text-muted-foreground sm:text-xs">
           Track your order from <span className="font-medium text-foreground">My Orders</span> in
           your patient dashboard (or keep your Order ID handy — it's also your payment reference).
         </p>
@@ -286,7 +286,7 @@ export function OrderPaymentStep({
         </Field>
       </div>
       {!signedIn && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[13px] leading-relaxed text-muted-foreground sm:text-xs">
           Enter the mobile number or email you used at checkout — at least one is required to verify
           your order.
         </p>
@@ -303,7 +303,7 @@ export function OrderPaymentStep({
         <h3 className="mt-4 font-display text-xl font-semibold text-foreground">
           Complete Your Payment
         </h3>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-[15px] text-muted-foreground sm:text-sm">
           Order — <span className="font-bold text-foreground">Rs. {amount}</span>
         </p>
         {orderRows}
@@ -311,7 +311,7 @@ export function OrderPaymentStep({
 
       {!signedIn && (
         <div className="mx-auto mt-5 w-full max-w-md">
-          <div className="flex items-start gap-2 rounded-xl border border-border bg-card px-4 py-3 text-xs text-muted-foreground">
+          <div className="flex items-start gap-2 rounded-xl border border-border bg-card px-4 py-3 text-[13px] leading-relaxed text-muted-foreground sm:text-xs">
             <Truck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <span>
               To verify your payment we need your{" "}
@@ -324,7 +324,9 @@ export function OrderPaymentStep({
       )}
 
       <div className="mx-auto mt-6 w-full max-w-md">
-        <div className="text-sm font-semibold text-foreground">Payment Verification</div>
+        <div className="text-[15px] font-semibold text-foreground sm:text-sm">
+          Payment Verification
+        </div>
         <div className="mt-2 grid grid-cols-1 gap-2 rounded-2xl bg-muted p-1 min-[400px]:grid-cols-2">
           <button
             type="button"
@@ -364,7 +366,7 @@ export function OrderPaymentStep({
 
             <Field label="Payment method">
               {methodsLoading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 text-[15px] text-muted-foreground sm:text-sm">
                   <Loader2 className="h-4 w-4 animate-spin" /> Loading…
                 </div>
               ) : (
@@ -374,7 +376,7 @@ export function OrderPaymentStep({
                       key={m.id}
                       type="button"
                       onClick={() => setMethodId(m.id)}
-                      className={`rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
+                      className={`rounded-xl border px-3 py-2.5 text-left text-[15px] transition-colors sm:text-sm ${
                         methodId === m.id
                           ? "border-primary bg-primary/5 text-foreground"
                           : "border-border bg-background text-foreground hover:border-primary/40"
@@ -382,7 +384,9 @@ export function OrderPaymentStep({
                     >
                       <span className="font-semibold">{m.name}</span>
                       {m.description && (
-                        <span className="block text-xs text-muted-foreground">{m.description}</span>
+                        <span className="block text-[13px] text-muted-foreground sm:text-xs">
+                          {m.description}
+                        </span>
                       )}
                     </button>
                   ))}
@@ -391,7 +395,7 @@ export function OrderPaymentStep({
             </Field>
 
             {selectedMethod?.instructions && (
-              <div className="rounded-xl bg-primary-soft px-3 py-2.5 text-xs text-primary">
+              <div className="rounded-xl bg-primary-soft px-3 py-2.5 text-[13px] leading-relaxed text-primary sm:text-xs">
                 {selectedMethod.instructions}
               </div>
             )}
@@ -411,7 +415,9 @@ export function OrderPaymentStep({
               />
             </Field>
 
-            {formError && <p className="text-sm font-medium text-destructive">{formError}</p>}
+            {formError && (
+              <p className="text-[15px] font-medium text-destructive sm:text-sm">{formError}</p>
+            )}
 
             <Button
               onClick={handleSubmitTransaction}
@@ -439,7 +445,7 @@ export function OrderPaymentStep({
 
             <Field label="Payment method">
               {methodsLoading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 text-[15px] text-muted-foreground sm:text-sm">
                   <Loader2 className="h-4 w-4 animate-spin" /> Loading…
                 </div>
               ) : (
@@ -449,7 +455,7 @@ export function OrderPaymentStep({
                       key={m.id}
                       type="button"
                       onClick={() => setMethodId(m.id)}
-                      className={`rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
+                      className={`rounded-xl border px-3 py-2.5 text-left text-[15px] transition-colors sm:text-sm ${
                         methodId === m.id
                           ? "border-primary bg-primary/5 text-foreground"
                           : "border-border bg-background text-foreground hover:border-primary/40"
@@ -508,17 +514,19 @@ export function OrderPaymentStep({
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-border bg-muted/40 px-4 py-6 text-sm text-muted-foreground transition hover:border-primary/40"
+                className="flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-border bg-muted/40 px-4 py-6 text-[15px] text-muted-foreground transition hover:border-primary/40 sm:text-sm"
               >
                 <Upload className="h-6 w-6" />
                 <span>
                   Take a photo or choose from gallery
-                  <span className="block text-xs">JPG/PNG receipt, up to 5 MB</span>
+                  <span className="block text-[13px] sm:text-xs">JPG/PNG receipt, up to 5 MB</span>
                 </span>
               </button>
             )}
 
-            {guestError && <p className="text-sm font-medium text-destructive">{guestError}</p>}
+            {guestError && (
+              <p className="text-[15px] font-medium text-destructive sm:text-sm">{guestError}</p>
+            )}
 
             <Button type="submit" disabled={submitReceipt.isPending} className="w-full gap-1.5">
               {submitReceipt.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -527,7 +535,7 @@ export function OrderPaymentStep({
           </form>
         )}
 
-        <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+        <div className="flex items-center justify-center gap-1.5 text-[13px] leading-relaxed text-muted-foreground sm:text-xs">
           <ShieldCheck className="h-3.5 w-3.5 text-primary" />
           Your payment is verified manually by the clinic before the order is processed.
         </div>
@@ -556,7 +564,9 @@ function Row({ label, value, mono = false }: { label: string; value: string; mon
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-medium text-foreground">{label}</label>
+      <label className="mb-1.5 block text-[15px] font-medium text-foreground sm:text-sm">
+        {label}
+      </label>
       {children}
     </div>
   );

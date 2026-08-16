@@ -26,11 +26,11 @@ export function LocationAbout() {
               </div>
               <div>
                 Rahat Homeopathic & physiotherapy clinic
-                <div className="text-sm font-semibold text-foreground">
+                <div className="text-[15px] font-semibold text-foreground sm:text-sm">
                   {" "}
                   11c2 North Karachi(Dr.Naseem Ahmed).
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-[13px] text-muted-foreground sm:text-xs">
                   St, Sirsyed Town Sector 11 C 2 North Karachi, Karachi, 75850
                   <br />
                 </div>
@@ -53,13 +53,13 @@ export function LocationAbout() {
               href={whatsappUrl("Hi Dr. Naseem, I'd like to know more about your clinic.")}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[color:var(--whatsapp)] px-4 py-3 text-sm font-semibold text-white shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:shadow-soft active:scale-95"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[color:var(--whatsapp)] px-4 py-3 text-[15px] font-semibold text-white shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:shadow-soft active:scale-95 sm:text-sm"
             >
               <MessageCircle className="h-4 w-4" /> Chat on WhatsApp
             </a>
             <a
               href={telUrl}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:shadow-soft active:scale-95"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary px-4 py-3 text-[15px] font-semibold text-primary-foreground shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:shadow-soft active:scale-95 sm:text-sm"
             >
               <Phone className="h-4 w-4" /> Call {PHONE}
             </a>
@@ -76,8 +76,8 @@ export function LocationAbout() {
           </h3>
           <div className="mt-5 grid items-start gap-5 sm:grid-cols-[1.4fr_1fr]">
             <div>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                <span className="mb-2 block text-lg font-semibold text-primary">
+              <p className="text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
+                <span className="mb-2 block text-[20px] font-semibold text-primary sm:text-lg">
                   Homeopath &amp; Physiotherapist
                 </span>
                 Dr. Naseem Ahmed is a highly educated and experienced{" "}
@@ -85,21 +85,23 @@ export function LocationAbout() {
                 patient-focused care. He works with both{" "}
                 <strong>acute and chronic health conditions</strong>, focusing on understanding each
                 patient’s individual needs.
-                <span className="mb-2 mt-5 block text-lg font-semibold text-primary">
+                <span className="mb-2 mt-5 block text-[20px] font-semibold text-primary sm:text-lg">
                   Our Approach
                 </span>
                 He combines <strong>homeopathic care</strong> with{" "}
                 <strong>modern physiotherapy techniques</strong> to support natural healing, improve
                 physical well-being, and help patients achieve better health and mobility.
-                <span className="mb-2 mt-5 block text-lg font-semibold text-primary">
+                <span className="mb-2 mt-5 block text-[20px] font-semibold text-primary sm:text-lg">
                   Patient-Centered Care
                 </span>
                 Dr. Naseem Ahmed believes that every patient is different. His approach is based on
                 careful assessment, personalized treatment, and patient comfort, with the goal of
                 providing safe and effective care.
               </p>{" "}
-              <h4 className="mb-4 font-display text-lg font-semibold text-primary">Education</h4>
-              <ul className="mt-4 space-y-2.5 text-sm">
+              <h4 className="mb-4 font-display text-[20px] font-semibold text-primary sm:text-lg">
+                Education
+              </h4>
+              <ul className="mt-4 space-y-2.5 text-[15px] sm:text-sm">
                 {[
                   {
                     Icon: BookOpenCheck,
@@ -108,7 +110,7 @@ export function LocationAbout() {
                         <span className="font-bold text-primary">
                           Diploma in Homeopathic Medicine & Surgery (D.H.M.S)
                         </span>
-                        <span className="block text-sm text-muted-foreground">
+                        <span className="block text-[15px] text-muted-foreground sm:text-sm">
                           Pakistan Central Homeopathic Medical College & Hospital, Karachi
                         </span>
                       </>
@@ -121,7 +123,7 @@ export function LocationAbout() {
                         <span className="font-bold text-primary">
                           Registered Homeopathic Medical Practitioner (R.H.M.P)
                         </span>
-                        <span className="block text-sm text-muted-foreground">
+                        <span className="block text-[15px] text-muted-foreground sm:text-sm">
                           National Council for Homeopathy, Pakistan, Islamabad
                         </span>
                       </>
@@ -134,7 +136,7 @@ export function LocationAbout() {
                         <span className="font-bold text-primary">
                           Certificate in Physiotherapy (C.P.T)
                         </span>
-                        <span className="block text-sm text-muted-foreground">
+                        <span className="block text-[15px] text-muted-foreground sm:text-sm">
                           Sindh Medical Faculty
                         </span>
                       </>

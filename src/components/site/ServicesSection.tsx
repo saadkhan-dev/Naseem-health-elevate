@@ -37,11 +37,11 @@ export function ServicesSection() {
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="font-display text-4xl font-bold text-red-600 sm:text-5xl">Our Services</h2>
 
-          <h3 className="mt-3 font-display text-xl font-semibold text-primary sm:text-2xl">
+          <h3 className="mt-3 font-display text-[22px] font-semibold text-primary sm:text-2xl">
             Healthcare Services Designed Around You
           </h3>
 
-          <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+          <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground sm:text-base">
             Professional homeopathic and physiotherapy care with a personalized approach for better
             health and well-being.
           </p>
@@ -66,15 +66,15 @@ export function ServicesSection() {
                     <Icon className="h-6 w-6" />
                   </div>
 
-                  <h3 className="mt-4 font-display text-xl font-semibold text-foreground transition-colors duration-300 group-hover:text-primary">
+                  <h3 className="mt-4 font-display text-[22px] font-semibold text-foreground transition-colors duration-300 group-hover:text-primary sm:text-xl">
                     {service.name}
                   </h3>
 
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
                     {service.description}
                   </p>
 
-                  <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
+                  <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-muted-foreground sm:text-xs">
                     {homeVisit ? (
                       <span className="inline-flex items-center gap-1">
                         <Clock className="h-3.5 w-3.5" />
@@ -109,24 +109,34 @@ export function ServicesSection() {
           <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-soft active:scale-[0.99]">
             <Clock className="h-5 w-5 shrink-0 text-primary" />
             <div>
-              <p className="text-sm font-semibold text-foreground">Convenient Care</p>
-              <p className="text-xs text-muted-foreground">Flexible consultation options</p>
+              <p className="text-[15px] font-semibold text-foreground sm:text-sm">
+                Convenient Care
+              </p>
+              <p className="text-[13px] text-muted-foreground sm:text-xs">
+                Flexible consultation options
+              </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-soft active:scale-[0.99]">
             <Stethoscope className="h-5 w-5 shrink-0 text-primary" />
             <div>
-              <p className="text-sm font-semibold text-foreground">Experienced Care</p>
-              <p className="text-xs text-muted-foreground">Professional healthcare guidance</p>
+              <p className="text-[15px] font-semibold text-foreground sm:text-sm">
+                Experienced Care
+              </p>
+              <p className="text-[13px] text-muted-foreground sm:text-xs">
+                Professional healthcare guidance
+              </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-soft active:scale-[0.99]">
             <UserRound className="h-5 w-5 shrink-0 text-primary" />
             <div>
-              <p className="text-sm font-semibold text-foreground">Patient First</p>
-              <p className="text-xs text-muted-foreground">Care focused on your needs</p>
+              <p className="text-[15px] font-semibold text-foreground sm:text-sm">Patient First</p>
+              <p className="text-[13px] text-muted-foreground sm:text-xs">
+                Care focused on your needs
+              </p>
             </div>
           </div>
         </div>

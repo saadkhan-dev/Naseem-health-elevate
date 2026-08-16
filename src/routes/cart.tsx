@@ -103,11 +103,11 @@ function CartPage() {
                     <Link
                       to="/product/$productId"
                       params={{ productId: product.id }}
-                      className="text-sm font-semibold text-foreground hover:text-primary"
+                      className="text-[15px] font-semibold text-foreground hover:text-primary sm:text-sm"
                     >
                       {product.name}
                     </Link>
-                    <div className="mt-0.5 text-sm font-medium text-primary">
+                    <div className="mt-0.5 text-[15px] font-medium text-primary sm:text-sm">
                       Rs. {productEffectivePrice(product, today).toLocaleString()}
                     </div>
                   </div>
@@ -137,18 +137,18 @@ function CartPage() {
                     </button>
                   </div>
                   {!isProductOrderable(product) && (
-                    <div className="flex w-full items-center gap-1 text-xs font-medium text-destructive">
+                    <div className="flex w-full items-center gap-1 text-[13px] font-medium text-destructive sm:text-xs">
                       <Ban className="h-3 w-3" /> This product is currently out of stock.
                     </div>
                   )}
                   {isProductOrderable(product) &&
                     typeof product.stock_quantity === "number" &&
                     quantity > product.stock_quantity && (
-                      <div className="flex w-full items-center gap-1 text-xs font-medium text-destructive">
+                      <div className="flex w-full items-center gap-1 text-[13px] font-medium text-destructive sm:text-xs">
                         <Ban className="h-3 w-3" /> Only {product.stock_quantity} available.
                       </div>
                     )}
-                  <div className="w-20 text-right text-sm font-bold text-foreground">
+                  <div className="w-20 text-right text-[15px] font-bold text-foreground sm:text-sm">
                     Rs. {(productEffectivePrice(product, today) * quantity).toLocaleString()}
                   </div>
                   <button
@@ -164,17 +164,17 @@ function CartPage() {
 
               <div className="mt-6 rounded-2xl border border-border bg-card p-5">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Subtotal</span>
+                  <span className="text-[15px] text-muted-foreground sm:text-sm">Subtotal</span>
                   <span className="text-lg font-bold text-foreground">
                     Rs. {subtotal.toLocaleString()}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground sm:text-xs">
                   Delivery charges and final total are confirmed by the clinic after your payment is
                   verified.
                 </p>
                 {blocked && (
-                  <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                  <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] font-medium text-red-700 sm:text-xs">
                     One or more items are out of stock or exceed available stock. Adjust your cart
                     to continue.
                   </p>

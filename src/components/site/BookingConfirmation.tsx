@@ -84,13 +84,16 @@ export function BookingConfirmation({
       <h3 className="mt-4 font-display text-xl font-semibold text-foreground">
         Appointment Requested
       </h3>
-      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-        You will soom receive a message to confirm your appointment. If you don't receive a confirmation message within 3 hours, plz contact <strong>03152968384</strong>
+      <p className="mt-2 max-w-sm text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
+        You will soom receive a message to confirm your appointment. If you don't receive a
+        confirmation message within 3 hours, plz contact <strong>03152968384</strong>
       </p>
 
       {appointmentNo && (
         <div className="mt-6 w-full max-w-xs rounded-2xl border border-primary/30 bg-primary-soft p-4">
-          <div className="text-xs font-medium text-primary">Keep Your Appointment ID </div>
+          <div className="text-[13px] font-medium text-primary sm:text-xs">
+            Keep Your Appointment ID{" "}
+          </div>
           <div className="mt-1 flex items-center justify-center gap-2">
             <span className="font-display text-2xl font-bold tracking-wide text-foreground break-all">
               {appointmentNo}
@@ -111,9 +114,9 @@ export function BookingConfirmation({
         </div>
       )}
 
-      {note && <p className="mt-3 max-w-xs text-xs text-muted-foreground">{note}</p>}
+      {note && <p className="mt-3 max-w-xs text-[13px] text-muted-foreground sm:text-xs">{note}</p>}
 
-      <div className="mt-4 w-full max-w-xs space-y-2 rounded-xl bg-muted p-4 text-left text-sm">
+      <div className="mt-4 w-full max-w-xs space-y-2 rounded-xl bg-muted p-4 text-left text-[15px] sm:text-sm">
         {patientName && <Row label="Patient" value={patientName} />}
         <Row label="Service" value={serviceName} />
         <Row label="Date" value={format(date, "EEEE, MMMM d, yyyy")} />
@@ -127,11 +130,11 @@ export function BookingConfirmation({
             <>
               <div className="flex items-center gap-2">
                 <Wallet className="h-4 w-4 text-primary" />
-                <span className="text-sm font-semibold text-foreground">
+                <span className="text-[15px] font-semibold text-foreground sm:text-sm">
                   No Payment Needed — Your Consultation is FREE
                 </span>
               </div>
-              <p className="mt-1.5 text-xs text-muted-foreground">
+              <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground sm:text-xs">
                 {video.offerTitle
                   ? `${video.offerTitle} covered the full consultation fee.`
                   : "Your consultation fee was fully covered."}{" "}
@@ -141,19 +144,21 @@ export function BookingConfirmation({
           ) : (
             <>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-foreground">
+                <span className="text-[15px] font-semibold text-foreground sm:text-sm">
                   Prepaid video consultation
                 </span>
-                <span className="text-sm font-bold text-primary">Rs. {video.amount}</span>
+                <span className="text-[15px] font-bold text-primary sm:text-sm">
+                  Rs. {video.amount}
+                </span>
               </div>
-              <p className="mt-1.5 text-xs text-muted-foreground">
+              <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground sm:text-xs">
                 Pay using the clinic's payment methods, then submit your transaction ID or upload
                 your receipt on the video consultation payment page to unlock your call.
               </p>
               <Link
                 to="/appointment-status"
                 search={{ apt: appointmentNo }}
-                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 sm:text-sm"
               >
                 <Wallet className="h-4 w-4" /> Pay for your video consultation
               </Link>
@@ -162,17 +167,14 @@ export function BookingConfirmation({
         </div>
       )}
 
-      <div className="mt-4 w-full max-w-xs rounded-xl border border-dashed border-primary/40 bg-primary-soft/60 p-3 text-xs text-muted-foreground">
+      <div className="mt-4 w-full max-w-xs rounded-xl border border-dashed border-primary/40 bg-primary-soft/60 p-3 text-[13px] text-muted-foreground sm:text-xs">
         <p>
-          <span className="font-medium text-primary">To check your appointment status, </span> 
+          <span className="font-medium text-primary">To check your appointment status, </span>
           Please enter your name, phone number or Email.{" "}
           <Link
             to="/appointment-status"
             className="font-medium text-primary underline-offset-2 hover:underline"
-          >
-          
-          </Link>{" "}
-         
+          ></Link>{" "}
         </p>
       </div>
 
@@ -180,7 +182,7 @@ export function BookingConfirmation({
         <Link
           to="/appointment-status"
           search={{ apt: appointmentNo }}
-          className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-primary transition-colors hover:underline"
+          className="mt-4 inline-flex items-center gap-2 text-[15px] font-medium text-primary transition-colors hover:underline sm:text-sm"
         >
           <CalendarCheck className="h-4 w-4" />
           Check your appointment status

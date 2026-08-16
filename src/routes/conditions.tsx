@@ -51,9 +51,9 @@ function ConditionsPage() {
             </div>
             <div>
               <h1 className="font-display text-3xl font-bold text-foreground">
-                Diseases & Symptoms 
+                Diseases & Symptoms
               </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-[15px] text-muted-foreground sm:text-sm">
                 Symptoms & Diseases treated with{" "}
                 {category === "homeopathic" ? "homeopathy" : "physiotherapy"}
               </p>
@@ -71,7 +71,7 @@ function ConditionsPage() {
                 key={value}
                 to="/conditions"
                 search={{ category: value }}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                className={`rounded-full px-4 py-2 text-[15px] font-medium transition sm:text-sm ${
                   category === value
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -94,7 +94,7 @@ function ConditionsPage() {
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : (conditions ?? []).length === 0 ? (
-              <p className="p-10 text-center text-sm text-muted-foreground sm:col-span-2">
+              <p className="p-10 text-center text-[15px] text-muted-foreground sm:col-span-2 sm:text-sm">
                 No conditions listed yet.
               </p>
             ) : (
@@ -104,7 +104,7 @@ function ConditionsPage() {
                   className="rounded-2xl border border-border bg-card p-5 shadow-soft"
                 >
                   <h2 className="font-display text-lg font-semibold text-foreground">{c.title}</h2>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
                     {c.description}
                   </p>
                 </div>

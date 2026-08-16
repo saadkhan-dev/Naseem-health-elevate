@@ -60,11 +60,11 @@ export function ReviewsSection() {
             Patient Reviews
           </h2>
 
-          <h3 className="mt-3 font-display text-xl font-semibold text-primary sm:text-2xl">
+          <h3 className="mt-3 font-display text-[22px] font-semibold text-primary sm:text-2xl">
             What Our Patients Say
           </h3>
 
-          <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+          <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground sm:text-base">
             See what patients have shared about their experience and care.
           </p>
         </div>
@@ -131,7 +131,7 @@ export function ReviewsSection() {
                       <MessageCircle className="h-3 w-3 text-primary/40" /> Google Review
                     </span>
                   </div>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
                     "{review.text}"
                   </p>
                 </div>
@@ -160,13 +160,15 @@ export function ReviewsSection() {
                     <MessageCircle className="h-5 w-5 text-primary/40" />
                   </div>
 
-                  <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+                  <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
                     "{review.text}"
                   </p>
 
-                  <p className="mt-5 text-sm font-semibold text-foreground">{review.name}</p>
+                  <p className="mt-5 text-[15px] font-semibold text-foreground sm:text-sm">
+                    {review.name}
+                  </p>
 
-                  <p className="mt-1 text-xs text-muted-foreground">Google Review</p>
+                  <p className="mt-1 text-[13px] text-muted-foreground sm:text-xs">Google Review</p>
                 </div>
               ))
             ) : (

@@ -145,7 +145,7 @@ export function BookingPanel() {
             <h2 className="font-display text-3xl font-bold text-red-600 sm:text-4xl">
               Book Your Appointment
             </h2>
-            <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
+            <p className="mx-auto mt-2 max-w-xl text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
               No account needed — enter your name and either your phone number or email to book
               instantly.
             </p>
@@ -246,7 +246,7 @@ export function BookingPanel() {
           </div>
 
           <div className="mt-6">
-            <h3 className="text-sm font-semibold text-foreground">Your Details</h3>
+            <h3 className="text-[15px] font-semibold text-foreground sm:text-sm">Your Details</h3>
             <div className="mt-3 grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <div className="mb-1.5 text-xs font-medium text-foreground">Your Name</div>
@@ -280,13 +280,15 @@ export function BookingPanel() {
                   className="h-11 rounded-xl transition-all duration-300 hover:border-primary/40"
                 />
               </div>
-              <p className="text-xs text-muted-foreground sm:col-span-2">
+              <p className="text-[13px] text-muted-foreground sm:text-xs sm:col-span-2">
                 Provide at least one — we'll send your Appointment ID there.
               </p>
             </div>
           </div>
 
-          {formError && <p className="mt-3 text-sm font-medium text-destructive">{formError}</p>}
+          {formError && (
+            <p className="mt-3 text-[15px] font-medium text-destructive sm:text-sm">{formError}</p>
+          )}
 
           <Button
             onClick={handleSubmit}
@@ -314,8 +316,8 @@ export function BookingPanel() {
                   <Icon className="h-4 w-4" />
                 </div>
                 <div className="leading-tight">
-                  <div className="text-sm font-semibold text-foreground">{t}</div>
-                  <div className="text-xs text-muted-foreground">{s}</div>
+                  <div className="text-[15px] font-semibold text-foreground sm:text-sm">{t}</div>
+                  <div className="text-[13px] text-muted-foreground sm:text-xs">{s}</div>
                 </div>
               </div>
             ))}
@@ -329,7 +331,7 @@ export function BookingPanel() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="mb-1.5 text-xs font-medium text-foreground">{label}</div>
+      <div className="mb-1.5 text-[13px] font-medium text-foreground sm:text-xs">{label}</div>
       {children}
     </div>
   );

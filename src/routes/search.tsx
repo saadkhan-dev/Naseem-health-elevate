@@ -32,7 +32,7 @@ function SearchPage() {
       <main className="px-4 py-12 md:px-8">
         <div className="mx-auto max-w-3xl">
           <h1 className="font-display text-3xl font-bold text-foreground">Search our products</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-[15px] text-muted-foreground sm:text-sm">
             Find a product available at the clinic
           </p>
 
@@ -52,7 +52,7 @@ function SearchPage() {
 
           <div className="mt-8 space-y-6">
             {!searching ? (
-              <p className="p-8 text-center text-sm text-muted-foreground">
+              <p className="p-8 text-center text-[15px] text-muted-foreground sm:text-sm">
                 Type at least 2 characters to search our products.
               </p>
             ) : isFetching && !groups ? (
@@ -62,15 +62,17 @@ function SearchPage() {
             ) : isError ? (
               <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border bg-card p-12 text-center">
                 <AlertTriangle className="h-8 w-8 text-destructive" />
-                <p className="text-sm font-medium text-destructive">
+                <p className="text-[15px] font-medium text-destructive sm:text-sm">
                   Search failed to load results.
                 </p>
-                <p className="text-xs text-muted-foreground">Please try again in a moment.</p>
+                <p className="text-[13px] text-muted-foreground sm:text-xs">
+                  Please try again in a moment.
+                </p>
               </div>
             ) : (groups ?? []).every((g) => g.items.length === 0) ? (
               <div className="flex flex-col items-center gap-3 p-12 text-center">
                 <SearchX className="h-10 w-10 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
+                <p className="text-[15px] text-muted-foreground sm:text-sm">
                   No products found for "{query}". Try different keywords.
                 </p>
               </div>
@@ -90,10 +92,10 @@ function SearchPage() {
                           className="group flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-5 py-4 shadow-soft transition hover:border-primary/40"
                         >
                           <div className="min-w-0">
-                            <div className="text-sm font-semibold text-foreground">
+                            <div className="text-[15px] font-semibold text-foreground sm:text-sm">
                               {item.label}
                             </div>
-                            <div className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+                            <div className="mt-0.5 line-clamp-1 text-[13px] text-muted-foreground sm:text-xs">
                               {item.description}
                             </div>
                           </div>

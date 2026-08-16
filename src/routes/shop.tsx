@@ -170,10 +170,10 @@ function ShopPage() {
                             {p.category}
                           </div>
                         )}
-                        <div className="mt-0.5 text-sm font-semibold text-foreground group-hover:text-primary">
+                        <div className="mt-0.5 text-[15px] font-semibold text-foreground group-hover:text-primary sm:text-sm">
                           {p.name}
                         </div>
-                        <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                        <div className="mt-1 flex items-center gap-1 text-[13px] text-muted-foreground sm:text-xs">
                           <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
                           <span className="font-medium text-foreground">
                             {p.rating_count > 0 ? Number(p.rating_avg).toFixed(1) : "New"}
@@ -181,7 +181,7 @@ function ShopPage() {
                           <span>({p.rating_count})</span>
                         </div>
                         <div className="mt-2 flex items-baseline gap-2">
-                          <span className="text-base font-bold text-primary">
+                          <span className="text-[17px] font-bold text-primary sm:text-base">
                             Rs. {productEffectivePrice(p, today).toLocaleString()}
                           </span>
                           {isProductOfferActive(p, today) && (
@@ -202,7 +202,7 @@ function ShopPage() {
                         <>
                           <Button
                             size="sm"
-                            className="flex-1 gap-1.5"
+                            className="flex-1 gap-1.5 text-[13px] sm:text-xs"
                             onClick={() => handleAdd(p)}
                             disabled={addedId === p.id}
                           >
@@ -216,7 +216,7 @@ function ShopPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="gap-1.5"
+                            className="gap-1.5 text-[13px] sm:text-xs"
                             onClick={() => {
                               cart.add(p.id, 1);
                               window.location.href = "/checkout";
@@ -230,7 +230,7 @@ function ShopPage() {
                           size="sm"
                           variant="outline"
                           disabled
-                          className="flex-1 gap-1.5 text-muted-foreground"
+                          className="flex-1 gap-1.5 text-[13px] text-muted-foreground sm:text-xs"
                         >
                           <Ban className="h-3.5 w-3.5" /> Out of stock
                         </Button>

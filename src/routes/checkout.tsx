@@ -294,24 +294,26 @@ function CheckoutPage() {
                         ) : null}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-foreground">
+                        <div className="truncate text-[15px] font-medium text-foreground sm:text-sm">
                           {product.name}
                         </div>
-                        <div className="text-xs text-muted-foreground">× {quantity}</div>
+                        <div className="text-[13px] text-muted-foreground sm:text-xs">
+                          × {quantity}
+                        </div>
                       </div>
-                      <div className="text-sm font-semibold text-foreground">
+                      <div className="text-[15px] font-semibold text-foreground sm:text-sm">
                         Rs. {(productEffectivePrice(product, today) * quantity).toLocaleString()}
                       </div>
                     </div>
                   ))}
                 </div>
                 <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
-                  <span className="text-sm text-muted-foreground">Subtotal</span>
+                  <span className="text-[15px] text-muted-foreground sm:text-sm">Subtotal</span>
                   <span className="text-lg font-bold text-foreground">
                     Rs. {subtotal.toLocaleString()}
                   </span>
                 </div>
-                <p className="mt-3 text-xs text-muted-foreground">
+                <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground sm:text-xs">
                   After placing the order you'll be guided through the payment (bank transfer or
                   mobile wallet). The clinic verifies your payment before processing the order.
                 </p>

@@ -189,7 +189,7 @@ function AppointmentStatusPage() {
               <h1 className="mt-4 font-display text-3xl font-bold text-red-600">
                 Check Appointment Status
               </h1>
-              <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+              <p className="mt-1 max-w-sm text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
                 To check your appointment status, please enter your appointment id, along with your
                 phone number or email address. If you don't have your appointment id, you can find
                 your appointment using the details you used when booking.
@@ -222,7 +222,9 @@ function AppointmentStatusPage() {
                       />
                     </div>
 
-                    <div className="text-center text-xs text-muted-foreground">or</div>
+                    <div className="text-center text-[13px] text-muted-foreground sm:text-xs">
+                      or
+                    </div>
 
                     <div className="space-y-1.5">
                       <Label htmlFor="email">Email Address</Label>
@@ -237,7 +239,9 @@ function AppointmentStatusPage() {
                     </div>
 
                     {formError && (
-                      <p className="text-sm font-medium text-destructive">{formError}</p>
+                      <p className="text-[15px] font-medium text-destructive sm:text-sm">
+                        {formError}
+                      </p>
                     )}
 
                     <Button
@@ -256,10 +260,10 @@ function AppointmentStatusPage() {
                   </form>
 
                   <div className="rounded-2xl border border-dashed border-border bg-background p-4 text-center">
-                    <p className="text-sm font-medium text-foreground">
+                    <p className="text-[15px] font-medium text-foreground sm:text-sm">
                       Forgot your Appointment ID?
                     </p>
-                    <p className="mx-auto mt-1 max-w-xs text-xs text-muted-foreground">
+                    <p className="mx-auto mt-1 max-w-xs text-[13px] leading-relaxed text-muted-foreground sm:text-xs">
                       No problem — find your appointment using the{" "}
                       <span className="font-medium">name</span>, phone
                       <span className="font-medium">number</span> or{" "}
@@ -300,7 +304,9 @@ function AppointmentStatusPage() {
                       />
                     </div>
 
-                    <div className="text-center text-xs text-muted-foreground">or</div>
+                    <div className="text-center text-[13px] text-muted-foreground sm:text-xs">
+                      or
+                    </div>
 
                     <div className="space-y-1.5">
                       <Label htmlFor="rEmail">Email Address</Label>
@@ -314,7 +320,11 @@ function AppointmentStatusPage() {
                       />
                     </div>
 
-                    {rError && <p className="text-sm font-medium text-destructive">{rError}</p>}
+                    {rError && (
+                      <p className="text-[15px] font-medium text-destructive sm:text-sm">
+                        {rError}
+                      </p>
+                    )}
 
                     <Button
                       type="submit"
@@ -351,7 +361,9 @@ function AppointmentStatusPage() {
                   <div className="mt-6 rounded-2xl border border-border bg-background p-6">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <div className="text-xs text-muted-foreground">Appointment ID</div>
+                        <div className="text-[13px] text-muted-foreground sm:text-xs">
+                          Appointment ID
+                        </div>
                         <div className="font-display text-lg font-bold text-foreground break-all">
                           {result.appointment.appointmentNo}
                         </div>
@@ -362,7 +374,7 @@ function AppointmentStatusPage() {
                         {APPOINTMENT_STATUS_LABELS[result.appointment.status]}
                       </span>
                     </div>
-                    <div className="mt-5 space-y-2 border-t border-border pt-4 text-sm">
+                    <div className="mt-5 space-y-2 border-t border-border pt-4 text-[15px] sm:text-sm">
                       <ResultRow label="Service" value={result.appointment.serviceName ?? "—"} />
                       <ResultRow
                         label="Date"
@@ -392,7 +404,7 @@ function AppointmentStatusPage() {
                             <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2">
                               <div className="flex min-w-0 items-center gap-2">
                                 <Video className="h-5 w-5 shrink-0 text-primary" />
-                                <span className="text-sm font-semibold text-foreground">
+                                <span className="text-[15px] font-semibold text-foreground sm:text-sm">
                                   Video Consultation Ready
                                 </span>
                               </div>
@@ -400,7 +412,7 @@ function AppointmentStatusPage() {
                                 {result.appointment.video.sessionStatus}
                               </span>
                             </div>
-                            <p className="mt-1 text-xs text-muted-foreground">
+                            <p className="mt-1 text-[13px] text-muted-foreground sm:text-xs">
                               Your online video consultation is ready to join
                               {result.appointment.video.durationMinutes
                                 ? ` — ${result.appointment.video.durationMinutes} minute session`
@@ -420,19 +432,19 @@ function AppointmentStatusPage() {
                             </Button>
                           </>
                         ) : result.appointment.video.sessionStatus === "completed" ? (
-                          <p className="text-sm text-foreground">
+                          <p className="text-[15px] text-foreground sm:text-sm">
                             This video consultation has been completed. Thank you for using Dr.
                             Naseem Ahmed Khan's services.
                           </p>
                         ) : (
-                          <p className="text-sm text-foreground">
+                          <p className="text-[15px] text-foreground sm:text-sm">
                             Your video consultation will be ready once the doctor starts the call —
                             you will receive the join link here and by message.
                           </p>
                         )}
                       </div>
                     )}
-                    <p className="mt-4 text-xs text-muted-foreground">
+                    <p className="mt-4 text-[13px] text-muted-foreground sm:text-xs">
                       {result.appointment.status === "pending" &&
                         "Your appointment is awaiting confirmation from the clinic."}
                       {result.appointment.status === "confirmed" &&
@@ -453,8 +465,10 @@ function AppointmentStatusPage() {
               ) : (
                 <div className="mt-6 flex flex-col items-center rounded-2xl border border-dashed border-border bg-background p-6 text-center">
                   <AlertTriangle className="h-8 w-8 text-muted-foreground" />
-                  <p className="mt-3 text-sm font-medium text-foreground">No appointment found</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-3 text-[15px] font-medium text-foreground sm:text-sm">
+                    No appointment found
+                  </p>
+                  <p className="mt-1 text-[13px] text-muted-foreground sm:text-xs">
                     Double-check your Appointment ID and phone/email, or contact the clinic.
                   </p>
                 </div>
@@ -466,13 +480,13 @@ function AppointmentStatusPage() {
                 <div className="mt-6 flex flex-col items-center rounded-2xl border border-dashed border-border bg-background p-6 text-center">
                   <AlertTriangle className="h-8 w-8 text-muted-foreground" />
                   <p className="mt-3 text-sm font-medium text-foreground">No appointments found</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-1 text-[13px] text-muted-foreground sm:text-xs">
                     Double-check your name and phone/email, or contact the clinic.
                   </p>
                 </div>
               ) : (
                 <div className="mt-6 space-y-4">
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-[15px] text-muted-foreground sm:text-sm">
                     Found {recoverResult.length} appointment
                     {recoverResult.length === 1 ? "" : "s"} for you.
                   </p>
@@ -483,7 +497,9 @@ function AppointmentStatusPage() {
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
-                          <div className="text-xs text-muted-foreground">Appointment ID</div>
+                          <div className="text-[13px] text-muted-foreground sm:text-xs">
+                            Appointment ID
+                          </div>
                           <div className="font-display text-xl font-bold text-foreground break-all">
                             {a.appointmentNo}
                           </div>
@@ -494,7 +510,7 @@ function AppointmentStatusPage() {
                           {APPOINTMENT_STATUS_LABELS[a.status]}
                         </span>
                       </div>
-                      <div className="mt-4 space-y-2 border-t border-border pt-3 text-sm">
+                      <div className="mt-4 space-y-2 border-t border-border pt-3 text-[15px] sm:text-sm">
                         <ResultRow label="Patient" value={a.patientName} />
                         <ResultRow label="Service" value={a.serviceName ?? "—"} />
                         <ResultRow

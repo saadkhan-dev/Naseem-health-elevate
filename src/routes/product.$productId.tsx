@@ -222,14 +222,14 @@ function ProductDetail() {
                 )}
 
                 {product.description && (
-                  <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+                  <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
                     {product.description}
                   </p>
                 )}
 
                 {typeof product.stock_quantity === "number" && (
                   <div
-                    className={`mt-3 text-xs font-medium ${
+                    className={`mt-3 text-[13px] font-medium sm:text-xs ${
                       product.stock_quantity > 0 ? "text-emerald-600" : "text-destructive"
                     }`}
                   >
@@ -284,7 +284,7 @@ function ProductDetail() {
                       <Zap className="h-4 w-4 text-primary" /> Buy Now
                     </Button>
 
-                    <div className="grid gap-2 pt-2 text-xs text-muted-foreground sm:grid-cols-3">
+                    <div className="grid gap-2 pt-2 text-[13px] text-muted-foreground sm:grid-cols-3 sm:text-xs">
                       <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5">
                         <ShieldCheck className="h-4 w-4 text-primary" /> Verified by the clinic
                       </div>
@@ -297,7 +297,7 @@ function ProductDetail() {
                     </div>
                   </div>
                 ) : (
-                  <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[15px] text-amber-800 sm:text-sm">
                     This product is currently out of stock. Please contact the clinic.
                   </div>
                 )}
@@ -343,7 +343,7 @@ function ProductDetail() {
                         </span>
                       </div>
                       {r.comment && (
-                        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                        <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
                           {r.comment}
                         </p>
                       )}
@@ -413,7 +413,7 @@ function ProductDetail() {
                   )}
                 </div>
               ) : (
-                <p className="mt-6 text-sm text-muted-foreground">
+                <p className="mt-6 text-[15px] text-muted-foreground sm:text-sm">
                   <Link to="/" className="font-medium text-primary hover:underline">
                     Sign in
                   </Link>{" "}

@@ -52,7 +52,9 @@ export function VideoOfferCards({ offers, basePrice, className }: VideoOfferCard
             )}
           >
             <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-              <span className="min-w-0 text-sm font-semibold text-foreground">{o.title}</span>
+              <span className="min-w-0 text-[15px] font-semibold text-foreground sm:text-sm">
+                {o.title}
+              </span>
               <span
                 className={cn(
                   "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
@@ -64,7 +66,7 @@ export function VideoOfferCards({ offers, basePrice, className }: VideoOfferCard
                 {active ? "Active" : "Upcoming"}
               </span>
             </div>
-            <div className="mt-0.5 text-xs text-muted-foreground">
+            <div className="mt-0.5 text-[13px] text-muted-foreground sm:text-xs">
               <span className="font-medium text-foreground">{discountLabel(o)}</span>
               {active
                 ? o.end_date
@@ -74,9 +76,11 @@ export function VideoOfferCards({ offers, basePrice, className }: VideoOfferCard
                     o.end_date ? `, ends ${formatOfferDate(o.end_date)}` : ""
                   }`}
             </div>
-            {o.description && <p className="mt-1 text-xs text-muted-foreground">{o.description}</p>}
+            {o.description && (
+              <p className="mt-1 text-[13px] text-muted-foreground sm:text-xs">{o.description}</p>
+            )}
             {activePrice != null && (
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-[13px] text-muted-foreground sm:text-xs">
                 You pay <span className="font-bold text-primary">Rs. {activePrice}</span>
                 {activePrice < basePrice! && (
                   <>

@@ -66,7 +66,7 @@ function AboutPage() {
             </div>
           ) : !profile ? (
             <div className="mt-10 flex flex-col items-center gap-3 rounded-3xl border border-border bg-card p-12 text-center">
-              <p className="text-sm text-muted-foreground">Profile coming soon.</p>
+              <p className="text-[15px] text-muted-foreground sm:text-sm">Profile coming soon.</p>
             </div>
           ) : (
             <div className="mt-6 rounded-3xl border border-border bg-card shadow-soft">
@@ -88,38 +88,40 @@ function AboutPage() {
                   </h1>
                   <div className="mt-1 font-medium text-primary">{profile.title}</div>
                   {profile.tagline && (
-                    <p className="mt-2 text-sm text-muted-foreground">{profile.tagline}</p>
+                    <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
+                      {profile.tagline}
+                    </p>
                   )}
                 </div>
               </div>
 
               <div className="p-8">
                 {profile.bio && (
-                  <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">
+                  <p className="whitespace-pre-line text-[15px] leading-relaxed text-foreground sm:text-sm">
                     {profile.bio}
                   </p>
                 )}
 
                 {profile.experience_years > 0 && (
-                  <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="mt-6 flex items-center gap-2 text-[15px] text-muted-foreground sm:text-sm">
                     <Award className="h-4 w-4 text-primary" />
                     {profile.experience_years}+ years of experience
                   </div>
                 )}
                 {profile.credentials && (
-                  <div className="mt-3 flex items-start gap-2 text-sm text-muted-foreground">
+                  <div className="mt-3 flex items-start gap-2 text-[15px] text-muted-foreground sm:text-sm">
                     <Award className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                     <span className="whitespace-pre-line">{profile.credentials}</span>
                   </div>
                 )}
                 {profile.education && (
-                  <div className="mt-3 flex items-start gap-2 text-sm text-muted-foreground">
+                  <div className="mt-3 flex items-start gap-2 text-[15px] text-muted-foreground sm:text-sm">
                     <GraduationCap className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                     <span className="whitespace-pre-line">{profile.education}</span>
                   </div>
                 )}
                 {profile.languages && (
-                  <div className="mt-3 flex items-start gap-2 text-sm text-muted-foreground">
+                  <div className="mt-3 flex items-start gap-2 text-[15px] text-muted-foreground sm:text-sm">
                     <Languages className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                     <span>{profile.languages}</span>
                   </div>
@@ -149,21 +151,21 @@ function AboutPage() {
                 <div className="mt-8 flex flex-wrap gap-3">
                   <Link
                     to="/booking"
-                    className="inline-flex h-11 items-center gap-2 rounded-xl bg-gradient-primary px-5 text-sm font-semibold text-primary-foreground shadow-card transition hover:brightness-[1.05]"
+                    className="inline-flex h-11 items-center gap-2 rounded-xl bg-gradient-primary px-5 text-[15px] font-semibold text-primary-foreground shadow-card transition hover:brightness-[1.05] sm:text-sm"
                   >
                     <CalendarCheck className="h-4 w-4" /> Book an appointment
                   </Link>
                   <Link
                     to="/booking"
                     search={{ mode: "video" }}
-                    className="inline-flex h-11 items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-5 text-sm font-semibold text-primary transition hover:bg-primary/20"
+                    className="inline-flex h-11 items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-5 text-[15px] font-semibold text-primary transition hover:bg-primary/20 sm:text-sm"
                   >
                     Video consultation
                   </Link>
                 </div>
 
                 {(profile.phone || profile.email || profile.address) && (
-                  <div className="mt-6 border-t border-border pt-5 text-sm text-muted-foreground">
+                  <div className="mt-6 border-t border-border pt-5 text-[15px] text-muted-foreground sm:text-sm">
                     {profile.phone && <div>Phone: {profile.phone}</div>}
                     {profile.email && <div>Email: {profile.email}</div>}
                     {profile.address && <div>Address: {profile.address}</div>}

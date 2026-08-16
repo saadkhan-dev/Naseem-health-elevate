@@ -39,19 +39,19 @@ export function Hero() {
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5 lg:justify-start xl:flex-nowrap">
             <SectionLink
               hash="booking"
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-soft transition-all duration-300 hover:-translate-y-0.5 hover:brightness-[1.05] hover:shadow-glass active:scale-[0.97]"
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-primary px-6 py-3.5 text-[15px] font-semibold text-primary-foreground shadow-soft transition-all duration-300 hover:-translate-y-0.5 hover:brightness-[1.05] hover:shadow-glass active:scale-[0.97] sm:text-sm"
             >
               <Calendar className="h-4 w-4" /> Book Appointment
             </SectionLink>
             <SectionLink
               hash="video-consultation"
-              className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-6 py-3.5 text-sm font-semibold text-foreground shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-muted hover:shadow-soft active:scale-[0.97]"
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-6 py-3.5 text-[15px] font-semibold text-foreground shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-muted hover:shadow-soft active:scale-[0.97] sm:text-sm"
             >
               <Video className="h-4 w-4 text-primary" /> Video Consultation
             </SectionLink>
             <a
               href="#diseases"
-              className="inline-flex items-center gap-2 rounded-full border-2 border-primary bg-card px-4 py-3.5 text-sm font-semibold text-primary shadow-soft transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary hover:text-primary-foreground hover:shadow-glass active:scale-[0.97]"
+              className="inline-flex items-center gap-2 rounded-full border-2 border-primary bg-card px-4 py-3.5 text-[15px] font-semibold text-primary shadow-soft transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary hover:text-primary-foreground hover:shadow-glass active:scale-[0.97] sm:text-sm"
             >
               <Stethoscope className="h-4 w-4" /> Diseases We Treat
             </a>
@@ -71,10 +71,10 @@ export function Hero() {
                   <Icon className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 text-left leading-tight">
-                  <div className="text-xs font-semibold text-foreground transition-colors duration-300 group-hover:text-primary">
+                  <div className="text-[13px] font-semibold text-foreground transition-colors duration-300 group-hover:text-primary sm:text-xs">
                     {t}
                   </div>
-                  <div className="text-[11px] text-muted-foreground">{s}</div>
+                  <div className="text-xs text-muted-foreground">{s}</div>
                 </div>
               </div>
             ))}

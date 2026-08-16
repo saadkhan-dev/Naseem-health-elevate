@@ -187,7 +187,7 @@ function BookingPage() {
               <h1 className="font-display text-3xl font-bold text-red-600">
                 {isVideoMode ? "Book a Video Consultation" : "Book Your Appointment"}
               </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
                 {isVideoMode
                   ? selectedService?.duration_minutes
                     ? `Pick a date and ${selectedService.duration_minutes}-minute slot for your online video consultation with Dr. Naseem Ahmed Khan.`
@@ -246,7 +246,7 @@ function BookingPage() {
                   className="mx-auto [--cell-size:1.75rem] min-[360px]:[--cell-size:2rem]"
                 />
               </div>
-              <p className="mt-3 text-xs text-muted-foreground">
+              <p className="mt-3 text-[13px] text-muted-foreground sm:text-xs">
                 {isHomeVisit
                   ? "Home visits are flexible — pick any future date and the doctor will confirm the time."
                   : "Greyed-out dates are closed or already fully booked."}
@@ -309,10 +309,10 @@ function BookingPage() {
                           <Home className="h-5 w-5" />
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-foreground">
+                          <p className="text-[15px] font-semibold text-foreground sm:text-sm">
                             Flexible timing — the doctor confirms your visit time
                           </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
+                          <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground sm:text-xs">
                             Home visits have no fixed slots. After booking, Dr. Naseem will call you
                             to agree on the exact time and confirm the fee, which depends on the
                             time and distance.
@@ -320,7 +320,7 @@ function BookingPage() {
                         </div>
                       </div>
                       <div className="mt-4">
-                        <div className="mb-1.5 text-xs font-medium text-foreground">
+                        <div className="mb-1.5 text-[13px] font-medium text-foreground sm:text-xs">
                           Preferred Time <span className="text-muted-foreground">(optional)</span>
                         </div>
                         <Input
@@ -333,7 +333,7 @@ function BookingPage() {
 
                       <div className="mt-6 grid gap-3 sm:grid-cols-2">
                         <div>
-                          <div className="mb-1.5 text-xs font-medium text-foreground">
+                          <div className="mb-1.5 text-[13px] font-medium text-foreground sm:text-xs">
                             Your Name
                           </div>
                           <Input
@@ -344,7 +344,7 @@ function BookingPage() {
                           />
                         </div>
                         <div>
-                          <div className="mb-1.5 text-xs font-medium text-foreground">
+                          <div className="mb-1.5 text-[13px] font-medium text-foreground sm:text-xs">
                             Phone Number <span className="text-muted-foreground">(optional)</span>
                           </div>
                           <Input
@@ -355,7 +355,7 @@ function BookingPage() {
                           />
                         </div>
                         <div>
-                          <div className="mb-1.5 text-xs font-medium text-foreground">
+                          <div className="mb-1.5 text-[13px] font-medium text-foreground sm:text-xs">
                             Email Address <span className="text-muted-foreground">(optional)</span>
                           </div>
                           <Input
@@ -366,13 +366,15 @@ function BookingPage() {
                             className="h-11 rounded-xl"
                           />
                         </div>
-                        <p className="text-xs text-muted-foreground sm:col-span-2">
+                        <p className="text-[13px] text-muted-foreground sm:col-span-2 sm:text-xs">
                           Provide at least one — we'll send your Appointment ID there.
                         </p>
                       </div>
 
                       {formError && (
-                        <p className="mt-3 text-sm font-medium text-destructive">{formError}</p>
+                        <p className="mt-3 text-[15px] font-medium text-destructive sm:text-sm">
+                          {formError}
+                        </p>
                       )}
 
                       <Button
@@ -394,12 +396,12 @@ function BookingPage() {
                   ) : !date ? (
                     <div className="mt-6 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-background py-14 text-center">
                       <AlertTriangle className="h-10 w-10 text-muted-foreground" />
-                      <p className="mt-3 max-w-xs text-sm text-muted-foreground">
+                      <p className="mt-3 max-w-xs text-[15px] text-muted-foreground sm:text-sm">
                         Select a date on the calendar to see the available time slots.
                       </p>
                     </div>
                   ) : slotsLoading ? (
-                    <div className="mt-6 flex items-center justify-center gap-2 py-14 text-sm text-muted-foreground">
+                    <div className="mt-6 flex items-center justify-center gap-2 py-14 text-[15px] text-muted-foreground sm:text-sm">
                       <Loader2 className="h-5 w-5 animate-spin" /> Checking available slots...
                     </div>
                   ) : slots.length === 0 ? (
@@ -413,7 +415,7 @@ function BookingPage() {
                     </Alert>
                   ) : (
                     <div className="mt-6">
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-[15px] text-muted-foreground sm:text-sm">
                         {slots.length} open slot{slots.length === 1 ? "" : "s"} available. Select a
                         time to book.
                       </p>
@@ -426,7 +428,7 @@ function BookingPage() {
                               setTime(t);
                             }}
                             className={cn(
-                              "flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors",
+                              "flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-[15px] font-medium transition-colors sm:text-sm",
                               time === t
                                 ? "border-primary bg-primary text-primary-foreground"
                                 : "border-border bg-background text-foreground hover:bg-muted",
@@ -439,7 +441,7 @@ function BookingPage() {
                       </div>
 
                       {isVideoMode && selectedService && (
-                        <div className="mt-4 flex items-center gap-2 rounded-xl border border-primary/30 bg-primary-soft px-4 py-3 text-sm">
+                        <div className="mt-4 flex items-center gap-2 rounded-xl border border-primary/30 bg-primary-soft px-4 py-3 text-[15px] sm:text-sm">
                           <Video className="h-4 w-4 text-primary" />
                           <span className="text-muted-foreground">
                             Online Video Consultation
@@ -457,7 +459,7 @@ function BookingPage() {
 
                       <div className="mt-6 grid gap-3 sm:grid-cols-2">
                         <div>
-                          <div className="mb-1.5 text-xs font-medium text-foreground">
+                          <div className="mb-1.5 text-[13px] font-medium text-foreground sm:text-xs">
                             Your Name
                           </div>
                           <Input
@@ -468,7 +470,7 @@ function BookingPage() {
                           />
                         </div>
                         <div>
-                          <div className="mb-1.5 text-xs font-medium text-foreground">
+                          <div className="mb-1.5 text-[13px] font-medium text-foreground sm:text-xs">
                             Phone Number <span className="text-muted-foreground">(optional)</span>
                           </div>
                           <Input
@@ -479,7 +481,7 @@ function BookingPage() {
                           />
                         </div>
                         <div>
-                          <div className="mb-1.5 text-xs font-medium text-foreground">
+                          <div className="mb-1.5 text-[13px] font-medium text-foreground sm:text-xs">
                             Email Address <span className="text-muted-foreground">(optional)</span>
                           </div>
                           <Input
@@ -490,13 +492,15 @@ function BookingPage() {
                             className="h-11 rounded-xl"
                           />
                         </div>
-                        <p className="text-xs text-muted-foreground sm:col-span-2">
+                        <p className="text-[13px] text-muted-foreground sm:col-span-2 sm:text-xs">
                           Provide at least one — we'll send your Appointment ID there.
                         </p>
                       </div>
 
                       {formError && (
-                        <p className="mt-3 text-sm font-medium text-destructive">{formError}</p>
+                        <p className="mt-3 text-[15px] font-medium text-destructive sm:text-sm">
+                          {formError}
+                        </p>
                       )}
 
                       <Button

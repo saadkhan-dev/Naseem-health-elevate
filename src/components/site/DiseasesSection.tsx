@@ -120,12 +120,12 @@ function ConditionList({
                 <span className="rounded-full bg-primary-soft px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
                   {categoryLabels[c.category]}
                 </span>
-                <span className="font-display text-base font-semibold text-foreground sm:text-lg">
+                <span className="font-display text-[17px] font-semibold text-foreground sm:text-lg">
                   {c.title}
                 </span>
               </span>
             </AccordionTrigger>
-            <AccordionContent className="pr-2 text-sm leading-relaxed text-muted-foreground">
+            <AccordionContent className="pr-2 text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
               {c.description}
             </AccordionContent>
           </AccordionItem>
@@ -327,11 +327,11 @@ export function DiseasesSection() {
             Diseases & Symptoms
           </h2>
 
-          <h3 className="mt-3 font-display text-xl font-semibold text-primary sm:text-2xl">
+          <h3 className="mt-3 font-display text-[22px] font-semibold text-primary sm:text-2xl">
             Your Health, Our Care
           </h3>
 
-          <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+          <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground sm:text-base">
             Explore the conditions we treat — tap any condition to read its details.
           </p>
         </div>
@@ -389,7 +389,7 @@ export function DiseasesSection() {
                         i === activeIndex ? "bg-muted" : "bg-card",
                       )}
                     >
-                      <span className="min-w-0 truncate text-sm font-medium text-foreground">
+                      <span className="min-w-0 truncate text-[15px] font-medium text-foreground sm:text-sm">
                         {s.title}
                       </span>
                       <span className="shrink-0 rounded-full bg-primary-soft px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-primary">
@@ -445,10 +445,10 @@ export function DiseasesSection() {
             <>
               {showHomeo && (
                 <section className="mt-12">
-                  <h4 className="font-display text-lg font-semibold text-primary sm:text-xl">
+                  <h4 className="font-display text-[20px] font-semibold text-primary sm:text-xl">
                     Symptoms & Diseases Treated With Homeopathy
                   </h4>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
                     Personalized homeopathic consultation based on your individual symptoms, health
                     history and healthcare needs.
                   </p>
@@ -467,10 +467,10 @@ export function DiseasesSection() {
 
               {showPhysio && (
                 <section className="mt-14">
-                  <h4 className="font-display text-lg font-semibold text-primary sm:text-xl">
+                  <h4 className="font-display text-[20px] font-semibold text-primary sm:text-xl">
                     Physiotherapy Treatment
                   </h4>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
                     Professional physiotherapy support for pain management, rehabilitation, mobility
                     and improved physical function.
                   </p>

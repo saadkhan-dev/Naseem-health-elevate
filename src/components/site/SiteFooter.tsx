@@ -30,7 +30,7 @@ export function SiteFooter() {
               <div className="text-[11px] text-white/60">Homeopath & Physiotherapist</div>
             </div>
           </div>
-          <p className="mt-4 max-w-sm text-sm text-white/70">
+          <p className="mt-4 max-w-sm text-[15px] leading-relaxed text-white/70 sm:text-sm">
             Providing natural, safe and effective homeopathic & physiotherapy treatments to help you
             live a pain-free, healthy and better life.
           </p>
@@ -91,7 +91,7 @@ export function SiteFooter() {
 
         <div>
           <div className="mb-3 text-sm font-semibold text-white">Contact Us</div>
-          <ul className="space-y-2.5 text-sm text-white/75">
+          <ul className="space-y-2.5 text-[15px] text-white/75 sm:text-sm">
             <li>
               <a
                 href={telUrl}
@@ -122,7 +122,7 @@ export function SiteFooter() {
               <MapPin className="h-4 w-4 text-primary" /> Sirsyed Town Sector 11 C 2 North Karachi
             </li>
           </ul>
-          <div className="mt-5 rounded-xl bg-white/5 p-3 text-xs text-white/70">
+          <div className="mt-5 rounded-xl bg-white/5 p-3 text-[13px] text-white/70 sm:text-xs">
             <div className="mb-1 font-semibold text-white">Clinic Timings</div>
             Mon – Sat: 07:00 PM – 11:00 PM
             <br />
@@ -132,7 +132,7 @@ export function SiteFooter() {
         </div>
       </div>
       <div className="border-t border-white/10">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 px-4 py-5 text-xs text-white/60 sm:flex-row md:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 px-4 py-5 text-[13px] text-white/60 sm:flex-row sm:text-xs md:px-8">
           <div>© {new Date().getFullYear()} Dr. Naseem Ahmed Khan. All Rights Reserved.</div>
           <div>Designed with care for better health.</div>
         </div>
@@ -180,8 +180,8 @@ export function SiteFooter() {
 function FCol({ title, items }: { title: string; items: { label: string; href: string }[] }) {
   return (
     <div>
-      <div className="mb-3 text-sm font-semibold text-white">{title}</div>
-      <ul className="space-y-2.5 text-sm text-white/75">
+      <div className="mb-3 text-[15px] font-semibold text-white sm:text-sm">{title}</div>
+      <ul className="space-y-2.5 text-[15px] text-white/75 sm:text-sm">
         {items.map((i) =>
           i.href.startsWith("/#") ? (
             <li key={i.label}>
