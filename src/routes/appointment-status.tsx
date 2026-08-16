@@ -190,7 +190,9 @@ function AppointmentStatusPage() {
                 Check Appointment Status
               </h1>
               <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                To check your appointment status, please enter your appointment id, along with your phone number or email address. If you don't have your appointment id, you can find your appointment using the details you used when booking.
+                To check your appointment status, please enter your appointment id, along with your
+                phone number or email address. If you don't have your appointment id, you can find
+                your appointment using the details you used when booking.
               </p>
             </div>
 
@@ -387,9 +389,9 @@ function AppointmentStatusPage() {
                         result.appointment.video.sessionStatus !== "completed" &&
                         result.appointment.status === "confirmed" ? (
                           <>
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                <Video className="h-5 w-5 text-primary" />
+                            <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <Video className="h-5 w-5 shrink-0 text-primary" />
                                 <span className="text-sm font-semibold text-foreground">
                                   Video Consultation Ready
                                 </span>
@@ -536,9 +538,9 @@ function AppointmentStatusPage() {
 
 function ResultRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between gap-4">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-right font-medium text-foreground">{value}</span>
+    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      <span className="min-w-0 break-words text-right font-medium text-foreground">{value}</span>
     </div>
   );
 }

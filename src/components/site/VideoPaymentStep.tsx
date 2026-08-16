@@ -310,7 +310,7 @@ export function VideoPaymentStep({
 
       <div className="mx-auto mt-6 w-full max-w-md">
         <div className="text-sm font-semibold text-foreground">Payment Verification</div>
-        <div className="mt-2 grid grid-cols-2 gap-2 rounded-2xl bg-muted p-1">
+        <div className="mt-2 grid grid-cols-1 gap-2 rounded-2xl bg-muted p-1 min-[400px]:grid-cols-2">
           <button
             type="button"
             onClick={() => setVerificationMode("transaction")}
@@ -612,7 +612,7 @@ export function VideoPaymentStep({
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 min-[400px]:grid-cols-2">
                   <label
                     htmlFor="receipt-camera"
                     className="flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-dashed border-border bg-background px-4 py-4 text-left transition-colors hover:border-primary/40"

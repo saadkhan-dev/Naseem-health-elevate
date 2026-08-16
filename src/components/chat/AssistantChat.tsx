@@ -3,6 +3,7 @@ import { Bot, Loader2, Send, Sparkles, X } from "lucide-react";
 import { chatWithAssistant, type ChatTurn } from "@/lib/chat.functions";
 import { cn } from "@/lib/utils";
 import { useFloatingControls } from "@/hooks/useFloatingControls";
+import { useFloatingDismiss } from "@/hooks/useFloatingDismiss";
 
 const WELCOME_MESSAGE =
   "Hello! I'm the Naseem AI Assistant. I can help you book an appointment, explore our services, or answer questions about the clinic. How can I help today?";
@@ -46,6 +47,7 @@ export function AssistantChat() {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const { hidden } = useFloatingControls();
+  const { naseemDismissed, dismissNaseem } = useFloatingDismiss();
   const chatMaxHeight = "max(280px, calc(100dvh - 9.5rem - env(safe-area-inset-bottom, 0px)))";
   const [messages, setMessages] = useState<ChatTurn[]>([
     { role: "assistant", content: WELCOME_MESSAGE },
@@ -141,30 +143,43 @@ export function AssistantChat() {
   return (
     <>
       {/* Floating button */}
-      <button
-        type="button"
-        onClick={openChat}
-        aria-label="Chat with Naseem AI Assistant"
+      <div
         data-floating-control="true"
         className={cn(
-          "group fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+5.25rem)] z-50 flex items-center gap-2 rounded-full bg-gradient-primary py-1 pl-1 pr-3 text-primary-foreground shadow-soft transition-[transform,box-shadow,opacity] duration-300 hover:-translate-y-1 hover:shadow-glass active:scale-95 sm:right-5 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.25rem)] sm:gap-3 sm:py-2 sm:pl-2 sm:pr-5",
-          mounted && "pointer-events-none opacity-0",
-          hidden && "pointer-events-none opacity-0",
+          "fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+5.25rem)] z-50 transition-opacity duration-300 sm:right-5 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.25rem)]",
+          (mounted || hidden || naseemDismissed) && "pointer-events-none opacity-0",
         )}
       >
-        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 shadow-inner transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105 sm:h-10 sm:w-10">
-          <Bot className="h-4 w-4 sm:h-5 sm:w-5" />
-          <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-white/60" />
-        </span>
-        <span className="text-left leading-tight">
-          <span className="block font-display text-xs font-semibold sm:text-sm">
-            Naseem AI Assistant
-          </span>
-          <span className="hidden text-[10px] text-primary-foreground/85 sm:block sm:text-[11px]">
-            How can we help you?
-          </span>
-        </span>
-      </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={openChat}
+            aria-label="Chat with Naseem AI Assistant"
+            className="group flex items-center gap-2 rounded-full bg-gradient-primary py-1 pl-1 pr-3 text-primary-foreground shadow-soft transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-glass active:scale-95 sm:gap-3 sm:py-2 sm:pl-2 sm:pr-5"
+          >
+            <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 shadow-inner transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105 sm:h-10 sm:w-10">
+              <Bot className="h-4 w-4 sm:h-5 sm:w-5" />
+              <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-white/60" />
+            </span>
+            <span className="text-left leading-tight">
+              <span className="block font-display text-xs font-semibold sm:text-sm">
+                Naseem AI Assistant
+              </span>
+              <span className="hidden text-[10px] text-primary-foreground/85 sm:block sm:text-[11px]">
+                How can we help you?
+              </span>
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={dismissNaseem}
+            aria-label="Hide Naseem AI Assistant button"
+            className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-soft transition-all duration-300 hover:bg-background hover:text-foreground active:scale-90"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
 
       {/* Chat window */}
       {mounted && (

@@ -95,8 +95,11 @@ function AdminDashboard() {
           ) : (
             <div className="divide-y">
               {todayAppts.map((a) => (
-                <div key={a.id} className="flex items-center justify-between px-5 py-3">
-                  <div>
+                <div
+                  key={a.id}
+                  className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-5 py-3"
+                >
+                  <div className="min-w-0">
                     <div className="text-sm font-medium text-foreground">
                       {a.patient_name ?? "Unknown"}
                     </div>

@@ -1,11 +1,22 @@
-import { Facebook, Instagram, MessageCircle, Phone, Mail, MapPin, Stethoscope } from "lucide-react";
+import {
+  Facebook,
+  Instagram,
+  MessageCircle,
+  Phone,
+  Mail,
+  MapPin,
+  Stethoscope,
+  X,
+} from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { PHONE, EMAIL, telUrl, whatsappUrl } from "@/lib/contact";
 import { SectionLink } from "@/components/site/SectionLink";
 import { useFloatingControls } from "@/hooks/useFloatingControls";
+import { useFloatingDismiss } from "@/hooks/useFloatingDismiss";
 
 export function SiteFooter() {
   const { hidden } = useFloatingControls();
+  const { whatsappDismissed, dismissWhatsapp } = useFloatingDismiss();
   return (
     <footer className="bg-[color:var(--footer)] text-[color:var(--footer-foreground)]">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 md:grid-cols-2 md:px-8 lg:grid-cols-5">
@@ -128,26 +139,40 @@ export function SiteFooter() {
       </div>
 
       {/* Floating WhatsApp */}
-      <a
-        href={whatsappUrl("Hi Dr. Naseem, I'd like to know more.")}
-        target="_blank"
-        rel="noreferrer"
-        aria-label="Chat on WhatsApp"
+      <div
         data-floating-control="true"
-        className={`group fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] z-50 flex items-center gap-2 rounded-full bg-[color:var(--whatsapp)] py-1 pl-1 pr-3 text-white shadow-soft transition-[transform,box-shadow,opacity] duration-300 hover:-translate-y-1 hover:shadow-glass active:scale-95 sm:right-5 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] sm:gap-3 sm:py-2 sm:pl-2 sm:pr-5 ${
-          hidden ? "pointer-events-none opacity-0" : ""
+        className={`fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] z-50 transition-[opacity] duration-300 sm:right-5 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] ${
+          hidden || whatsappDismissed ? "pointer-events-none opacity-0" : "opacity-100"
         }`}
       >
-        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 shadow-inner transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105 sm:h-10 sm:w-10">
-          <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5" />
-        </span>
-        <span className="text-left leading-tight">
-          <span className="block font-display text-xs font-semibold sm:text-sm">WhatsApp</span>
-          <span className="hidden text-[10px] text-white/85 sm:block sm:text-[11px]">
-            Chat with us
-          </span>
-        </span>
-      </a>
+        <div className="relative">
+          <a
+            href={whatsappUrl("Hi Dr. Naseem, I'd like to know more.")}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Chat on WhatsApp"
+            className={`group flex items-center gap-2 rounded-full bg-[color:var(--whatsapp)] py-1 pl-1 pr-3 text-white shadow-soft transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-glass active:scale-95 sm:gap-3 sm:py-2 sm:pl-2 sm:pr-5`}
+          >
+            <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 shadow-inner transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105 sm:h-10 sm:w-10">
+              <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5" />
+            </span>
+            <span className="text-left leading-tight">
+              <span className="block font-display text-xs font-semibold sm:text-sm">WhatsApp</span>
+              <span className="hidden text-[10px] text-white/85 sm:block sm:text-[11px]">
+                Chat with us
+              </span>
+            </span>
+          </a>
+          <button
+            type="button"
+            onClick={dismissWhatsapp}
+            aria-label="Hide WhatsApp button"
+            className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-soft transition-all duration-300 hover:bg-background hover:text-foreground active:scale-90"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
     </footer>
   );
 }

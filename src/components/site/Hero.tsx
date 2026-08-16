@@ -57,7 +57,7 @@ export function Hero() {
             </a>
           </div>
 
-          <div className="mt-8 grid grid-cols-3 gap-4 max-w-lg">
+          <div className="mt-8 grid max-w-lg grid-cols-1 gap-4 min-[420px]:grid-cols-3">
             {[
               { Icon: UserRound, t: "Experienced Doctor", s: "20 Years of expertise" },
               { Icon: ShieldCheck, t: "Natural & Safe", s: "Gentle & Effective" },
@@ -67,7 +67,7 @@ export function Hero() {
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110">
                   <Icon className="h-4 w-4" />
                 </div>
-                <div className="leading-tight">
+                <div className="min-w-0 leading-tight">
                   <div className="text-xs font-semibold text-foreground transition-colors duration-300 group-hover:text-primary">
                     {t}
                   </div>

@@ -308,12 +308,12 @@ function OrderCard({
         {(order.order_items ?? []).map((item, i) => (
           <div
             key={i}
-            className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2 text-sm"
+            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg bg-muted/40 px-3 py-2 text-sm"
           >
-            <span className="text-foreground">
+            <span className="min-w-0 break-words text-foreground">
               {item.product_name} <span className="text-muted-foreground">× {item.quantity}</span>
             </span>
-            <span className="flex items-center gap-3">
+            <span className="flex shrink-0 items-center gap-3">
               {order.status === "delivered" && item.product_id && (
                 <Link
                   to="/product/$productId"
