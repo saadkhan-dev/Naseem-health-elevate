@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, PhoneOff, Clock, AlertTriangle, Captions, CaptionsOff } from "lucide-react";
+import {
+  Loader2,
+  PhoneOff,
+  Clock,
+  AlertTriangle,
+  Captions,
+  CaptionsOff,
+  Video,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface JitsiApi {
@@ -66,6 +74,30 @@ function loadJitsiScript(domain: string): Promise<void> {
   });
 }
 
+type MediaPermissionState = "granted" | "denied" | "unknown";
+
+/**
+ * Best-effort pre-flight camera/microphone permission check before starting
+ * the conference. Uses the Permissions API where supported; browsers without
+ * it (or with unsupported permission names) fall through to "unknown" so we
+ * never block the call on a check the browser cannot perform.
+ */
+async function checkMediaPermissions(): Promise<MediaPermissionState> {
+  if (typeof navigator === "undefined" || !navigator.permissions?.query) {
+    return "unknown";
+  }
+  try {
+    const camera = await navigator.permissions.query({ name: "camera" as PermissionName });
+    const mic = await navigator.permissions.query({ name: "microphone" as PermissionName });
+    if (camera.state === "denied" || mic.state === "denied") {
+      return "denied";
+    }
+    return "granted";
+  } catch {
+    return "unknown";
+  }
+}
+
 export function VideoCallRoom({
   roomName,
   domain = "meet.jit.si",
@@ -117,8 +149,19 @@ export function VideoCallRoom({
     startTimeRef.current = Date.now();
 
     loadJitsiScript(domain)
-      .then(() => {
+      .then(async () => {
         if (disposed || !window.JitsiMeetExternalAPI || !containerRef.current) return;
+
+        // Check camera/mic permission BEFORE opening the conference so a
+        // blocked browser can be told exactly what to fix instead of staring
+        // at a black room. Falls through safely when unsupported.
+        const media = await checkMediaPermissions();
+        if (disposed) return;
+        if (media === "denied") {
+          setLoading(false);
+          setPermissionError(true);
+          return;
+        }
 
         const api = new window.JitsiMeetExternalAPI(domain, {
           roomName,
@@ -277,6 +320,27 @@ export function VideoCallRoom({
     onLeave();
   };
 
+  /**
+   * "Allow Camera & Microphone" — request real media permission from the
+   * browser (which shows the permission prompt) and then retry the call.
+   * Never throws: if permission is still refused, the retry re-runs the
+   * pre-flight check and the user stays on the clear permission message.
+   */
+  const handleAllowMedia = async () => {
+    setPermissionError(false);
+    setLoading(true);
+    try {
+      if (navigator.mediaDevices?.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    } catch {
+      // Permission still denied or device unavailable — the retry below will
+      // surface the right state again.
+    }
+    setRetryKey((k) => k + 1);
+  };
+
   if (ended) {
     return (
       <div className="flex h-full flex-col items-center justify-center bg-background p-8 text-center">
@@ -310,12 +374,9 @@ export function VideoCallRoom({
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-background p-8 text-center">
           <div className="max-w-sm">
             <AlertTriangle className="mx-auto h-8 w-8 text-red-600" />
-            <h2 className="mt-4 text-xl font-semibold text-foreground">
-              Could not load video call
-            </h2>
+            <h2 className="mt-4 text-xl font-semibold text-foreground">Service unavailable</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              The video call provider could not be loaded. Please check your internet connection and
-              try again.
+              Unable to load the video consultation service. Please try again.
             </p>
             <div className="mt-6 flex justify-center gap-3">
               <Button onClick={() => setRetryKey((k) => k + 1)} className="gap-1.5">
@@ -355,18 +416,23 @@ export function VideoCallRoom({
           <div className="max-w-sm">
             <AlertTriangle className="mx-auto h-8 w-8 text-amber-500" />
             <h2 className="mt-4 text-xl font-semibold text-foreground">
-              Camera or microphone blocked
+              Camera and microphone access is required
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              To join the call, allow your browser to use the camera and microphone, then click Try
-              Again. If you previously blocked access, change it in your browser's site settings.
-              Make sure no other app is using the camera or microphone.
+              Camera and microphone access is required for your video consultation.
             </p>
-            <div className="mt-6 flex justify-center gap-3">
-              <Button onClick={() => setRetryKey((k) => k + 1)} className="gap-1.5">
+            <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+              <Button onClick={handleAllowMedia} className="gap-1.5">
+                <Video className="h-4 w-4" /> Allow Camera &amp; Microphone
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setRetryKey((k) => k + 1)}
+                className="gap-1.5"
+              >
                 <Loader2 className="h-4 w-4" /> Try Again
               </Button>
-              <Button variant="outline" onClick={handleLeave}>
+              <Button variant="ghost" onClick={handleLeave}>
                 Go Back
               </Button>
             </div>
@@ -385,7 +451,7 @@ export function VideoCallRoom({
             </p>
             <div className="mt-6 flex justify-center gap-3">
               <Button onClick={() => setRetryKey((k) => k + 1)} className="gap-1.5">
-                <Loader2 className="h-4 w-4" /> Try Again
+                <Loader2 className="h-4 w-4" /> Reconnect
               </Button>
               <Button variant="outline" onClick={handleLeave}>
                 Go Back
