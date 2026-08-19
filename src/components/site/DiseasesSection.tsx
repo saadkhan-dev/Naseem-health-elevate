@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Search, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, X, ChevronLeft, ChevronRight, Leaf, Activity, Filter } from "lucide-react";
 import { useConditions } from "@/hooks/queries/useContent";
 import type { Condition, ConditionCategory } from "@/lib/site-content";
 import {
@@ -10,6 +10,9 @@ import {
 } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { SectionHeading } from "@/components/site/SectionHeading";
+import { Reveal } from "@/components/site/Reveal";
+import { SectionDeco } from "@/components/site/SectionDeco";
 
 const PER_PAGE = 6;
 const MAX_SUGGESTIONS = 8;
@@ -96,7 +99,7 @@ function ConditionList({
 
   if (conditions.length === 0) {
     return (
-      <div className="rounded-3xl border border-border bg-card py-12 text-center shadow-card">
+      <div className="rounded-3xl border border-dashed border-border bg-card py-12 text-center shadow-card">
         <p className="text-sm font-medium text-foreground">No conditions found</p>
         <p className="mt-1 text-xs text-muted-foreground">
           Try a different search term or category.
@@ -114,13 +117,24 @@ function ConditionList({
         className="overflow-hidden rounded-3xl border border-border bg-card shadow-card transition-shadow duration-300 hover:shadow-soft"
       >
         {pageItems.map((c) => (
-          <AccordionItem key={c.id} value={c.id} className="px-5 last:border-0">
-            <AccordionTrigger className="gap-3 -mx-2 rounded-xl px-2 py-4 transition-all duration-200 hover:bg-muted/40 hover:no-underline active:scale-[0.99]">
+          <AccordionItem
+            key={c.id}
+            value={c.id}
+            className="px-5 transition-colors duration-200 first:rounded-t-3xl last:rounded-b-3xl last:border-0"
+          >
+            <AccordionTrigger className="group gap-3 -mx-2 rounded-xl px-2 py-4 transition-all duration-200 hover:bg-muted/40 hover:no-underline active:scale-[0.99]">
               <span className="flex flex-1 items-center gap-3 text-left pr-2">
-                <span className="rounded-full bg-primary-soft px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
+                <span
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide",
+                    c.category === "homeopathic"
+                      ? "bg-primary-soft text-primary"
+                      : "bg-sky-100 text-sky-700",
+                  )}
+                >
                   {categoryLabels[c.category]}
                 </span>
-                <span className="font-display text-[17px] font-semibold text-foreground sm:text-lg">
+                <span className="font-display text-[17px] font-semibold text-foreground transition-colors duration-200 group-hover:text-primary sm:text-lg">
                   {c.title}
                 </span>
               </span>
@@ -159,7 +173,7 @@ function ConditionList({
                 className={cn(
                   "h-9 w-9 rounded-full text-sm font-medium transition-all duration-300",
                   n === currentPage
-                    ? "bg-primary text-primary-foreground shadow-sm"
+                    ? "bg-gradient-primary text-primary-foreground shadow-sm"
                     : "border border-border bg-card text-foreground hover:-translate-y-0.5 hover:bg-muted hover:shadow-sm active:scale-90",
                 )}
                 aria-label={`Page ${n}`}
@@ -320,139 +334,163 @@ export function DiseasesSection() {
     : () => {};
 
   return (
-    <section id="diseases" className="py-16 sm:py-20">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-3xl text-center">
-          <h2 className="font-display text-4xl font-bold text-red-600 sm:text-5xl">
-            Diseases & Symptoms
-          </h2>
+    <section id="diseases" className="relative overflow-hidden bg-section-soft py-16 sm:py-24">
+      <SectionDeco />
+      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <Reveal>
+          <SectionHeading
+            eyebrow="Conditions We Treat"
+            title="Diseases & Symptoms"
+            accent="Your Health, Our Care"
+            subtitle="Explore the conditions we treat — tap any condition to read its details."
+          />
+        </Reveal>
 
-          <h3 className="mt-3 font-display text-[22px] font-semibold text-primary sm:text-2xl">
-            Your Health, Our Care
-          </h3>
+        <Reveal delay={80}>
+          <div className="mx-auto mt-12 max-w-3xl rounded-3xl border border-border bg-card/90 p-4 shadow-card backdrop-blur-sm sm:p-6">
+            <div ref={searchRef} className="relative">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="text"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setSelected(null);
+                  setActiveIndex(-1);
+                  setDropdownOpen(true);
+                }}
+                onKeyDown={handleKeyDown}
+                onFocus={() => {
+                  if (query.trim()) setDropdownOpen(true);
+                }}
+                placeholder="Search Homeopathic or Physiotherapy Conditions..."
+                className="h-12 w-full rounded-2xl border-border bg-background pl-10 shadow-sm transition-all duration-300 hover:border-primary/40 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:border-primary/40"
+                role="combobox"
+                aria-expanded={showDropdown}
+                aria-autocomplete="list"
+                aria-controls="condition-suggestions"
+                aria-activedescendant={
+                  activeIndex >= 0 ? `condition-option-${activeIndex}` : undefined
+                }
+              />
 
-          <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground sm:text-base">
-            Explore the conditions we treat — tap any condition to read its details.
-          </p>
-        </div>
-
-        <div className="mx-auto mt-10 max-w-3xl">
-          <div ref={searchRef} className="relative">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="text"
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setSelected(null);
-                setActiveIndex(-1);
-                setDropdownOpen(true);
-              }}
-              onKeyDown={handleKeyDown}
-              onFocus={() => {
-                if (query.trim()) setDropdownOpen(true);
-              }}
-              placeholder="Search Homeopathic or Physiotherapy Conditions..."
-              className="h-12 w-full rounded-2xl border-border bg-card pl-10 shadow-card transition-all duration-300 hover:border-primary/40 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:border-primary/40"
-              role="combobox"
-              aria-expanded={showDropdown}
-              aria-autocomplete="list"
-              aria-controls="condition-suggestions"
-              aria-activedescendant={
-                activeIndex >= 0 ? `condition-option-${activeIndex}` : undefined
-              }
-            />
-
-            {showDropdown && (
-              <div
-                id="condition-suggestions"
-                role="listbox"
-                className="absolute left-0 right-0 top-full z-50 mt-2 max-h-80 overflow-auto rounded-2xl border border-border bg-card py-1.5 shadow-soft animate-in fade-in zoom-in-95 duration-150"
-              >
-                {visibleSuggestions.length === 0 ? (
-                  <p className="px-4 py-3 text-sm text-muted-foreground">No conditions found</p>
-                ) : (
-                  visibleSuggestions.map((s, i) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      role="option"
-                      id={`condition-option-${i}`}
-                      aria-selected={i === activeIndex}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        selectSuggestion(s);
-                      }}
-                      onMouseEnter={() => setActiveIndex(i)}
-                      className={cn(
-                        "flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors duration-150 active:scale-[0.99]",
-                        i === activeIndex ? "bg-muted" : "bg-card",
-                      )}
-                    >
-                      <span className="min-w-0 truncate text-[15px] font-medium text-foreground sm:text-sm">
-                        {s.title}
-                      </span>
-                      <span className="shrink-0 rounded-full bg-primary-soft px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-primary">
-                        {categoryLabels[s.category]}
-                      </span>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="mt-4 flex flex-wrap justify-center gap-2">
-            {filterOptions.map(({ value, label }) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setFilter(value)}
-                className={cn(
-                  "rounded-full border px-4 py-2 text-sm font-medium transition-all duration-300",
-                  filter === value
-                    ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                    : "border-border bg-card text-foreground hover:-translate-y-0.5 hover:border-primary/40 hover:bg-muted hover:shadow-sm active:scale-95",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {selected ? (
-            <div className="mt-12 flex flex-col items-center">
-              <button
-                type="button"
-                onClick={clearSearch}
-                className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-muted hover:shadow-soft active:scale-95"
-              >
-                <X className="h-4 w-4" />
-                Show All Conditions
-              </button>
-              <div className="mt-4 w-full">
-                <ConditionList
-                  conditions={[selected]}
-                  page={1}
-                  onPageChange={() => {}}
-                  loading={false}
-                  value={selectedOpen}
-                  onValueChange={selectedOnValueChange}
-                />
-              </div>
+              {showDropdown && (
+                <div
+                  id="condition-suggestions"
+                  role="listbox"
+                  className="absolute left-0 right-0 top-full z-50 mt-2 max-h-80 overflow-auto rounded-2xl border border-border bg-card py-1.5 shadow-soft animate-in fade-in zoom-in-95 duration-150"
+                >
+                  {visibleSuggestions.length === 0 ? (
+                    <p className="px-4 py-3 text-sm text-muted-foreground">No conditions found</p>
+                  ) : (
+                    visibleSuggestions.map((s, i) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        role="option"
+                        id={`condition-option-${i}`}
+                        aria-selected={i === activeIndex}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          selectSuggestion(s);
+                        }}
+                        onMouseEnter={() => setActiveIndex(i)}
+                        className={cn(
+                          "flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors duration-150 active:scale-[0.99]",
+                          i === activeIndex ? "bg-muted" : "bg-card",
+                        )}
+                      >
+                        <span className="min-w-0 truncate text-[15px] font-medium text-foreground sm:text-sm">
+                          {s.title}
+                        </span>
+                        <span
+                          className={cn(
+                            "shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide",
+                            s.category === "homeopathic"
+                              ? "bg-primary-soft text-primary"
+                              : "bg-sky-100 text-sky-700",
+                          )}
+                        >
+                          {categoryLabels[s.category]}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
-          ) : (
-            <>
-              {showHomeo && (
-                <section className="mt-12">
-                  <h4 className="font-display text-[20px] font-semibold text-primary sm:text-xl">
-                    Symptoms & Diseases Treated With Homeopathy
-                  </h4>
-                  <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
-                    Personalized homeopathic consultation based on your individual symptoms, health
-                    history and healthcare needs.
-                  </p>
-                  <div className="mt-5">
+
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+              <span className="mr-1 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Filter className="h-3.5 w-3.5" />
+                Filter:
+              </span>
+              {filterOptions.map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setFilter(value)}
+                  className={cn(
+                    "rounded-full border px-4 py-2 text-sm font-medium transition-all duration-300",
+                    filter === value
+                      ? "border-primary bg-gradient-primary text-primary-foreground shadow-sm"
+                      : "border-border bg-background text-foreground hover:-translate-y-0.5 hover:border-primary/40 hover:bg-muted hover:shadow-sm active:scale-95",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </Reveal>
+
+        {selected ? (
+          <div className="mx-auto mt-12 flex max-w-3xl flex-col items-center">
+            <button
+              type="button"
+              onClick={clearSearch}
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-muted hover:shadow-soft active:scale-95"
+            >
+              <X className="h-4 w-4" />
+              Show All Conditions
+            </button>
+            <div className="mt-4 w-full">
+              <ConditionList
+                conditions={[selected]}
+                page={1}
+                onPageChange={() => {}}
+                loading={false}
+                value={selectedOpen}
+                onValueChange={selectedOnValueChange}
+              />
+            </div>
+          </div>
+        ) : (
+          <>
+            {showHomeo && (
+              <section className="mt-14">
+                <Reveal>
+                  <div className="flex items-start gap-3.5">
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 to-primary/5 text-primary ring-1 ring-primary/10">
+                      <Leaf className="h-6 w-6" />
+                    </span>
+                    <div>
+                      <h4 className="font-display text-[20px] font-semibold text-foreground sm:text-xl">
+                        Symptoms &amp; Diseases Treated With Homeopathy
+                      </h4>
+                      <p className="mt-1.5 max-w-2xl text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
+                        Personalized homeopathic consultation based on your individual symptoms,
+                        health history and healthcare needs.
+                      </p>
+                    </div>
+                  </div>
+                </Reveal>
+                <Reveal delay={80}>
+                  <div className="relative mt-6 overflow-hidden rounded-3xl border border-primary/10 bg-gradient-to-br from-primary/[0.06] to-transparent p-4 sm:p-5">
+                    <span
+                      aria-hidden
+                      className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/70 via-primary/30 to-transparent"
+                    />
                     <ConditionList
                       conditions={homeoConditions}
                       page={homeoPage}
@@ -462,19 +500,34 @@ export function DiseasesSection() {
                       onValueChange={setHomeoOpen}
                     />
                   </div>
-                </section>
-              )}
+                </Reveal>
+              </section>
+            )}
 
-              {showPhysio && (
-                <section className="mt-14">
-                  <h4 className="font-display text-[20px] font-semibold text-primary sm:text-xl">
-                    Physiotherapy Treatment
-                  </h4>
-                  <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
-                    Professional physiotherapy support for pain management, rehabilitation, mobility
-                    and improved physical function.
-                  </p>
-                  <div className="mt-5">
+            {showPhysio && (
+              <section className="mt-14">
+                <Reveal>
+                  <div className="flex items-start gap-3.5">
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500/15 to-sky-500/5 text-sky-600 ring-1 ring-sky-500/10">
+                      <Activity className="h-6 w-6" />
+                    </span>
+                    <div>
+                      <h4 className="font-display text-[20px] font-semibold text-foreground sm:text-xl">
+                        Physiotherapy Treatment
+                      </h4>
+                      <p className="mt-1.5 max-w-2xl text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
+                        Professional physiotherapy support for pain management, rehabilitation,
+                        mobility and improved physical function.
+                      </p>
+                    </div>
+                  </div>
+                </Reveal>
+                <Reveal delay={80}>
+                  <div className="relative mt-6 overflow-hidden rounded-3xl border border-sky-500/10 bg-gradient-to-br from-sky-500/[0.07] to-transparent p-4 sm:p-5">
+                    <span
+                      aria-hidden
+                      className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-500/70 via-sky-500/30 to-transparent"
+                    />
                     <ConditionList
                       conditions={physioConditions}
                       page={physioPage}
@@ -484,11 +537,11 @@ export function DiseasesSection() {
                       onValueChange={setPhysioOpen}
                     />
                   </div>
-                </section>
-              )}
-            </>
-          )}
-        </div>
+                </Reveal>
+              </section>
+            )}
+          </>
+        )}
       </div>
     </section>
   );

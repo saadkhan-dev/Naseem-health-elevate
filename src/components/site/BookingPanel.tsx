@@ -8,6 +8,7 @@ import {
   UserCog,
   ArrowRight,
   Loader2,
+  CalendarHeart,
 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -139,10 +140,30 @@ export function BookingPanel() {
 
   return (
     <section id="booking" className="relative -mt-10 px-4 md:-mt-16 md:px-8">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-10 top-1/2 hidden h-24 w-24 -translate-y-1/2 rounded-full border border-primary/10 lg:block"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute bottom-8 right-10 hidden h-16 w-16 rounded-full bg-primary/[0.08] lg:block"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute bottom-16 left-1/3 hidden h-3 w-3 rounded-full bg-red-500/20 lg:block"
+      />
       <div className="mx-auto max-w-7xl">
-        <div className="rounded-3xl border border-border bg-card p-5 shadow-soft md:p-8">
-          <div className="text-center">
-            <h2 className="font-display text-3xl font-bold text-red-600 sm:text-4xl">
+        <div className="relative overflow-hidden rounded-3xl border border-border bg-card p-5 shadow-soft md:p-8">
+          <div
+            aria-hidden
+            className="h-1.5 w-full bg-gradient-to-r from-primary via-primary/60 to-primary/20"
+          />
+          <div className="pt-6 text-center">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary-soft/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
+              <CalendarHeart className="h-3 w-3" />
+              Fast & Easy Booking
+            </span>
+            <h2 className="mt-3 font-display text-3xl font-bold text-red-600 sm:text-4xl">
               Book Your Appointment
             </h2>
             <p className="mx-auto mt-2 max-w-xl text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
@@ -293,7 +314,7 @@ export function BookingPanel() {
           <Button
             onClick={handleSubmit}
             disabled={!serviceId || !date || (!isHomeVisit && !time) || createAppointment.isPending}
-            className="mt-6 h-12 w-full rounded-xl hover:brightness-[1.05]"
+            className="mt-6 h-12 w-full rounded-full text-base shadow-soft transition-all duration-300 hover:-translate-y-0.5 hover:brightness-[1.05] hover:shadow-glass active:scale-[0.99]"
           >
             {createAppointment.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -312,7 +333,7 @@ export function BookingPanel() {
               { Icon: UserCog, t: "Doctor-Managed", s: "Schedules updated anytime" },
             ].map(({ Icon, t, s }) => (
               <div key={t} className="group flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft text-primary transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 text-primary ring-1 ring-primary/10 transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110">
                   <Icon className="h-4 w-4" />
                 </div>
                 <div className="leading-tight">

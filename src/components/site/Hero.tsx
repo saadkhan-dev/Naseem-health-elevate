@@ -1,3 +1,4 @@
+import * as React from "react";
 import {
   Calendar,
   Video,
@@ -7,10 +8,44 @@ import {
   Award,
   Stethoscope,
 } from "lucide-react";
+import useEmblaCarousel from "embla-carousel-react";
 import homeSectionImg from "@/assets/home-section.webp";
+import physioImage from "@/assets/physio_image.jpg.jpeg";
 import { SectionLink } from "@/components/site/SectionLink";
 
+const heroSlides = [
+  {
+    src: homeSectionImg,
+    alt: "Dr. Naseem Ahmed Khan — Homeopathic & Physiotherapist in Karachi",
+  },
+  {
+    src: physioImage,
+    alt: "Physiotherapy session at Rahat Homeopathic & Physiotherapy Clinic, Karachi",
+  },
+];
+
 export function Hero() {
+  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
+  const [current, setCurrent] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!emblaApi) return;
+
+    const onSelect = () => setCurrent(emblaApi.selectedScrollSnap());
+    onSelect();
+    emblaApi.on("select", onSelect);
+    return () => {
+      emblaApi.off("select", onSelect);
+    };
+  }, [emblaApi]);
+
+  React.useEffect(() => {
+    if (!emblaApi) return;
+
+    const id = window.setInterval(() => emblaApi.scrollNext(), 4500);
+    return () => window.clearInterval(id);
+  }, [emblaApi]);
+
   return (
     <section
       id="home"
@@ -84,13 +119,39 @@ export function Hero() {
         {/* Right */}
         <div className="relative">
           <div className="group relative mx-auto aspect-[4/5] w-full max-w-md overflow-hidden rounded-[2rem] bg-primary-soft shadow-soft">
-            <img
-              src={homeSectionImg}
-              alt="Dr. Naseem Ahmed Khan — Homeopathic & Physiotherapist in Karachi"
-              width={1122}
-              height={1402}
-              className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-            />
+            <div ref={emblaRef} className="h-full overflow-hidden">
+              <div className="flex h-full">
+                {heroSlides.map((slide, i) => (
+                  <div key={slide.src} className="relative h-full min-w-0 flex-[0_0_100%]">
+                    <img
+                      src={slide.src}
+                      alt={slide.alt}
+                      width={1122}
+                      height={1402}
+                      loading={slide.src === physioImage ? "lazy" : "eager"}
+                      className={`absolute inset-0 h-full w-full object-cover transition-transform duration-700 ${
+                        current === i ? "group-hover:scale-105" : ""
+                      }`}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Slider pagination dots */}
+            <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5">
+              {heroSlides.map((slide, i) => (
+                <button
+                  key={slide.src}
+                  type="button"
+                  aria-label={`Go to slide ${i + 1}`}
+                  onClick={() => emblaApi?.scrollTo(i)}
+                  className={`h-2 rounded-full shadow-sm transition-all duration-300 ${
+                    current === i ? "w-5 bg-white" : "w-2 bg-white/50 hover:bg-white/80"
+                  }`}
+                />
+              ))}
+            </div>
           </div>
 
           {/* Floating glass card */}
