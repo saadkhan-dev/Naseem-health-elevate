@@ -1,0 +1,546 @@
+@import url("https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap");
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", "Plus Jakarta Sans", serif;
+  --font-serif: "Instrument Serif", Georgia, serif;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-footer: var(--footer);
+  --color-footer-foreground: var(--footer-foreground);
+  --color-whatsapp: var(--whatsapp);
+}
+
+:root {
+  --radius: 0.875rem;
+  --navbar-height: 4.5rem;
+
+  /* Premium healthcare dark theme (matches the landing hero: near-black + emerald/teal/cyan) */
+  --background: oklch(0.128 0.016 195);
+  --foreground: oklch(0.975 0.008 190);
+  --card: oklch(0.168 0.02 195);
+  --card-foreground: oklch(0.96 0.01 190);
+  --popover: oklch(0.168 0.02 195);
+  --popover-foreground: oklch(0.96 0.01 190);
+  --primary: oklch(0.775 0.155 165);
+  --primary-foreground: oklch(0.175 0.035 160);
+  --primary-soft: oklch(0.26 0.06 170);
+  --secondary: oklch(0.21 0.02 200);
+  --secondary-foreground: oklch(0.95 0.01 190);
+  --muted: oklch(0.2 0.02 200);
+  --muted-foreground: oklch(0.72 0.02 200);
+  --accent: oklch(0.25 0.05 180);
+  --accent-foreground: oklch(0.95 0.02 180);
+  --destructive: oklch(0.68 0.2 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.27 0.02 200);
+  --input: oklch(0.24 0.02 200);
+  --ring: oklch(0.775 0.155 165);
+  --footer: oklch(0.095 0.018 195);
+  --footer-foreground: oklch(0.95 0.01 190);
+  --whatsapp: oklch(0.66 0.16 150);
+
+  --gradient-hero: linear-gradient(
+    135deg,
+    oklch(0.16 0.025 195) 0%,
+    oklch(0.2 0.045 200) 55%,
+    oklch(0.14 0.02 205) 100%
+  );
+  --gradient-primary: linear-gradient(135deg, oklch(0.775 0.155 165), oklch(0.76 0.12 195));
+  --shadow-soft: 0 10px 40px -12px oklch(0 0 0 / 0.6);
+  --shadow-card: 0 4px 20px -8px oklch(0 0 0 / 0.55);
+  --shadow-glass: 0 8px 32px -8px oklch(0 0 0 / 0.6);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    /* Native controls (date pickers, selects) follow the dark theme */
+    color-scheme: dark;
+    scroll-behavior: smooth;
+    /* Native in-page anchor jumps land below the sticky floating navbar */
+    scroll-padding-top: calc(var(--navbar-height) + 0.5rem);
+    background-color: var(--color-background);
+    /* Prevent horizontal page scrolling. `clip` (not `hidden`) keeps the navbar sticky. */
+    overflow-x: clip;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Guard against stray underlines on headings & serif em accents */
+  h1,
+  h2,
+  h3,
+  h4 {
+    text-decoration: none;
+  }
+  /* Remove browser-default underlines from all anchors.
+     Tailwind's hover:underline utility still works (higher specificity). */
+  a {
+    text-decoration: none;
+  }
+  h1 a,
+  h2 a,
+  h3 a,
+  h4 a {
+    text-decoration: none;
+  }
+  .font-serif-display em,
+  em,
+  i {
+    font-style: italic;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+
+  :where(a, button, input, select, textarea, summary, [tabindex], [role="button"]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@layer components {
+  .liquid-glass {
+    background: rgba(255, 255, 255, 0.02);
+    background-blend-mode: luminosity;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: none;
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.15),
+      0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .liquid-glass::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.4px;
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.45) 0%,
+      rgba(255, 255, 255, 0.15) 20%,
+      rgba(255, 255, 255, 0.02) 40%,
+      rgba(255, 255, 255, 0.02) 60%,
+      rgba(255, 255, 255, 0.15) 80%,
+      rgba(255, 255, 255, 0.45) 100%
+    );
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .liquid-glass-glow {
+    background: rgba(255, 255, 255, 0.03);
+    background-blend-mode: luminosity;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: none;
+    box-shadow:
+      inset 0 1px 2px rgba(255, 255, 255, 0.25),
+      0 12px 40px -8px rgba(0, 0, 0, 0.6);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .liquid-glass-glow::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.6) 0%,
+      rgba(255, 255, 255, 0.2) 25%,
+      rgba(255, 255, 255, 0.05) 50%,
+      rgba(255, 255, 255, 0.2) 75%,
+      rgba(255, 255, 255, 0.5) 100%
+    );
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .liquid-glass-card {
+    background: radial-gradient(
+      circle at top left,
+      rgba(255, 255, 255, 0.05) 0%,
+      rgba(255, 255, 255, 0.01) 100%
+    );
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+      0 20px 50px rgba(0, 0, 0, 0.5),
+      inset 0 1px 1px rgba(255, 255, 255, 0.15);
+  }
+
+  .landing-dark-panel {
+    color: #ffffff;
+  }
+  .landing-dark-panel input,
+  .landing-dark-panel textarea,
+  .landing-dark-panel select {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+    color: #ffffff !important;
+  }
+  .landing-dark-panel input::placeholder,
+  .landing-dark-panel textarea::placeholder {
+    color: rgba(255, 255, 255, 0.4) !important;
+  }
+}
+
+@layer utilities {
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+  .backface-hidden {
+    backface-visibility: hidden;
+  }
+  .text-glow {
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.35);
+  }
+  .text-glow-emerald {
+    text-shadow: 0 0 24px rgba(52, 211, 153, 0.4);
+  }
+  .bg-radial-glow {
+    background: radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.06) 0%, transparent 70%);
+  }
+  .bg-gradient-hero {
+    background: var(--gradient-hero);
+  }
+  .bg-gradient-primary {
+    background: var(--gradient-primary);
+  }
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+  .shadow-glass {
+    box-shadow: var(--shadow-glass);
+  }
+  .glass {
+    background: oklch(0.18 0.02 195 / 0.72);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+  .glass-dark {
+    background: oklch(0.15 0.02 195 / 0.72);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid oklch(1 0 0 / 0.1);
+  }
+  .font-display {
+    font-family: var(--font-display);
+  }
+  .font-serif-display {
+    font-family: var(--font-serif);
+  }
+
+  /* Native selects / popovers follow the dark theme */
+  option {
+    color: var(--color-foreground);
+    background-color: var(--color-card);
+  }
+
+  /* Keep embedded Google Maps vibrant & colourful (never grayscale) */
+  iframe[title*="map" i],
+  iframe[title*="Location" i],
+  .map-frame iframe {
+    filter: saturate(1.12) brightness(1.02) contrast(1.02) !important;
+    color-scheme: light;
+  }
+
+  /* Subtle section background decorations (dark, calm teal/emerald tones) */
+  .bg-section-sky {
+    background-image:
+      radial-gradient(50% 42% at 8% 0%, oklch(0.3 0.05 195 / 0.4), transparent 60%),
+      radial-gradient(42% 45% at 100% 100%, oklch(0.26 0.05 230 / 0.35), transparent 62%);
+  }
+  .bg-section-teal {
+    background-image:
+      radial-gradient(48% 48% at 0% 100%, oklch(0.28 0.06 200 / 0.42), transparent 60%),
+      radial-gradient(45% 40% at 100% 0%, oklch(0.26 0.04 230 / 0.36), transparent 62%);
+  }
+  .bg-section-soft {
+    background-image:
+      radial-gradient(55% 50% at 50% 0%, oklch(0.26 0.04 205 / 0.38), transparent 62%),
+      radial-gradient(40% 40% at 100% 80%, oklch(0.25 0.05 235 / 0.32), transparent 60%);
+  }
+  .bg-dot-grid {
+    background-image: radial-gradient(oklch(1 0 0 / 0.12) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+
+  /* Scroll-reveal helper used by the <Reveal /> component */
+  .reveal-hidden {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  .reveal-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .reveal-transition {
+    transition:
+      opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: opacity, transform;
+  }
+
+  /* Gentle floating for decorative elements */
+  @keyframes float-slow {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-14px);
+    }
+  }
+  .animate-float-slow {
+    animation: float-slow 9s ease-in-out infinite;
+  }
+  @keyframes float-slower {
+    0%,
+    100% {
+      transform: translateY(0) translateX(0);
+    }
+    50% {
+      transform: translateY(-10px) translateX(8px);
+    }
+  }
+  .animate-float-slower {
+    animation: float-slower 13s ease-in-out infinite;
+  }
+
+  /* Shine sweep that runs once across a card on hover */
+  .shine-sweep {
+    overflow: hidden;
+  }
+  .shine-sweep::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -75%;
+    width: 45%;
+    height: 100%;
+    background: linear-gradient(
+      100deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.14) 50%,
+      transparent 100%
+    );
+    transform: skewX(-20deg);
+    pointer-events: none;
+  }
+  @media (hover: hover) {
+    .shine-sweep:hover::after {
+      animation: shine-sweep 0.85s ease forwards;
+    }
+  }
+  @keyframes shine-sweep {
+    0%,
+    40% {
+      left: -75%;
+    }
+    100% {
+      left: 130%;
+    }
+  }
+
+  /* Slow rotating conic glow ring used on hero cards / quick actions */
+  @keyframes slow-spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  .animate-slow-spin {
+    animation: slow-spin 14s linear infinite;
+  }
+
+  /* Touch devices: static glow instead of a per-frame rotating conic gradient.
+     Keeps the identical look while avoiding constant repaints on mobile. */
+  @media (hover: none) {
+    .animate-slow-spin {
+      animation: none;
+    }
+  }
+
+  /* Chat: message entrance */
+  @keyframes chat-msg-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  .chat-msg-in {
+    animation: chat-msg-in 0.28s ease-out both;
+  }
+
+  /* Chat: typing dots */
+  @keyframes chat-typing-bounce {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    30% {
+      transform: translateY(-4px);
+      opacity: 1;
+    }
+  }
+  .chat-typing-dot {
+    animation: chat-typing-bounce 1.2s ease-in-out infinite;
+  }
+
+  /* Chat: thin scrollbar for the quick-help list */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(0.75 0.06 230) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: oklch(0.75 0.06 230);
+    border-radius: 9999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* Stagger children: each direct child fades/slides up with a delay.
+     Apply `stagger` to the parent container. */
+  .stagger > *:not([style]) {
+    opacity: 0;
+    transform: translateY(18px);
+    animation: stagger-in 0.55s ease-out both;
+  }
+  .stagger > *:not([style]):nth-child(1) {
+    animation-delay: 0ms;
+  }
+  .stagger > *:not([style]):nth-child(2) {
+    animation-delay: 80ms;
+  }
+  .stagger > *:not([style]):nth-child(3) {
+    animation-delay: 160ms;
+  }
+  .stagger > *:not([style]):nth-child(4) {
+    animation-delay: 240ms;
+  }
+  .stagger > *:not([style]):nth-child(5) {
+    animation-delay: 320ms;
+  }
+  .stagger > *:not([style]):nth-child(6) {
+    animation-delay: 400ms;
+  }
+  .stagger > *:not([style]):nth-child(7) {
+    animation-delay: 480ms;
+  }
+  .stagger > *:not([style]):nth-child(8) {
+    animation-delay: 560ms;
+  }
+  .stagger > *:not([style]):nth-child(9) {
+    animation-delay: 640ms;
+  }
+  .stagger > *:not([style]):nth-child(10) {
+    animation-delay: 720ms;
+  }
+  .stagger > *:not([style]):nth-child(11) {
+    animation-delay: 800ms;
+  }
+  .stagger > *:not([style]):nth-child(12) {
+    animation-delay: 880ms;
+  }
+  @keyframes stagger-in {
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
