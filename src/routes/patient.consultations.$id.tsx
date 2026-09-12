@@ -40,7 +40,7 @@ function PatientConversationView() {
     navigate({ to: "/patient/consultations/$id", params: { id }, search: {} });
 
   return (
-    <div className="flex h-[calc(100dvh-9.5rem)] min-h-0 flex-col gap-3 lg:h-[calc(100dvh-7rem)]">
+    <div className="flex h-[calc(100dvh-9.5rem)] min-h-0 flex-col gap-3 max-sm:fixed max-sm:inset-x-0 max-sm:top-0 max-sm:z-40 max-sm:h-[100dvh] max-sm:overflow-hidden max-sm:bg-background max-sm:px-3 max-sm:pb-3 max-sm:pt-[4.5rem] lg:h-[calc(100dvh-7rem)]">
       {search.openVideo && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">

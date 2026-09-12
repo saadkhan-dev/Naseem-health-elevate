@@ -981,6 +981,69 @@ export async function sendMessage(
   return data as unknown as ConsultationMessageRow;
 }
 
+/**
+ * Upper bound for chat attachments uploaded through the server function. The
+ * request body travels as base64 inside a JSON server-function call, which is
+ * far more reliable across mobile browsers/networks than the direct
+ * browser→Supabase Storage cross-origin PUT (the one that surfaced as
+ * "TypeError: Failed to fetch").
+ */
+export const ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024;
+
+/**
+ * Store a chat attachment on the server: upload the decoded bytes to the
+ * private `consultation-attachments` bucket with the service-role client, then
+ * delegate to `createFileMessage` for the participant/active checks and the
+ * message + attachment rows. Called from `consultationUploadAttachment` after
+ * the middleware has authenticated the caller (so `userId`/`role` are trusted).
+ */
+export async function uploadAttachment(
+  admin: SupabaseClient,
+  input: {
+    conversationId: string;
+    userId: string;
+    role: ConsultationRole;
+    fileName: string;
+    mimeType: string;
+    size: number;
+    fileBase64: string;
+    attachmentType: AttachmentKind;
+  },
+): Promise<ConsultationMessageRow> {
+  if (!input.fileBase64) throw new Error("The selected file is empty or could not be read.");
+  if (input.size <= 0 || input.size > ATTACHMENT_MAX_BYTES) {
+    throw new Error("Files must be 20 MB or smaller.");
+  }
+  const bytes = Buffer.from(input.fileBase64, "base64");
+  if (bytes.length === 0 || bytes.length !== input.size) {
+    throw new Error("The selected file could not be read. Please try again.");
+  }
+
+  // Same sanitisation as the previous client-side path.
+  const safeName =
+    input.fileName.replace(/[^\w.-]+/g, "_").slice(-120) || `file-${Date.now()}`;
+  const path = `${input.conversationId}/${input.userId}/${crypto.randomUUID()}-${safeName}`;
+
+  const { error: uploadError } = await admin.storage
+    .from("consultation-attachments")
+    .upload(path, bytes, {
+      upsert: false,
+      contentType: input.mimeType || "application/octet-stream",
+    });
+  if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+  return createFileMessage(admin, {
+    conversationId: input.conversationId,
+    userId: input.userId,
+    senderRole: senderRoleOf(input.role),
+    storagePath: path,
+    fileName: input.fileName,
+    mimeType: input.mimeType || "application/octet-stream",
+    size: input.size,
+    attachmentType: input.attachmentType,
+  });
+}
+
 export async function createFileMessage(
   admin: SupabaseClient,
   input: {

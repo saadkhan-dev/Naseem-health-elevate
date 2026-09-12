@@ -81,7 +81,7 @@ function PatientConsultations() {
         <section
           className={`flex-col lg:flex lg:h-full lg:min-h-0 ${
             viewingChat
-              ? "flex h-[calc(100dvh-23rem)] min-h-[20rem] lg:h-full lg:min-h-0"
+              ? "flex h-[calc(100dvh-23rem)] min-h-[20rem] max-sm:fixed max-sm:inset-x-0 max-sm:top-0 max-sm:z-40 max-sm:h-[100dvh] max-sm:min-h-0 max-sm:overflow-hidden max-sm:bg-background max-sm:px-3 max-sm:pb-3 max-sm:pt-[4.5rem] lg:h-full lg:min-h-0"
               : "hidden lg:flex"
           }`}
         >

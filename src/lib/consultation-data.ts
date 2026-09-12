@@ -13,7 +13,7 @@ import {
   consultationGetAttachmentUrl,
   consultationGetTimeline,
   consultationSendMessage,
-  consultationCreateFileMessage,
+  consultationUploadAttachment,
 } from "@/lib/consultation.functions";
 import type {
   AttachmentKind,
@@ -194,10 +194,33 @@ export async function sendConsultationMessage(input: {
 }
 
 /**
- * Upload a private file (RLS-protected bucket path {conversation}/{user}/{uuid}-name)
- * through the browser, then create its "file" message + attachment record on
- * the server (service-role, participant-checked) so the message insert is never
- * blocked by RLS. Downloads later go through signed URLs.
+ * Client-side hard cap so an oversized file fails fast with a clear message
+ * instead of reading/serialising megabytes first. Must stay in sync with
+ * `ATTACHMENT_MAX_BYTES` in `src/lib/server/consultation.ts` (20 MB).
+ */
+export const ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024;
+
+/** Read a File as raw base64 (matches the receipt-upload helper pattern). */
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      resolve(result.split(",")[1] ?? "");
+    };
+    reader.onerror = () => reject(new Error("Could not read the selected file. Please try again."));
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Upload a private chat attachment through a server function instead of the
+ * direct browser→Supabase Storage PUT. The old direct call died with
+ * "TypeError: Failed to fetch" on some devices/networks (cross-origin request
+ * to the storage host); the bytes now travel with the authenticated
+ * server-function request and the server stores them with the service-role
+ * client, then creates the "file" message + attachment record
+ * (participant-checked). Downloads still go through signed URLs.
  */
 export async function uploadConsultationAttachment(
   client: SupabaseClient,
@@ -208,30 +231,35 @@ export async function uploadConsultationAttachment(
     attachmentType: AttachmentKind;
   },
 ): Promise<ConsultationMessageRow> {
-  const { conversationId, userId, file, attachmentType } = input;
-  const cleanName = file.name.replace(/[^\w.-]+/g, "_");
-  const path = `${conversationId}/${userId}/${crypto.randomUUID()}-${cleanName}`;
-
-  const { error: uploadError } = await client.storage
-    .from("consultation-attachments")
-    .upload(path, file, {
-      upsert: false,
-      contentType: file.type || "application/octet-stream",
-    });
-  if (uploadError) {
-    throw new Error(`Upload failed: ${uploadError.message}`);
+  const { conversationId, file, attachmentType } = input;
+  if (file.size > ATTACHMENT_MAX_BYTES) {
+    throw new Error("Files must be 20 MB or smaller.");
   }
 
-  return consultationCreateFileMessage({
-    data: {
-      conversationId,
-      storagePath: path,
-      fileName: file.name,
-      mimeType: file.type || "application/octet-stream",
-      size: file.size,
-      attachmentType,
-    },
-  });
+  const fileBase64 = await readFileAsBase64(file);
+  if (!fileBase64) {
+    throw new Error("The selected file is empty or could not be read. Please try again.");
+  }
+
+  try {
+    return await consultationUploadAttachment({
+      data: {
+        conversationId,
+        fileName: file.name,
+        mimeType: file.type || "application/octet-stream",
+        size: file.size,
+        fileBase64,
+        attachmentType,
+      },
+    });
+  } catch (e) {
+    // A network-level failure ("Failed to fetch", offline, timeout) used to
+    // bubble up raw; surface it in plain language instead.
+    if (e instanceof TypeError) {
+      throw new Error("Network error while uploading. Please check your connection and try again.");
+    }
+    throw e;
+  }
 }
 
 /** Update the caller's own participant row (mark everything read up to now). */

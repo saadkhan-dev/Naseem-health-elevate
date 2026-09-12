@@ -281,7 +281,7 @@ export function ConsultationChat({
     : "Consultation";
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col">
       {/* Header */}
       <div className="border-b border-border bg-card/60 px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
@@ -349,9 +349,9 @@ export function ConsultationChat({
         </div>
       </div>
 
-      <div className="relative flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 min-w-0 flex-1">
         {/* Messages */}
-        <div className="relative flex min-h-0 flex-1 flex-col">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           {pinned.length > 0 && (
             <div className="flex items-center gap-2 overflow-x-auto border-b border-border bg-amber-50/60 px-4 py-2">
               <Pin className="h-3.5 w-3.5 shrink-0 text-amber-600" />
@@ -367,11 +367,11 @@ export function ConsultationChat({
             </div>
           )}
 
-          <div className="relative min-h-0 flex-1">
+          <div className="relative min-h-0 min-w-0 flex-1">
             <div
               ref={scrollRef}
               onScroll={handleScroll}
-              className="h-full min-h-0 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6"
+              className="h-full min-h-0 w-full min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-4 sm:px-6"
             >
               {hasMore && (
                 <div className="mb-3 flex justify-center">
@@ -414,7 +414,12 @@ export function ConsultationChat({
                           </div>
                         )}
                         <div id={`msg-${m.id}`} className="group py-1">
-                          <div className={cn("flex", mine ? "justify-end" : "justify-start")}>
+                          <div
+                            className={cn(
+                              "flex w-full min-w-0",
+                              mine ? "justify-end" : "justify-start",
+                            )}
+                          >
                             <div
                               className={cn(
                                 "min-w-0 max-w-[85%] sm:max-w-[75%]",
@@ -422,7 +427,7 @@ export function ConsultationChat({
                               )}
                             >
                               {m.deleted_at ? (
-                                <div className="rounded-2xl bg-muted/60 px-4 py-2 text-xs italic text-muted-foreground">
+                                <div className="max-w-full wrap-anywhere rounded-2xl bg-muted/60 px-4 py-2 text-xs italic text-muted-foreground">
                                   Message deleted
                                 </div>
                               ) : (
@@ -480,7 +485,7 @@ export function ConsultationChat({
                                   ) : (
                                     <div
                                       className={cn(
-                                        "rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm",
+                                        "min-w-0 max-w-full rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm",
                                         mine
                                           ? "rounded-br-md bg-primary text-primary-foreground"
                                           : "rounded-bl-md border border-border bg-card text-foreground",
@@ -494,11 +499,13 @@ export function ConsultationChat({
                                           downloading={pendingDownloadId === m.id}
                                         />
                                       ) : (
-                                        <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                                        <p className="whitespace-pre-wrap wrap-anywhere">
+                                          {m.body}
+                                        </p>
                                       )}
                                       <div
                                         className={cn(
-                                          "mt-1 flex items-center justify-end gap-2 text-[10px]",
+                                          "mt-1 flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-0.5 text-[10px]",
                                           mine
                                             ? "text-primary-foreground/70"
                                             : "text-muted-foreground",
@@ -507,8 +514,12 @@ export function ConsultationChat({
                                         {m.is_pinned && (
                                           <Pin className="h-3 w-3" aria-label="Pinned" />
                                         )}
-                                        <span>{formatConversationTime(m.created_at)}</span>
-                                        {m.edited_at && <span>· edited</span>}
+                                        <span className="whitespace-nowrap">
+                                          {formatConversationTime(m.created_at)}
+                                        </span>
+                                        {m.edited_at && (
+                                          <span className="whitespace-nowrap">· edited</span>
+                                        )}
                                         {mine && (
                                           <ReadTicks
                                             read={isReadByRecipient(m)}
@@ -744,7 +755,7 @@ function AttachmentBubble({
   const att = message.attachments?.[0];
   const kind = att?.attachment_type ?? "document";
   return (
-    <div className="flex min-w-[180px] max-w-full items-center gap-3">
+    <div className="flex min-w-0 max-w-full items-center gap-3 sm:min-w-[180px]">
       <div
         className={cn(
           "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",

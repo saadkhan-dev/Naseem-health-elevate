@@ -4,6 +4,7 @@ import { supabase, staffSupabase } from "@/lib/supabase";
 import { getSupabaseAdmin } from "./server/supabase-admin";
 import {
   ensureConversation,
+  ATTACHMENT_MAX_BYTES,
   getAttachmentSignedUrl,
   getConversationDetail,
   getPatientHistory,
@@ -17,6 +18,7 @@ import {
   togglePinMessage,
   sendMessage,
   createFileMessage,
+  uploadAttachment,
   type ConsultationHistoryFilters,
 } from "./server/consultation";
 import type {
@@ -376,6 +378,44 @@ export const consultationCreateFileMessage = createServerFn({ method: "POST" })
       fileName: data.fileName,
       mimeType: data.mimeType,
       size: data.size,
+      attachmentType: data.attachmentType,
+    });
+  });
+
+/**
+ * Chat attachment upload.
+ *
+ * The previous flow uploaded the file browser→Supabase Storage directly and
+ * died with "TypeError: Failed to fetch" on some devices/networks (cross-origin
+ * PUT to the storage host). The bytes now travel with the authenticated
+ * server-function request and are stored here with the service-role client —
+ * the same proven pattern as the payment receipt uploads. Authorization is the
+ * same as the other write endpoints (JWT → profile role via the middleware);
+ * `createFileMessage` still re-checks participation and the active status.
+ */
+export const consultationUploadAttachment = createServerFn({ method: "POST" })
+  .middleware([
+    consultationAuthMiddleware({ roles: ["patient", "doctor", "admin"], prefer: "public" }),
+  ])
+  .validator(
+    z.object({
+      conversationId: uuidSchema,
+      fileName: z.string().trim().min(1).max(255),
+      mimeType: z.string().trim().max(200).default("application/octet-stream"),
+      size: z.number().int().positive().max(ATTACHMENT_MAX_BYTES),
+      fileBase64: z.string().min(1).max(30_000_000),
+      attachmentType: z.enum(ATTACHMENT_KINDS),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    return uploadAttachment(getSupabaseAdmin(), {
+      conversationId: data.conversationId,
+      userId: context.userId,
+      role: context.role,
+      fileName: data.fileName,
+      mimeType: data.mimeType,
+      size: data.size,
+      fileBase64: data.fileBase64,
       attachmentType: data.attachmentType,
     });
   });

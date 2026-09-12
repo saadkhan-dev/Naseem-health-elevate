@@ -126,7 +126,7 @@ export function Nav() {
   }
 
   return (
-    <header className="sticky top-0 z-50 w-full px-3 pt-3 sm:px-5 sm:pt-4">
+    <header className="sticky top-0 z-50 w-full bg-background px-3 pt-3 sm:px-5 sm:pt-4">
       {/* Pill background made explicit below the floating pill so the mobile
           dropdown can never appear on top of it. */}
       <div className="liquid-glass relative z-40 mx-auto flex h-[3.5rem] max-w-[1320px] items-center justify-between gap-2 rounded-full px-2.5 shadow-soft sm:gap-3 sm:px-3">
@@ -275,7 +275,7 @@ export function Nav() {
       {menuOpen && (
         <div
           id="mobile-nav"
-          className="liquid-glass absolute inset-x-3 top-full z-50 mt-2 max-h-[calc(100dvh-5.5rem)] overflow-y-auto rounded-3xl p-3 shadow-soft lg:hidden"
+          className="liquid-glass absolute inset-x-3 top-full z-50 mt-2 max-h-[calc(100dvh-5.5rem)] overflow-y-auto rounded-3xl bg-background p-3 shadow-soft lg:hidden"
         >
           <nav aria-label="Mobile navigation" className="grid gap-1">
             {SECTION_LINKS.map((l) => (

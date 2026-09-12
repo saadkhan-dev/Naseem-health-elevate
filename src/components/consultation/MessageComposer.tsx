@@ -129,7 +129,7 @@ export function MessageComposer({
         </div>
       )}
 
-      <div className="flex items-end gap-2 p-3 sm:gap-3 sm:p-4">
+      <div className="flex min-w-0 items-end gap-2 p-3 sm:gap-3 sm:p-4">
         <input
           ref={fileRef}
           id={`attach-${conversationId}`}
@@ -161,7 +161,7 @@ export function MessageComposer({
             rows={1}
             placeholder={`Message to ${nameLabel}…`}
             aria-label={`Message to ${nameLabel}`}
-            className="max-h-40 min-h-[44px] w-full resize-none rounded-2xl border border-input bg-background px-4 py-2.5 text-base text-foreground shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-60 md:text-sm"
+            className="min-h-[44px] w-full min-w-0 max-w-full resize-none rounded-2xl border border-input bg-background px-4 py-2.5 text-base text-foreground shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-60 md:text-sm"
           />
         </div>
 
@@ -200,10 +200,10 @@ export function MessageComposer({
               )}
             >
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <FileText className="h-5 w-5" />
+                <FileText className="h-5 w-5 shrink-0 text-primary" />
               </div>
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium text-foreground">
+              <div className="min-w-0 flex-1">
+                <div className="wrap-anywhere text-sm font-medium break-words text-foreground">
                   {pendingFile.name}
                 </div>
                 <div className="text-xs text-muted-foreground">
@@ -233,9 +233,10 @@ export function MessageComposer({
             </Select>
           </div>
           {uploadMutation.isError && (
-            <p className="text-xs font-medium text-destructive">
-              Upload failed:{" "}
-              {uploadMutation.error instanceof Error ? uploadMutation.error.message : "Try again"}
+            <p className="text-xs font-medium break-words text-destructive">
+              {uploadMutation.error instanceof Error
+                ? uploadMutation.error.message
+                : "Could not upload the file. Please try again."}
             </p>
           )}
           <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
