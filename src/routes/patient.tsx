@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { Outlet, Link, useRouter, useLocation, createFileRoute } from "@tanstack/react-router";
+import {
+  Outlet,
+  Link,
+  useRouter,
+  useLocation,
+  createFileRoute,
+  useNavigate,
+} from "@tanstack/react-router";
 import {
   LayoutDashboard,
   FolderOpen,
@@ -16,8 +23,13 @@ import { usePatientConsultationUnread } from "@/hooks/useConsultation";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { Nav } from "@/components/site/Nav";
 import { SiteFooter } from "@/components/site/SiteFooter";
+import { z } from "zod";
 
 export const Route = createFileRoute("/patient")({
+  validateSearch: z.object({
+    /** Where to send the patient after a successful sign-in (e.g. back to a video chat link). */
+    redirect: z.string().optional(),
+  }),
   head: () => ({
     meta: [{ name: "robots", content: "noindex, nofollow" }],
   }),
@@ -36,12 +48,21 @@ function PatientLayout() {
   const { user, profile, loading } = useAuth();
   const router = useRouter();
   const location = useLocation();
+  const navigate = useNavigate();
+  const { redirect } = Route.useSearch();
   const [authOpen, setAuthOpen] = useState(false);
   const { data: unreadCount } = usePatientConsultationUnread();
 
+  // Safe internal redirect target only — never an off-site or protocol URL.
+  const redirectTarget =
+    redirect && redirect.startsWith("/") && !redirect.startsWith("//") ? redirect : null;
+
+  // After sign-in, finish the journey that brought the patient here (e.g. the
+  // "Chat with Doctor" button) instead of dumping them on the dashboard.
   useEffect(() => {
-    if (!loading && !user) setAuthOpen(true);
-  }, [loading, user]);
+    if (loading || !user || !redirectTarget) return;
+    void navigate({ to: redirectTarget });
+  }, [loading, user, redirectTarget, navigate]);
 
   if (loading) {
     return (

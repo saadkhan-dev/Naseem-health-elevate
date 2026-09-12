@@ -1020,8 +1020,7 @@ export async function uploadAttachment(
   }
 
   // Same sanitisation as the previous client-side path.
-  const safeName =
-    input.fileName.replace(/[^\w.-]+/g, "_").slice(-120) || `file-${Date.now()}`;
+  const safeName = input.fileName.replace(/[^\w.-]+/g, "_").slice(-120) || `file-${Date.now()}`;
   const path = `${input.conversationId}/${input.userId}/${crypto.randomUUID()}-${safeName}`;
 
   const { error: uploadError } = await admin.storage

@@ -53,6 +53,7 @@ import { Route as ProductProductIdRouteImport } from './routes/product.$productI
 import { Route as VideoVcNoRouteImport } from './routes/video.$vcNo'
 import { Route as AdminConsultationsIdRouteImport } from './routes/admin.consultations.$id'
 import { Route as PatientConsultationsIdRouteImport } from './routes/patient.consultations.$id'
+import { Route as VideoVcNoChatRouteImport } from './routes/video_.$vcNo.chat'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -274,6 +275,11 @@ const PatientConsultationsIdRoute = PatientConsultationsIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => PatientConsultationsRoute,
 } as any)
+const VideoVcNoChatRoute = VideoVcNoChatRouteImport.update({
+  id: '/video_/$vcNo/chat',
+  path: '/video/$vcNo/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -320,6 +326,7 @@ export interface FileRoutesByFullPath {
   '/patient/': typeof PatientIndexRoute
   '/admin/consultations/$id': typeof AdminConsultationsIdRoute
   '/patient/consultations/$id': typeof PatientConsultationsIdRoute
+  '/video/$vcNo/chat': typeof VideoVcNoChatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -364,6 +371,7 @@ export interface FileRoutesByTo {
   '/patient': typeof PatientIndexRoute
   '/admin/consultations/$id': typeof AdminConsultationsIdRoute
   '/patient/consultations/$id': typeof PatientConsultationsIdRoute
+  '/video/$vcNo/chat': typeof VideoVcNoChatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -411,6 +419,7 @@ export interface FileRoutesById {
   '/patient/': typeof PatientIndexRoute
   '/admin/consultations/$id': typeof AdminConsultationsIdRoute
   '/patient/consultations/$id': typeof PatientConsultationsIdRoute
+  '/video_/$vcNo/chat': typeof VideoVcNoChatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -459,6 +468,7 @@ export interface FileRouteTypes {
     | '/patient/'
     | '/admin/consultations/$id'
     | '/patient/consultations/$id'
+    | '/video/$vcNo/chat'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -503,6 +513,7 @@ export interface FileRouteTypes {
     | '/patient'
     | '/admin/consultations/$id'
     | '/patient/consultations/$id'
+    | '/video/$vcNo/chat'
   id:
     | '__root__'
     | '/'
@@ -549,6 +560,7 @@ export interface FileRouteTypes {
     | '/patient/'
     | '/admin/consultations/$id'
     | '/patient/consultations/$id'
+    | '/video_/$vcNo/chat'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -569,6 +581,7 @@ export interface RootRouteChildren {
   SupportRoute: typeof SupportRoute
   ProductProductIdRoute: typeof ProductProductIdRoute
   VideoVcNoRoute: typeof VideoVcNoRoute
+  VideoVcNoChatRoute: typeof VideoVcNoChatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -881,6 +894,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PatientConsultationsIdRouteImport
       parentRoute: typeof PatientConsultationsRoute
     }
+    '/video_/$vcNo/chat': {
+      id: '/video_/$vcNo/chat'
+      path: '/video/$vcNo/chat'
+      fullPath: '/video/$vcNo/chat'
+      preLoaderRoute: typeof VideoVcNoChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -991,6 +1011,7 @@ const rootRouteChildren: RootRouteChildren = {
   SupportRoute: SupportRoute,
   ProductProductIdRoute: ProductProductIdRoute,
   VideoVcNoRoute: VideoVcNoRoute,
+  VideoVcNoChatRoute: VideoVcNoChatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

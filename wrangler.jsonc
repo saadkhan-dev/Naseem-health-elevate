@@ -6,16 +6,16 @@
   "main": "dist/server/index.mjs",
   "assets": {
     "directory": "dist/client",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
   },
   "observability": {
-    "enabled": true
+    "enabled": true,
   },
   "no_bundle": true,
   "rules": [
     {
       "type": "ESModule",
-      "globs": ["**/*.mjs", "**/*.js"]
-    }
-  ]
+      "globs": ["**/*.mjs", "**/*.js"],
+    },
+  ],
 }

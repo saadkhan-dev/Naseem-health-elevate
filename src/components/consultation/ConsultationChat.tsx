@@ -57,6 +57,14 @@ interface Props {
   detailLoading?: boolean;
   showBackButton?: boolean;
   onBack?: () => void;
+  /** When provided, renders a compact X close button in the header — used by the
+   *  floating consultation chat panel on the video page. */
+  onClose?: () => void;
+  /** Render the compact full-width gradient header (video chat page) instead of
+   *  the default card header. Keeps every other behaviour identical. */
+  hideHeader?: boolean;
+  /** Doctor display name for the compact header (e.g. "Dr. Naseem Ahmed Khan"). */
+  doctorLabel?: string | null;
 }
 
 const FILE_ICON: Record<string, string> = {
@@ -93,6 +101,9 @@ export function ConsultationChat({
   detailLoading,
   showBackButton,
   onBack,
+  onClose,
+  hideHeader,
+  doctorLabel,
 }: Props) {
   const isStaff = viewer.role !== "patient";
   const { messages, hasMore, loadOlder, total } = useConsultationMessages(client, conversationId);
@@ -262,6 +273,9 @@ export function ConsultationChat({
     document.getElementById(`msg-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  /** True when the conversation is open for chatting (drives the header dot). */
+  const chatOpen = (detail?.status ?? "active") === "active";
+
   const nameLabel = detail?.appointment?.patientName || (isStaff ? "the patient" : "Doctor");
   const headerTitle = isStaff
     ? (detail?.appointment?.patientName ?? detail?.appointment?.serviceName ?? "Consultation")
@@ -283,71 +297,157 @@ export function ConsultationChat({
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col">
       {/* Header */}
-      <div className="border-b border-border bg-card/60 px-4 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <div className="flex min-w-0 items-center gap-2">
-            {showBackButton && (
-              <button
-                onClick={onBack}
-                aria-label="Back to conversations"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-accent hover:text-foreground lg:hidden"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </button>
-            )}
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="truncate text-sm font-semibold text-foreground sm:text-base">
-                  {headerTitle}
-                </h2>
-                {isStaff && <GenderBadge gender={patientGender} />}
-                <StatusBadge status={detail?.status ?? "active"} />
-              </div>
-              <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
+      {hideHeader ? (
+        /* Compact gradient header for the full-page video chat — fits 320px
+           screens, truncates long names, safe-area aware via the page shell. */
+        <div className="border-b border-border bg-gradient-primary px-3 py-2.5 text-primary-foreground sm:px-4">
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={onBack}
+              aria-label="Back to video call"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition hover:bg-white/15 active:scale-95"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <div
+              aria-hidden="true"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-xs font-bold sm:h-10 sm:w-10"
+            >
+              {(doctorLabel ?? headerTitle)
+                .replace(/^dr\.?\s/i, "")
+                .split(/\s+/)
+                .map((w) => w[0])
+                .join("")
+                .slice(0, 2)
+                .toUpperCase() || "?"}
+            </div>
+            <div className="min-w-0 flex-1 leading-tight">
+              <p className="truncate font-display text-sm font-semibold sm:text-base">
+                {doctorLabel ?? headerTitle}
+              </p>
+              <p className="flex items-center gap-1.5 text-[11px] text-primary-foreground/85">
+                <span
+                  aria-hidden="true"
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                    chatOpen ? "animate-pulse bg-emerald-300" : "bg-white/60"
+                  }`}
+                />
+                {chatOpen ? "Available for consultation" : "Consultation closed"}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {onClose && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Close chat"
+                  title="Close chat"
+                  className="h-9 w-9 shrink-0"
+                  onClick={onClose}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+              {detail?.appointment?.vcNo && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Open video call"
+                  title="Open video call"
+                  className="h-9 w-9 shrink-0"
+                  onClick={() =>
+                    window.open(
+                      `/video/${detail.appointment!.vcNo}${isStaff ? "?as=doctor" : ""}`,
+                      "_blank",
+                      "noopener,noreferrer",
+                    )
+                  }
+                >
+                  <Video className="h-4 w-4 text-primary" />
+                </Button>
+              )}
             </div>
           </div>
+        </div>
+      ) : (
+        <div className="border-b border-border bg-card/60 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <div className="flex min-w-0 items-center gap-2">
+              {showBackButton && (
+                <button
+                  onClick={onBack}
+                  aria-label="Back to conversations"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-accent hover:text-foreground lg:hidden"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </button>
+              )}
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="truncate text-sm font-semibold text-foreground sm:text-base">
+                    {headerTitle}
+                  </h2>
+                  {isStaff && <GenderBadge gender={patientGender} />}
+                  <StatusBadge status={detail?.status ?? "active"} />
+                </div>
+                <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
+              </div>
+            </div>
 
-          <div className="flex items-center gap-1.5">
-            {isStaff && detail && (
-              <label className="flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                Follow-up chat
-                <Switch
-                  checked={detail.status === "active"}
-                  onCheckedChange={(on) => setStatus.mutate(on ? "active" : "read_only")}
-                  disabled={setStatus.isPending}
-                  aria-label="Toggle follow-up chat"
-                />
-              </label>
-            )}
-            {detail?.appointment?.vcNo && (
+            <div className="flex items-center gap-1.5">
+              {onClose && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Close chat"
+                  title="Close chat"
+                  className="h-9 w-9 shrink-0"
+                  onClick={onClose}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+              {isStaff && detail && (
+                <label className="flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                  Follow-up chat
+                  <Switch
+                    checked={detail.status === "active"}
+                    onCheckedChange={(on) => setStatus.mutate(on ? "active" : "read_only")}
+                    disabled={setStatus.isPending}
+                    aria-label="Toggle follow-up chat"
+                  />
+                </label>
+              )}
+              {detail?.appointment?.vcNo && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() =>
+                    window.open(
+                      `/video/${detail.appointment!.vcNo}${isStaff ? "?as=doctor" : ""}`,
+                      "_blank",
+                      "noopener,noreferrer",
+                    )
+                  }
+                >
+                  <Video className="h-4 w-4 text-primary" /> Open Video
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
                 className="gap-1.5"
-                onClick={() =>
-                  window.open(
-                    `/video/${detail.appointment!.vcNo}${isStaff ? "?as=doctor" : ""}`,
-                    "_blank",
-                    "noopener,noreferrer",
-                  )
-                }
+                onClick={() => setShowPanel((v) => !v)}
+                aria-pressed={showPanel}
               >
-                <Video className="h-4 w-4 text-primary" /> Open Video
+                <Info className="h-4 w-4" />
+                {showPanel ? "Hide details" : "Details"}
               </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => setShowPanel((v) => !v)}
-              aria-pressed={showPanel}
-            >
-              <Info className="h-4 w-4" />
-              {showPanel ? "Hide details" : "Details"}
-            </Button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="relative flex min-h-0 min-w-0 flex-1">
         {/* Messages */}

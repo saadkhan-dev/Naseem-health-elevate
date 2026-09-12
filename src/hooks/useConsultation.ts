@@ -112,6 +112,7 @@ export function useConsultationMessages(
   client: SupabaseClient,
   conversationId: string,
   enabled = true,
+  realtime = true,
 ) {
   const qc = useQueryClient();
   const keys = consultationKeys.messages(conversationId);
@@ -140,9 +141,12 @@ export function useConsultationMessages(
   }, [conversationId, enabled, qc, keys]);
 
   // Realtime: RLS filters what this client is allowed to receive, so even a
-  // guessed conversation id yields nothing (and no events are delivered).
+  // guessed conversation id yields nothing (and no events are delivered). The
+  // `realtime` flag lets a consumer keep the shared message cache warm WITHOUT
+  // subscribing — used by the floating video-page chat so there is never a
+  // duplicate postgres_changes listener while the panel chat is open.
   useEffect(() => {
-    if (!enabled || !conversationId) return;
+    if (!enabled || !conversationId || !realtime) return;
 
     const channel = client
       .channel(`consultation-${conversationId}`)
@@ -217,7 +221,7 @@ export function useConsultationMessages(
     return () => {
       client.removeChannel(channel);
     };
-  }, [client, conversationId, enabled, qc, keys]);
+  }, [client, conversationId, enabled, qc, keys, realtime]);
 
   const loadOlder = useCallback(async () => {
     const current = qc.getQueryData<ConsultationMessageRow[]>(keys);
