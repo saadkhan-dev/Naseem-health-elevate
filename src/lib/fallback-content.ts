@@ -39,7 +39,8 @@ export const FALLBACK_CONDITIONS: Condition[] = [
     id: "6f2aafcb-ffba-4614-b07c-898471d8a345",
     category: "homeopathic",
     title: "Stress & Anxiety",
-    description: "Personalized consultation for stress, anxiety and related everyday health concerns.",
+    description:
+      "Personalized consultation for stress, anxiety and related everyday health concerns.",
     sort_order: 2,
     is_active: true,
     created_at: SEED_TS,
@@ -48,7 +49,8 @@ export const FALLBACK_CONDITIONS: Condition[] = [
     id: "e72c48bc-111a-4435-8501-1a5f5289a87a",
     category: "homeopathic",
     title: "Respiratory Conditions",
-    description: "Individualized homeopathic guidance for common respiratory and seasonal complaints.",
+    description:
+      "Individualized homeopathic guidance for common respiratory and seasonal complaints.",
     sort_order: 3,
     is_active: true,
     created_at: SEED_TS,
@@ -98,7 +100,8 @@ export const FALLBACK_CONDITIONS: Condition[] = [
     id: "b06a2130-d005-4739-b7f4-5a9f9809dc78",
     category: "homeopathic",
     title: "Malaria & Fever Types",
-    description: "Supportive homeopathic care for malaria-type fevers, chills and post-fever fatigue.",
+    description:
+      "Supportive homeopathic care for malaria-type fevers, chills and post-fever fatigue.",
     sort_order: 8,
     is_active: true,
     created_at: "2026-08-10T21:34:50.704252+00:00",
@@ -118,7 +121,8 @@ export const FALLBACK_CONDITIONS: Condition[] = [
     id: "be130ef2-4800-4fd0-8584-4118c1190a99",
     category: "physiotherapy",
     title: "Back & Neck Pain",
-    description: "Physiotherapy support to improve mobility, manage discomfort and restore daily function.",
+    description:
+      "Physiotherapy support to improve mobility, manage discomfort and restore daily function.",
     sort_order: 1,
     is_active: true,
     created_at: SEED_TS,
@@ -145,7 +149,8 @@ export const FALLBACK_CONDITIONS: Condition[] = [
     id: "abb69117-ec7b-4ce3-9e5e-676dbcd54293",
     category: "physiotherapy",
     title: "Arthritis & Mobility",
-    description: "Exercise-based physiotherapy support for mobility, flexibility and everyday movement.",
+    description:
+      "Exercise-based physiotherapy support for mobility, flexibility and everyday movement.",
     sort_order: 4,
     is_active: true,
     created_at: SEED_TS,
@@ -154,7 +159,8 @@ export const FALLBACK_CONDITIONS: Condition[] = [
     id: "30b44e05-8775-4938-a5bb-7f4786ac2e63",
     category: "physiotherapy",
     title: "Post-Injury Rehabilitation",
-    description: "Structured rehabilitation to support a safe return to normal movement and activities.",
+    description:
+      "Structured rehabilitation to support a safe return to normal movement and activities.",
     sort_order: 5,
     is_active: true,
     created_at: SEED_TS,
@@ -163,7 +169,8 @@ export const FALLBACK_CONDITIONS: Condition[] = [
     id: "19b40591-eaef-49bb-81b7-51136976ce80",
     category: "physiotherapy",
     title: "Movement & Posture Problems",
-    description: "Professional guidance to improve posture, movement patterns and physical function.",
+    description:
+      "Professional guidance to improve posture, movement patterns and physical function.",
     sort_order: 6,
     is_active: true,
     created_at: SEED_TS,

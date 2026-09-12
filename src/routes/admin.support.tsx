@@ -93,7 +93,9 @@ function AdminSupport() {
         {selectedMsg && (
           <div className="h-fit rounded-xl border border-border bg-card p-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="min-w-0 font-semibold text-foreground">Message from {selectedMsg.name}</div>
+              <div className="min-w-0 font-semibold text-foreground">
+                Message from {selectedMsg.name}
+              </div>
               <Select
                 value={selectedMsg.status}
                 onValueChange={async (v) => {

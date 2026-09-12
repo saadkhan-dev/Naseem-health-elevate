@@ -1,0 +1,276 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  consultationGetPatientHistory,
+  consultationGetUnreadTotal,
+  consultationGetStaffHistory,
+  consultationEnsureConversation,
+  consultationGetDetail,
+  consultationSetStatus,
+  consultationSaveSummary,
+  consultationEditMessage,
+  consultationDeleteMessage,
+  consultationTogglePin,
+  consultationGetAttachmentUrl,
+  consultationGetTimeline,
+  consultationSendMessage,
+  consultationCreateFileMessage,
+} from "@/lib/consultation.functions";
+import type {
+  AttachmentKind,
+  ConsultationAttachmentRow,
+  ConsultationDetailView,
+  ConsultationEventRow,
+  ConsultationMessageRow,
+  ConversationEnsureView,
+  ConversationStatus,
+  ConversationSummaryView,
+  SenderRole,
+  SummaryStatus,
+} from "@/lib/consultation-types";
+
+export type {
+  ConversationSummaryView,
+  ConversationEnsureView,
+  ConsultationDetailView,
+  ConsultationMessageRow,
+  ConsultationAttachmentRow,
+  ConsultationEventRow,
+  ConversationStatus,
+  ConsultationRole,
+} from "@/lib/consultation-types";
+export type { AttachmentKind, SenderRole, SummaryStatus } from "@/lib/consultation-types";
+
+// --- Server-function wrappers -----------------------------------------------
+
+export async function getPatientConsultationHistory(): Promise<ConversationSummaryView[]> {
+  return consultationGetPatientHistory({ data: undefined });
+}
+
+export async function getConsultationUnreadTotal(): Promise<number> {
+  return consultationGetUnreadTotal({ data: undefined });
+}
+
+export interface StaffHistoryFilters {
+  q?: string;
+  status?: ConversationStatus;
+  from?: string;
+  to?: string;
+  hasAttachments?: boolean;
+}
+
+export async function getStaffConsultationHistory(
+  filters: StaffHistoryFilters = {},
+): Promise<ConversationSummaryView[]> {
+  return consultationGetStaffHistory({ data: filters });
+}
+
+export async function ensureConsultationConversation(
+  appointmentId: string,
+): Promise<ConversationEnsureView> {
+  return consultationEnsureConversation({ data: { appointmentId } });
+}
+
+export async function getConsultationDetail(
+  conversationId: string,
+): Promise<ConsultationDetailView> {
+  return consultationGetDetail({ data: { conversationId } });
+}
+
+export async function setConsultationStatus(
+  conversationId: string,
+  status: ConversationStatus,
+): Promise<ConversationStatus> {
+  return consultationSetStatus({ data: { conversationId, status } });
+}
+
+export interface SaveSummaryInput {
+  chief_concern?: string;
+  symptoms?: string;
+  diagnosis?: string;
+  doctor_notes?: string;
+  advice?: string;
+  prescription?: string;
+  follow_up_date?: string | null;
+  additional_notes?: string;
+  status: SummaryStatus;
+}
+
+export async function saveConsultationSummary(
+  conversationId: string,
+  data: SaveSummaryInput,
+): Promise<ConsultationDetailView["summary"]> {
+  return consultationSaveSummary({ data: { conversationId, data } });
+}
+
+export async function editConsultationMessage(messageId: string, body: string) {
+  return consultationEditMessage({ data: { messageId, body } });
+}
+
+export async function deleteConsultationMessage(messageId: string) {
+  return consultationDeleteMessage({ data: { messageId } });
+}
+
+export async function togglePinConsultationMessage(messageId: string, pinned: boolean) {
+  return consultationTogglePin({ data: { messageId, pinned } });
+}
+
+export async function getConsultationTimeline(
+  conversationId: string,
+): Promise<ConsultationEventRow[]> {
+  return consultationGetTimeline({ data: { conversationId } });
+}
+
+/**
+ * Create a short-lived force-download link via the server (service-role). The
+ * recipient may not own the uploaded file, so this must NOT depend on the
+ * caller's own storage RLS — the server resolves the attachment row by message
+ * id and re-checks participation instead. Resolving server-side also works for
+ * messages the client only knows about from a Realtime payload (which carry no
+ * nested `consultation_attachments`).
+ */
+export async function getConsultationAttachmentUrl(
+  conversationId: string,
+  messageId: string,
+): Promise<{ url: string; fileName: string }> {
+  return consultationGetAttachmentUrl({
+    data: { conversationId, messageId },
+  });
+}
+
+// --- Direct client calls (protected by RLS) ---------------------------------
+
+const MESSAGE_SELECT = `
+  id, conversation_id, sender_id, sender_role, body, message_type, reply_to_id,
+  is_pinned, pinned_at, edited_at, deleted_at, created_at,
+  consultation_attachments(*),
+  reply_to:reply_to_id (id, body, sender_role, deleted_at, created_at)
+`;
+
+/**
+ * Load the most recent `limit` messages (ascending), or the `limit` older
+ * messages before `before` (returned ascending). Passing `before` = last
+ * loaded message's `created_at` implements pagination ("load older").
+ */
+export async function fetchConversationMessages(
+  client: SupabaseClient,
+  conversationId: string,
+  opts: { before?: string | null; limit?: number } = {},
+): Promise<ConsultationMessageRow[]> {
+  const limit = opts.limit ?? 60;
+  let query = client
+    .from("consultation_messages")
+    .select(MESSAGE_SELECT)
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (opts.before) {
+    query = query.lt("created_at", opts.before);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as unknown as ConsultationMessageRow[]).reverse();
+}
+
+/**
+ * Send a text message. The insert happens on the server with the service-role
+ * client, so it is never blocked by RLS grants/policy edge-cases; the server
+ * still verifies the caller is a participant and the conversation is active.
+ * `sender_id` is always the JWT user id from the middleware context.
+ */
+export async function sendConsultationMessage(input: {
+  conversationId: string;
+  body: string;
+  replyToId?: string | null;
+}): Promise<ConsultationMessageRow> {
+  return consultationSendMessage({
+    data: {
+      conversationId: input.conversationId,
+      body: input.body,
+      replyToId: input.replyToId ?? null,
+    },
+  });
+}
+
+/**
+ * Upload a private file (RLS-protected bucket path {conversation}/{user}/{uuid}-name)
+ * through the browser, then create its "file" message + attachment record on
+ * the server (service-role, participant-checked) so the message insert is never
+ * blocked by RLS. Downloads later go through signed URLs.
+ */
+export async function uploadConsultationAttachment(
+  client: SupabaseClient,
+  input: {
+    conversationId: string;
+    userId: string;
+    file: File;
+    attachmentType: AttachmentKind;
+  },
+): Promise<ConsultationMessageRow> {
+  const { conversationId, userId, file, attachmentType } = input;
+  const cleanName = file.name.replace(/[^\w.-]+/g, "_");
+  const path = `${conversationId}/${userId}/${crypto.randomUUID()}-${cleanName}`;
+
+  const { error: uploadError } = await client.storage
+    .from("consultation-attachments")
+    .upload(path, file, {
+      upsert: false,
+      contentType: file.type || "application/octet-stream",
+    });
+  if (uploadError) {
+    throw new Error(`Upload failed: ${uploadError.message}`);
+  }
+
+  return consultationCreateFileMessage({
+    data: {
+      conversationId,
+      storagePath: path,
+      fileName: file.name,
+      mimeType: file.type || "application/octet-stream",
+      size: file.size,
+      attachmentType,
+    },
+  });
+}
+
+/** Update the caller's own participant row (mark everything read up to now). */
+export async function markConversationRead(
+  client: SupabaseClient,
+  conversationId: string,
+  userId: string,
+): Promise<void> {
+  await client
+    .from("consultation_participants")
+    .update({ last_read_at: new Date().toISOString() })
+    .eq("conversation_id", conversationId)
+    .eq("user_id", userId);
+}
+
+/** Generate a short-lived signed URL for a private attachment. */
+export async function createAttachmentUrl(
+  client: SupabaseClient,
+  storagePath: string,
+  expiresInSeconds = 300,
+): Promise<string> {
+  const { data, error } = await client.storage
+    .from("consultation-attachments")
+    .createSignedUrl(storagePath, expiresInSeconds);
+  if (error || !data?.signedUrl) throw new Error(error?.message ?? "Could not create link");
+  return data.signedUrl;
+}
+
+/** List all attachments in a conversation (RLS scoped to participants/staff). */
+export async function fetchConversationAttachments(
+  client: SupabaseClient,
+  conversationId: string,
+): Promise<ConsultationAttachmentRow[]> {
+  const { data, error } = await client
+    .from("consultation_attachments")
+    .select("*")
+    .eq("conversation_id", conversationId)
+    .eq("deleted_at", null)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as ConsultationAttachmentRow[];
+}

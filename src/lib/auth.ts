@@ -96,7 +96,13 @@ async function safeAuthCall<T>(
 // Public / patient authentication (uses the public `supabase` client only)
 // ---------------------------------------------------------------------------
 
-export async function signUp(email: string, password: string, fullName: string, phone: string) {
+export async function signUp(
+  email: string,
+  password: string,
+  fullName: string,
+  phone: string,
+  gender?: string,
+) {
   return safeAuthCall(
     () =>
       supabase.auth.signUp({
@@ -107,6 +113,7 @@ export async function signUp(email: string, password: string, fullName: string, 
           data: {
             full_name: fullName,
             phone: phone,
+            ...(gender ? { gender } : {}),
           },
         },
       }),

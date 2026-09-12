@@ -132,7 +132,12 @@ export function ContactSection() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {[
                 { Icon: Phone, label: PHONE, href: telUrl, sub: "Direct Phone" },
-                { Icon: MessageCircle, label: "WhatsApp Clinic", href: whatsappUrl("Hi Dr. Naseem"), sub: "+92 315 2968384" },
+                {
+                  Icon: MessageCircle,
+                  label: "WhatsApp Clinic",
+                  href: whatsappUrl("Hi Dr. Naseem"),
+                  sub: "+92 315 2968384",
+                },
                 { Icon: Mail, label: EMAIL, href: `mailto:${EMAIL}`, sub: "Email Inquiries" },
                 {
                   Icon: MapPin,

@@ -199,6 +199,8 @@ export async function createOrReuseVideoSession(
 }
 
 export interface VideoJoinAppointment {
+  /** The appointment's internal id — used to open the same consultation chat. */
+  appointmentId: string;
   status: string;
   serviceName: string | null;
   date: string;
@@ -207,9 +209,11 @@ export interface VideoJoinAppointment {
 }
 
 /**
- * Public join lookup by patient-facing VC code. Only safe fields are exposed —
- * never the internal appointment or session UUIDs. Cancelled/rejected
- * appointments cannot join.
+ * Public join lookup by patient-facing VC code. The appointment id is exposed
+ * ONLY so the UI can open the same persistent consultation conversation — that
+ * chat remains guarded by its own RLS + the `ensureConversation` ownership
+ * check (a non-owner can never read or join it). The session UUID is never
+ * exposed. Cancelled/rejected appointments cannot join.
  */
 export async function getVideoJoinByVcNo(
   admin: SupabaseClient,
@@ -282,6 +286,7 @@ export async function getVideoJoinByVcNo(
       meetUrl: (session.meet_url as string | null) ?? null,
     },
     appointment: {
+      appointmentId: appointment.id as string,
       status: appointment.status as string,
       serviceName: service?.name ?? null,
       date: appointment.date as string,

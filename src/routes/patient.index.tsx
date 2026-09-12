@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { format } from "date-fns";
 import {
@@ -14,6 +14,7 @@ import {
   FlaskConical,
   Link2,
   Copy,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,8 @@ import {
   useMyTestRecommendations,
   useMarkTestRecommendationCompleted,
 } from "@/hooks/queries/usePatient";
+import { usePatientConsultationHistory } from "@/hooks/useConsultation";
+import { ensureConsultationConversation } from "@/lib/consultation-data";
 import { formatTimeDisplay } from "@/lib/bookings";
 import { scrollToHash } from "@/lib/scroll";
 import { APPOINTMENT_STATUS_LABELS, type AppointmentStatusValue } from "@/lib/notifications";
@@ -343,12 +346,60 @@ function JoinVideoDialog({
 
 function PatientDashboard() {
   const router = useRouter();
+  const navigate = useNavigate();
   const { data: appointments, isLoading, isError, error } = useMyAppointments();
+  const { data: consultationHistory } = usePatientConsultationHistory();
   const cancel = useCancelMyAppointment();
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
   const [joiningVideo, setJoiningVideo] = useState<
     import("@/lib/patient-data").PatientAppointment | null
   >(null);
+  const [joiningAppointmentId, setJoiningAppointmentId] = useState<string | null>(null);
+  const [openingChatId, setOpeningChatId] = useState<string | null>(null);
+
+  /** Map the SAME conversation that history/realtime use to each appointment. */
+  const convoByAppointment = useMemo(
+    () => new Map((consultationHistory ?? []).map((c) => [c.appointmentId, c.conversationId])),
+    [consultationHistory],
+  );
+
+  async function handleJoinVideo(a: import("@/lib/patient-data").PatientAppointment) {
+    const vcNo = a.vcNo;
+    if (!vcNo) {
+      setJoiningVideo(a);
+      return;
+    }
+    setJoiningAppointmentId(a.id);
+    try {
+      const conversationId = convoByAppointment.get(a.id);
+      const id = conversationId ?? (await ensureConsultationConversation(a.id)).conversationId;
+      // Open the video page in a new tab (it holds the Google Meet link)…
+      window.open(`/video/${vcNo}`, "_blank", "noopener,noreferrer");
+      // …and bring the SAME appointment's chat into the current tab.
+      navigate({
+        to: "/patient/consultations/$id",
+        params: { id },
+        search: { openVideo: vcNo },
+      });
+    } catch {
+      setJoiningVideo(a);
+    } finally {
+      setJoiningAppointmentId(null);
+    }
+  }
+
+  async function handleOpenChat(a: import("@/lib/patient-data").PatientAppointment) {
+    setOpeningChatId(a.id);
+    try {
+      const conversationId = convoByAppointment.get(a.id);
+      const id = conversationId ?? (await ensureConsultationConversation(a.id)).conversationId;
+      navigate({ to: "/patient/consultations/$id", params: { id } });
+    } catch {
+      navigate({ to: "/patient/consultations" });
+    } finally {
+      setOpeningChatId(null);
+    }
+  }
 
   async function goToBookingSection(e: React.MouseEvent) {
     e.preventDefault();
@@ -359,7 +410,7 @@ function PatientDashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-x-clip">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">My Appointments</h1>
@@ -400,8 +451,11 @@ function PatientDashboard() {
           </div>
         ) : (
           (appointments ?? []).map((a) => (
-            <div key={a.id} className="rounded-2xl border border-border bg-card p-4 shadow-soft sm:p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
+            <div
+              key={a.id}
+              className="rounded-2xl border border-border bg-card p-4 shadow-soft sm:p-5"
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-display font-semibold text-foreground">
@@ -435,7 +489,7 @@ function PatientDashboard() {
                     <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
                       <Link2 className="h-3.5 w-3.5 shrink-0 text-primary" />
                       <span className="text-xs text-muted-foreground">Meeting link:</span>
-                      <code className="max-w-full truncate rounded bg-background px-2 py-0.5 font-mono text-xs text-foreground sm:max-w-[14rem]">
+                      <code className="min-w-0 max-w-full truncate rounded bg-background px-2 py-0.5 font-mono text-xs text-foreground sm:max-w-[14rem]">
                         {window.location.origin}/video/{a.vcNo}
                       </code>
                       <button
@@ -451,15 +505,52 @@ function PatientDashboard() {
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  {a.isVideo && (
-                    <button
-                      type="button"
-                      onClick={() => setJoiningVideo(a)}
-                      className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground"
-                    >
-                      <Video className="h-3.5 w-3.5" /> Join Video Consultation
-                    </button>
-                  )}
+                  {a.isVideo &&
+                    a.status !== "cancelled" &&
+                    a.status !== "rejected" &&
+                    a.status !== "no_show" && (
+                      <button
+                        type="button"
+                        onClick={() => void handleJoinVideo(a)}
+                        disabled={joiningAppointmentId === a.id}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground"
+                      >
+                        {joiningAppointmentId === a.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Video className="h-3.5 w-3.5" />
+                        )}
+                        {joiningAppointmentId === a.id ? "Opening…" : "Join Video Consultation"}
+                      </button>
+                    )}
+                  {a.status !== "cancelled" &&
+                    a.status !== "rejected" &&
+                    a.status !== "no_show" &&
+                    (convoByAppointment.get(a.id) ? (
+                      <Link
+                        to="/patient/consultations/$id"
+                        params={{ id: convoByAppointment.get(a.id)! }}
+                        title="Open the chat for this appointment"
+                        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground transition hover:border-primary/40 hover:bg-muted"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5 text-primary" /> Chat
+                      </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => void handleOpenChat(a)}
+                        disabled={openingChatId === a.id}
+                        title="Open the chat for this appointment"
+                        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground transition hover:border-primary/40 hover:bg-muted"
+                      >
+                        {openingChatId === a.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                        ) : (
+                          <MessageSquare className="h-3.5 w-3.5 text-primary" />
+                        )}
+                        Chat
+                      </button>
+                    ))}
                   {a.canCancel && (
                     <Button
                       size="sm"
@@ -491,6 +582,8 @@ function PatientDashboard() {
       </div>
 
       <TestRecommendationsPanel />
+
+      <ConsultationHistorySection />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <NotificationsPanel />
@@ -531,6 +624,99 @@ function PatientDashboard() {
       {joiningVideo && (
         <JoinVideoDialog appointment={joiningVideo} onClose={() => setJoiningVideo(null)} />
       )}
+    </div>
+  );
+}
+
+function ConsultationHistorySection() {
+  const {
+    data: conversations,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = usePatientConsultationHistory();
+  const recent = (conversations ?? []).slice(0, 3);
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <MessageSquare className="h-5 w-5 text-primary" />
+          <div>
+            <div className="font-display font-semibold text-foreground">Consultation History</div>
+            <div className="text-xs text-muted-foreground">
+              Chat and records from your appointments
+            </div>
+          </div>
+        </div>
+        <Link
+          to="/patient/consultations"
+          className="text-sm font-medium text-primary hover:underline"
+        >
+          View all
+        </Link>
+      </div>
+
+      <div className="mt-4 space-y-2">
+        {isLoading ? (
+          <div className="flex justify-center py-6">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : isError ? (
+          <div className="rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-center">
+            <p className="text-sm font-semibold text-destructive">
+              Could not load your consultation history.
+            </p>
+            <p className="mt-1 break-all text-xs text-destructive/80">
+              {error instanceof Error ? error.message : String(error)}
+            </p>
+            <button
+              onClick={() => void refetch()}
+              className="mt-2 text-sm font-medium text-primary hover:underline"
+            >
+              Try again
+            </button>
+          </div>
+        ) : recent.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            No consultations yet. After a video or clinic visit, your conversations will appear
+            here.
+          </p>
+        ) : (
+          recent.map((c) => (
+            <Link
+              key={c.conversationId}
+              to="/patient/consultations/$id"
+              params={{ id: c.conversationId }}
+              className="block rounded-xl border border-border bg-background/50 p-3 transition hover:border-primary/40 hover:bg-muted"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-sm font-medium text-foreground">
+                      {c.serviceName ?? "Consultation"}
+                    </span>
+                    {c.unreadCount > 0 && (
+                      <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                        {c.unreadCount > 99 ? "99+" : c.unreadCount}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    {format(new Date(`${c.appointmentDate}T00:00:00`), "MMM d, yyyy")}
+                    {c.appointmentTime && <> at {formatTimeDisplay(c.appointmentTime)}</>}
+                  </div>
+                  {c.lastBody && (
+                    <div className="mt-1 truncate text-xs text-muted-foreground">{c.lastBody}</div>
+                  )}
+                </div>
+                <span className="shrink-0 text-muted-foreground">→</span>
+              </div>
+            </Link>
+          ))
+        )}
+      </div>
     </div>
   );
 }

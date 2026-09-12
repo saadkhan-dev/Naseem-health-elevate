@@ -67,7 +67,9 @@ export function WebsiteReviewsBlock({
                 />
               ))}
             </span>
-            <span className="text-[11px] text-white/40 italic"><strong>Website Reviews</strong></span>
+            <span className="text-[11px] text-white/40 italic">
+              <strong>Website Reviews</strong>
+            </span>
           </span>
         </span>
 
@@ -128,7 +130,8 @@ export function WebsiteReviewsBlock({
                           </span>
                         </div>
                         <span className="flex items-center gap-1 text-[11px] text-white/40 italic">
-                          <MessageCircle className="h-3 w-3 text-emerald-400/60" /> <strong>Website Review</strong>
+                          <MessageCircle className="h-3 w-3 text-emerald-400/60" />{" "}
+                          <strong>Website Review</strong>
                         </span>
                       </div>
                       <p className="mt-2 text-[15px] leading-relaxed text-white/60 sm:text-sm">
@@ -186,7 +189,6 @@ export function WebsiteReviewsBlock({
                 ))}
               </div>
             )}
-           
           </>
         ) : (
           <p className="w-full py-8 text-center text-sm text-white/40 italic">

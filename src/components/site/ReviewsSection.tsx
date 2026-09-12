@@ -77,8 +77,7 @@ export function ReviewsSection() {
 
         <GoogleReviewsBlock isInView={isInView} />
 
-        
-         <motion.div
+        <motion.div
           initial={{ opacity: 0, y: 40 }}
           animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
           transition={{ duration: 0.8, delay: 0.8 }}
@@ -167,8 +166,6 @@ export function ReviewsSection() {
           isError={isError}
           isInView={isInView}
         />
-
-       
       </div>
     </section>
   );

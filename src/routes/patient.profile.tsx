@@ -18,6 +18,20 @@ export const Route = createFileRoute("/patient/profile")({
   component: PatientProfile,
 });
 
+function computeAge(dob: string): number | null {
+  if (!dob) return null;
+  const [y, m, d] = dob.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  const birth = new Date(y, m - 1, d);
+  const now = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  const beforeBirthday =
+    now.getMonth() < birth.getMonth() ||
+    (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate());
+  if (beforeBirthday) age -= 1;
+  return age >= 0 ? age : null;
+}
+
 function PatientProfile() {
   const { profile, user, refreshProfile } = useAuth();
   const updateProfile = useUpdateProfile();
@@ -114,6 +128,14 @@ function PatientProfile() {
               onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })}
               className="mt-1"
             />
+            {(() => {
+              const age = computeAge(form.date_of_birth);
+              return age != null ? (
+                <p className="mt-1.5 text-xs font-medium text-muted-foreground">
+                  Your age: <span className="font-semibold text-foreground">{age} years</span>
+                </p>
+              ) : null;
+            })()}
           </div>
           <div>
             <label className="text-sm font-medium text-foreground">Gender</label>

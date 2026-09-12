@@ -14,6 +14,7 @@ interface AuthState {
     password: string,
     name: string,
     phone: string,
+    gender?: string,
   ) => Promise<string | null>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<Profile | null>;
@@ -77,8 +78,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const register = useCallback(
-    async (email: string, password: string, name: string, phone: string) => {
-      const result = await signUp(email, password, name, phone);
+    async (email: string, password: string, name: string, phone: string, gender?: string) => {
+      const result = await signUp(email, password, name, phone, gender);
       return result.error;
     },
     [],

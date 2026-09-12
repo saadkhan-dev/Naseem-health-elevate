@@ -98,15 +98,21 @@ export function AboutSection() {
 
               <div className="mt-6 space-y-2 border-t border-white/10 pt-4 text-xs text-white/60">
                 <div className="flex items-center justify-between">
-                  <span><strong>Specialization:</strong></span>
+                  <span>
+                    <strong>Specialization:</strong>
+                  </span>
                   <span className="font-medium text-white/90">Homeopathy & Physiotherapy</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span><strong>Practice Location:</strong></span>
+                  <span>
+                    <strong>Practice Location:</strong>
+                  </span>
                   <span className="font-medium text-white/90">North Karachi, Pakistan</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span><strong>Experience:</strong></span>
+                  <span>
+                    <strong>Experience:</strong>
+                  </span>
                   <span className="font-medium text-emerald-400">20+ Years Clinical Practice</span>
                 </div>
               </div>
@@ -136,9 +142,7 @@ export function AboutSection() {
                       key={cred.degree}
                       className="rounded-xl bg-white/[0.04] p-2.5 ring-1 ring-white/5"
                     >
-                      <p className="text-xs font-semibold leading-snug text-white">
-                        {cred.degree}
-                      </p>
+                      <p className="text-xs font-semibold leading-snug text-white">{cred.degree}</p>
                       <p className="mt-0.5 text-[11px] leading-snug text-white/50 sm:text-xs">
                         {cred.institute}
                       </p>

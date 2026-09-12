@@ -178,7 +178,11 @@ function AdminProducts() {
               >
                 <div className="flex min-w-0 items-center gap-4">
                   {p.image_url && (
-                    <img src={p.image_url} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" />
+                    <img
+                      src={p.image_url}
+                      alt=""
+                      className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                    />
                   )}
                   <div className="min-w-0">
                     <div className="truncate font-medium text-foreground">{p.name}</div>
@@ -203,9 +207,7 @@ function AdminProducts() {
                           )}
                         </Badge>
                         {offerActive ? (
-                          <span className="text-xs font-medium text-emerald-600">
-                            Offer live
-                          </span>
+                          <span className="text-xs font-medium text-emerald-600">Offer live</span>
                         ) : (
                           <span className="text-xs font-medium text-muted-foreground">
                             Scheduled / paused

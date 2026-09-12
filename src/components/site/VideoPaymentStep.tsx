@@ -605,6 +605,7 @@ export function VideoPaymentStep({
                     <img
                       src={upPreview}
                       alt="Receipt preview"
+                      decoding="async"
                       className="max-h-56 w-full object-contain"
                     />
                     <button

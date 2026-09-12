@@ -2,8 +2,17 @@ import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { useVideoJoin } from "@/hooks/queries/useVideo";
+import { ensureConsultationConversation } from "@/lib/consultation-data";
 import { Button } from "@/components/ui/button";
-import { Loader2, Video, Clock, ShieldAlert, AlertTriangle, ExternalLink } from "lucide-react";
+import {
+  Loader2,
+  Video,
+  Clock,
+  ShieldAlert,
+  AlertTriangle,
+  ExternalLink,
+  MessageSquare,
+} from "lucide-react";
 import { formatTimeDisplay } from "@/lib/bookings";
 
 /** If the join lookup hangs for this long, stop the spinner and offer a retry. */
@@ -26,6 +35,7 @@ function VideoCallPage() {
   const navigate = useNavigate();
   const { data: join, isLoading, refetch } = useVideoJoin(vcNo);
   const [joinTimedOut, setJoinTimedOut] = useState(false);
+  const [openingChat, setOpeningChat] = useState(false);
 
   useEffect(() => {
     if (!isLoading || joinTimedOut) return;
@@ -37,6 +47,33 @@ function VideoCallPage() {
   const isDoctor = search.as === "doctor";
   const session = join?.session;
   const doctorReady = isDoctor && !!session && !!join?.sessionId;
+
+  /**
+   * Open this appointment's persistent consultation chat (the SAME conversation
+   * the appointment card links to — never a new one). `joinMeet` additionally
+   * opens Google Meet in a new tab so the call stays open side-by-side.
+   */
+  async function openConsultationChat(joinMeet: boolean) {
+    if (!session || !join?.appointment || openingChat) return;
+    if (joinMeet && session.meetUrl) {
+      window.open(session.meetUrl, "_blank", "noopener,noreferrer");
+    }
+    setOpeningChat(true);
+    try {
+      const result = await ensureConsultationConversation(join.appointment.appointmentId);
+      if (isDoctor) {
+        navigate({ to: "/admin/consultations/$id", params: { id: result.conversationId } });
+      } else {
+        navigate({
+          to: "/patient/consultations/$id",
+          params: { id: result.conversationId },
+          search: { openVideo: session.vcNo },
+        });
+      }
+    } catch {
+      setOpeningChat(false);
+    }
+  }
 
   function goHome() {
     navigate({ to: "/" });
@@ -161,6 +198,9 @@ function VideoCallPage() {
             >
               <Loader2 className="h-4 w-4" /> Check Again
             </Button>
+            <Button variant="outline" onClick={() => void openConsultationChat(false)}>
+              Open Consultation Chat
+            </Button>
             <Button variant="outline" onClick={goHome}>
               Go Home
             </Button>
@@ -223,14 +263,29 @@ function VideoCallPage() {
         )}
 
         <Button
-          className="mt-4 w-full"
-          onClick={() => window.open(session.meetUrl!, "_blank", "noopener,noreferrer")}
+          className="mt-4 w-full gap-1.5"
+          onClick={() => void openConsultationChat(true)}
+          disabled={openingChat}
         >
-          <ExternalLink className="h-4 w-4" />
-          Join Video Call
+          {openingChat ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <ExternalLink className="h-4 w-4" />
+          )}
+          {openingChat ? "Opening Meet & chat…" : "Join Video Call"}
+        </Button>
+        <Button
+          variant="outline"
+          className="mt-2 w-full gap-1.5"
+          onClick={() => void openConsultationChat(false)}
+          disabled={openingChat}
+        >
+          <MessageSquare className="h-4 w-4" />
+          {openingChat ? "Opening chat…" : "Open Consultation Chat"}
         </Button>
         <p className="mt-3 text-center text-xs text-muted-foreground">
-          Google Meet will open in a new tab. Allow camera and microphone access when asked.
+          Google Meet will open in a new tab while this appointment's chat stays open here. Allow
+          camera and microphone access when asked.
         </p>
       </div>
     </div>

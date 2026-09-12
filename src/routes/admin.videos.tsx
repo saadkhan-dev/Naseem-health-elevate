@@ -125,7 +125,11 @@ function AdminVideos() {
             >
               <div className="flex min-w-0 items-center gap-4">
                 {v.thumbnail_url ? (
-                  <img src={v.thumbnail_url} alt="" className="h-14 w-20 shrink-0 rounded-lg object-cover" />
+                  <img
+                    src={v.thumbnail_url}
+                    alt=""
+                    className="h-14 w-20 shrink-0 rounded-lg object-cover"
+                  />
                 ) : (
                   <div className="flex h-14 w-20 shrink-0 items-center justify-center rounded-lg bg-muted">
                     <Play className="h-5 w-5 text-muted-foreground" />

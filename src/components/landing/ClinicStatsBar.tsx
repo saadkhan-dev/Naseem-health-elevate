@@ -54,7 +54,7 @@ function AnimatedCounter({ stat, inView }: { stat: StatItem; inView: boolean }) 
 
   useEffect(() => {
     if (!inView) return;
-    let start = 0;
+    const start = 0;
     const duration = 1600;
     const frameRate = 1000 / 60;
     const totalFrames = Math.round(duration / frameRate);

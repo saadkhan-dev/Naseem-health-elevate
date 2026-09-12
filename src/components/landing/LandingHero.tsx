@@ -100,8 +100,8 @@ export function LandingHero() {
 
           <p className="mt-3 text-sm leading-relaxed text-white/75 sm:text-base">
             Natural healing. Pain relief. Better health. Personalized, patient-first care from
-            <strong className="font-semibold text-white/90"> Dr. Naseem Ahmed Khan</strong> — for you
-            and your family.
+            <strong className="font-semibold text-white/90"> Dr. Naseem Ahmed Khan</strong> — for
+            you and your family.
           </p>
         </motion.div>
 

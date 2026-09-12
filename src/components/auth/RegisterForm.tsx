@@ -4,6 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Loader2, MailCheck } from "lucide-react";
 
 interface RegisterFormProps {
@@ -15,6 +22,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [gender, setGender] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,7 +33,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
     setError("");
     setLoading(true);
     try {
-      const err = await register(email, password, name, phone);
+      const err = await register(email, password, name, phone, gender || undefined);
       if (err) {
         setError(err);
       } else {
@@ -97,6 +105,23 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
           onChange={(e) => setPhone(e.target.value)}
           required
         />
+      </div>
+      <div className="space-y-2">
+        <Label>Gender</Label>
+        <Select value={gender} onValueChange={setGender}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select your gender" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="male">Male</SelectItem>
+            <SelectItem value="female">Female</SelectItem>
+            <SelectItem value="other">Other</SelectItem>
+            <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          Used to show a small gender symbol next to your name in consultation chats.
+        </p>
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">Password</Label>

@@ -15,6 +15,7 @@ import {
   ChevronRight,
   UserCircle,
   MessageSquare,
+  MessageCircle,
   HelpCircle,
   FileText,
   BellRing,
@@ -46,6 +47,7 @@ const navItems = [
   { href: "/admin/reminders", label: "Reminders", Icon: BellRing, exact: false },
   { href: "/admin/videos", label: "Videos", Icon: Video, exact: false },
   { href: "/admin/support", label: "Support", Icon: MessageSquare, exact: false },
+  { href: "/admin/consultations", label: "Consultations", Icon: MessageCircle, exact: false },
   { href: "/admin/faq", label: "FAQ", Icon: HelpCircle, exact: false },
   { href: "/admin/doctor", label: "Doctor Profile", Icon: UserCircle, exact: false },
   { href: "/admin/analytics", label: "Analytics", Icon: BarChart3, exact: false },
@@ -89,7 +91,7 @@ function AdminLayout() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-muted/30 lg:flex-row">
+    <div className="flex min-h-screen flex-col overflow-x-clip bg-muted/30 lg:flex-row">
       <header className="flex items-center justify-between gap-2 border-b bg-card px-4 py-3 lg:hidden">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-bold">

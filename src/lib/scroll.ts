@@ -97,8 +97,7 @@ function navbarHeightPx(): number {
     return FALLBACK_NAVBAR_REM * rootRemPx();
   }
 
-  const header =
-    document.querySelector<HTMLElement>("header.sticky");
+  const header = document.querySelector<HTMLElement>("header.sticky");
 
   if (header && header.offsetHeight > 0) {
     return header.offsetHeight;
@@ -106,10 +105,7 @@ function navbarHeightPx(): number {
 
   const root = getComputedStyle(document.documentElement);
 
-  const navbarRem =
-    parseFloat(
-      root.getPropertyValue("--navbar-height"),
-    ) || FALLBACK_NAVBAR_REM;
+  const navbarRem = parseFloat(root.getPropertyValue("--navbar-height")) || FALLBACK_NAVBAR_REM;
 
   return navbarRem * rootRemPx();
 }
@@ -133,10 +129,7 @@ function getScrollTarget(el: HTMLElement, id?: string): HTMLElement {
    CALCULATE TARGET POSITION
    ========================================================= */
 
-function getTargetTop(
-  el: HTMLElement,
-  id: string,
-): number {
+function getTargetTop(el: HTMLElement, id: string): number {
   if (id === "home") {
     return 0;
   }
@@ -147,39 +140,24 @@ function getTargetTop(
 
   const sectionGap = getSectionGap(id);
 
-  return (
-    target.getBoundingClientRect().top +
-    window.scrollY -
-    navbarHeight -
-    sectionGap
-  );
+  return target.getBoundingClientRect().top + window.scrollY - navbarHeight - sectionGap;
 }
 
 /* =========================================================
    CHECK POSITION
    ========================================================= */
 
-function isPositionCorrect(
-  el: HTMLElement,
-  id: string,
-): boolean {
+function isPositionCorrect(el: HTMLElement, id: string): boolean {
   const expected = getTargetTop(el, id);
 
-  return (
-    Math.abs(window.scrollY - expected) <=
-    POSITION_TOLERANCE
-  );
+  return Math.abs(window.scrollY - expected) <= POSITION_TOLERANCE;
 }
 
 /* =========================================================
    CORRECT LATE LAYOUT SHIFT
    ========================================================= */
 
-function correctPosition(
-  el: HTMLElement,
-  id: string,
-  remaining: number,
-) {
+function correctPosition(el: HTMLElement, id: string, remaining: number) {
   if (remaining <= 0) {
     return;
   }
@@ -196,11 +174,7 @@ function correctPosition(
   });
 
   window.setTimeout(() => {
-    correctPosition(
-      el,
-      id,
-      remaining - 1,
-    );
+    correctPosition(el, id, remaining - 1);
   }, CORRECTION_DELAY_MS);
 }
 
@@ -218,8 +192,7 @@ export function scrollToHash(hash: string) {
   let attempt = 0;
 
   const performScroll = () => {
-    const section =
-      document.getElementById(id) as HTMLElement | null;
+    const section = document.getElementById(id) as HTMLElement | null;
 
     /* -----------------------------------------------------
        Section does not exist yet.
@@ -230,10 +203,7 @@ export function scrollToHash(hash: string) {
       if (attempt < RETRY_LIMIT) {
         attempt += 1;
 
-        window.setTimeout(
-          performScroll,
-          RETRY_DELAY_MS,
-        );
+        window.setTimeout(performScroll, RETRY_DELAY_MS);
       }
 
       return;
@@ -244,25 +214,17 @@ export function scrollToHash(hash: string) {
        independent gap.
        ----------------------------------------------------- */
 
-    const target = getTargetTop(
-      section,
-      id,
-    );
+    const target = getTargetTop(section, id);
 
     /* -----------------------------------------------------
        Scroll
        ----------------------------------------------------- */
 
-    const reducedMotion =
-      window.matchMedia(
-        "(prefers-reduced-motion: reduce)",
-      ).matches;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     window.scrollTo({
       top: Math.max(target, 0),
-      behavior: reducedMotion
-        ? "auto"
-        : "smooth",
+      behavior: reducedMotion ? "auto" : "smooth",
     });
 
     /* -----------------------------------------------------
@@ -271,11 +233,7 @@ export function scrollToHash(hash: string) {
        ----------------------------------------------------- */
 
     window.setTimeout(() => {
-      correctPosition(
-        section,
-        id,
-        CORRECTION_LIMIT,
-      );
+      correctPosition(section, id, CORRECTION_LIMIT);
     }, CORRECTION_DELAY_MS);
 
     /* -----------------------------------------------------
@@ -284,11 +242,7 @@ export function scrollToHash(hash: string) {
        ----------------------------------------------------- */
 
     try {
-      history.replaceState(
-        null,
-        "",
-        `#${id}`,
-      );
+      history.replaceState(null, "", `#${id}`);
     } catch {
       // Ignore history errors.
     }
@@ -296,8 +250,3 @@ export function scrollToHash(hash: string) {
 
   performScroll();
 }
-
-
-
-
-

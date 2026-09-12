@@ -67,8 +67,8 @@ export function Hero() {
             Healing Naturally, Living Better.
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-base text-muted-foreground md:text-lg lg:mx-0">
-            Natural healing. Pain relief. Better health. Personalized, patient-first care from <strong>Dr.
-            Naseem Ahmed Khan</strong>  for you and your family.
+            Natural healing. Pain relief. Better health. Personalized, patient-first care from{" "}
+            <strong>Dr. Naseem Ahmed Khan</strong> for you and your family.
           </p>
 
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5 lg:justify-start xl:flex-nowrap">

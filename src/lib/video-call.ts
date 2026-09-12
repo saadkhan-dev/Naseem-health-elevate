@@ -70,6 +70,8 @@ export interface VideoJoinSession {
 }
 
 export interface VideoJoinAppointment {
+  /** The appointment's internal id — used to open the same consultation chat. */
+  appointmentId: string;
   status: string;
   serviceName: string | null;
   date: string;

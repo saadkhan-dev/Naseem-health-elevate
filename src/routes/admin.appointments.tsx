@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
 import { Loader2, Video } from "lucide-react";
+import { ensureConsultationConversation } from "@/lib/consultation-data";
 import {
   useAppointments,
   useUpdateAppointmentStatus,
@@ -96,6 +97,7 @@ function PaymentBadge({ status }: { status: string }) {
 }
 
 function AdminAppointments() {
+  const navigate = useNavigate();
   const { data: appointments, isLoading, isError, error } = useAppointments();
   const { data: availability } = useAdminAvailability();
   const updateStatus = useUpdateAppointmentStatus();
@@ -116,6 +118,7 @@ function AdminAppointments() {
   } | null>(null);
   const [callDuration, setCallDuration] = useState(20);
   const [videoError, setVideoError] = useState("");
+  const [joiningCall, setJoiningCall] = useState(false);
 
   const [rescheduleTarget, setRescheduleTarget] = useState<AppointmentWithDetails | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState("");
@@ -234,6 +237,27 @@ function AdminAppointments() {
     setRescheduleTarget(a);
     setRescheduleDate(a.date);
     setRescheduleTime(a.time ?? "");
+  }
+
+  /** Join the call as the doctor: open Meet in a new tab, then bring the same
+   *  appointment's consultation chat into this tab (mirrors the patient flow). */
+  async function joinDoctorCall() {
+    if (!videoDialog) return;
+    const show = videoDialog;
+    if (show.meetUrl) {
+      window.open(show.meetUrl, "_blank", "noopener,noreferrer");
+    }
+    setJoiningCall(true);
+    try {
+      const result = await ensureConsultationConversation(show.appointmentId);
+      setVideoDialog(null);
+      navigate({ to: "/admin/consultations/$id", params: { id: result.conversationId } });
+    } catch {
+      setVideoDialog(null);
+      window.open(`/video/${show.vcNo}?as=doctor`, "_blank", "noopener,noreferrer");
+    } finally {
+      setJoiningCall(false);
+    }
   }
 
   async function submitReschedule() {
@@ -806,13 +830,15 @@ function AdminAppointments() {
             {videoDialog?.vcNo && videoDialog.meetUrl ? (
               <Button
                 className="w-full"
-                onClick={() => {
-                  window.open(`/video/${videoDialog?.vcNo}?as=doctor`, "_blank");
-                  setVideoDialog(null);
-                }}
+                onClick={() => void joinDoctorCall()}
+                disabled={joiningCall}
               >
-                <Video className="mr-2 h-4 w-4" />
-                Join as Doctor ({callDuration} min)
+                {joiningCall ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Video className="mr-2 h-4 w-4" />
+                )}
+                {joiningCall ? "Opening Meet & chat…" : `Join as Doctor (${callDuration} min)`}
               </Button>
             ) : videoDialog?.vcNo && !videoDialog.meetUrl ? (
               <>

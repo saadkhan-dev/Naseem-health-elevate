@@ -8,9 +8,11 @@ import {
   LogOut,
   ChevronRight,
   CalendarCheck,
+  MessageSquare,
 } from "lucide-react";
 import { signOut } from "@/lib/auth";
 import { useAuth } from "@/hooks/useAuth";
+import { usePatientConsultationUnread } from "@/hooks/useConsultation";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { Nav } from "@/components/site/Nav";
 import { SiteFooter } from "@/components/site/SiteFooter";
@@ -24,6 +26,7 @@ export const Route = createFileRoute("/patient")({
 
 const navItems = [
   { href: "/patient", label: "Dashboard", Icon: LayoutDashboard, exact: true },
+  { href: "/patient/consultations", label: "Consultations", Icon: MessageSquare, exact: false },
   { href: "/patient/documents", label: "My Documents", Icon: FolderOpen, exact: false },
   { href: "/patient/orders", label: "My Orders", Icon: Package, exact: false },
   { href: "/patient/profile", label: "Profile", Icon: User, exact: false },
@@ -34,6 +37,7 @@ function PatientLayout() {
   const router = useRouter();
   const location = useLocation();
   const [authOpen, setAuthOpen] = useState(false);
+  const { data: unreadCount } = usePatientConsultationUnread();
 
   useEffect(() => {
     if (!loading && !user) setAuthOpen(true);
@@ -73,10 +77,10 @@ function PatientLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-screen overflow-x-clip bg-muted/30">
       <Nav />
       <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 lg:flex-row lg:px-8">
-<aside className="w-full shrink-0 lg:w-60">
+        <aside className="w-full shrink-0 lg:w-60">
           <div className="rounded-2xl border border-border bg-card p-4">
             <div className="mb-3 flex items-center gap-3 lg:border-b lg:pb-3 lg:mb-0">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-primary text-sm font-bold text-primary-foreground">
@@ -108,6 +112,14 @@ function PatientLayout() {
                   >
                     <Icon className="h-4 w-4 shrink-0" />
                     <span className="whitespace-nowrap">{label}</span>
+                    {href === "/patient/consultations" && !!unreadCount && unreadCount > 0 && (
+                      <span
+                        className="ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground lg:ml-0"
+                        aria-label={`${unreadCount} unread consultations`}
+                      >
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </span>
+                    )}
                     {active && <ChevronRight className="ml-auto hidden h-4 w-4 lg:block" />}
                   </Link>
                 );
