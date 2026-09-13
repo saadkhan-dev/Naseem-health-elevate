@@ -22,7 +22,11 @@ import {
   getVideoJoinByVcNo as getVideoJoinByVcNoServer,
   resendVideoNotification,
 } from "./server/video-sessions";
-import { createPatientNotification } from "./server/patient-notifications";
+import {
+  createPatientNotification,
+  createAdminNotification,
+  buildAdminNotificationDedupKey,
+} from "./server/patient-notifications";
 import { validateAppointmentSlot } from "./server/slot-validation";
 import {
   createAppointmentReminder,
@@ -473,6 +477,18 @@ export const createBooking = createServerFn({ method: "POST" })
           });
         }
 
+        // Best-effort admin notification for the new booking (authed + guest).
+        // Safe summary only — guest phone/email are never included.
+        await createAdminNotification(admin, {
+          type: "new_appointment",
+          title: "New appointment booked",
+          body: `${data.name || "A patient"} booked ${service.name} appointment ${appointmentNo} for ${data.date}${
+            data.time ? ` at ${data.time.slice(0, 5)}` : ""
+          }.`,
+          link: "/admin/appointments",
+          dedupKey: buildAdminNotificationDedupKey("new_appointment", inserted.id as string),
+        });
+
         // Best-effort delivery of the Appointment ID. A channel with no provider
         // credentials is reported as not_configured — never faked.
         const siteUrl = getSiteUrl();
@@ -679,6 +695,12 @@ export const adminUpdateAppointmentStatus = createServerFn({ method: "POST" })
 
     if (!row) {
       return { error: "Appointment not found.", id: null, status: null, notifications: [] };
+    }
+
+    // Setting the same status again is a no-op: skip the write and the
+    // duplicate patient notification / status-change messages entirely.
+    if (row.status === data.status) {
+      return { error: null, id: data.id, status: data.status, notifications: [] };
     }
 
     const { error } = await admin
@@ -953,6 +975,13 @@ export const adminUpdateReview = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const admin = getSupabaseAdmin();
 
+    const { data: existing } = await admin
+      .from("reviews")
+      .select("status, patient_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!existing) return { error: "Review not found." };
+
     const reviewData = { ...data.data };
     // Approving a review also makes it publicly visible.
     if (reviewData.status === "approved") {
@@ -965,25 +994,21 @@ export const adminUpdateReview = createServerFn({ method: "POST" })
     const { error } = await admin.from("reviews").update(reviewData).eq("id", data.id);
     if (error) return { error: error?.message ?? null };
 
-    // Notify the author when their review is approved or rejected.
-    if (reviewData.status) {
-      const { data: review } = await admin
-        .from("reviews")
-        .select("patient_id, rating, text")
-        .eq("id", data.id)
-        .maybeSingle();
-      if (review?.patient_id) {
-        const approved = reviewData.status === "approved";
-        await createPatientNotification(admin, {
-          userId: review.patient_id,
-          type: "review",
-          title: approved ? "Review approved" : "Review not approved",
-          body: approved
-            ? "Great news — your review is now live on the website. Thank you!"
-            : "Your submitted review was not approved and is not shown publicly.",
-          link: "/patient",
-        });
-      }
+    // Notify the author only when the approval state actually changed
+    // (editing the text/rating without touching the status must not
+    // re-send the "approved"/"not approved" message).
+    const statusChanged = reviewData.status != null && reviewData.status !== existing.status;
+    if (statusChanged && existing.patient_id) {
+      const approved = reviewData.status === "approved";
+      await createPatientNotification(admin, {
+        userId: existing.patient_id,
+        type: "review",
+        title: approved ? "Review approved" : "Review not approved",
+        body: approved
+          ? "Great news — your review is now live on the website. Thank you!"
+          : "Your submitted review was not approved and is not shown publicly.",
+        link: "/patient",
+      });
     }
     return { error: null };
   });
@@ -1570,6 +1595,14 @@ export const adminRescheduleAppointment = createServerFn({ method: "POST" })
 
     if (!row) return { error: "Appointment not found." };
 
+    // Moving the appointment to the exact same date/time is a no-op: skip the
+    // write, slot validation, and the duplicate reschedule notifications.
+    const sameDay = row.date === data.date;
+    const sameTime = ((row.time as string | null)?.slice(0, 5) ?? null) === (data.time ?? null);
+    if (sameDay && sameTime) {
+      return { error: null, notifications: [] };
+    }
+
     const services = row.services as unknown as {
       name: string | null;
       duration_minutes: number | null;
@@ -1893,6 +1926,15 @@ export const patientCancelAppointment = createServerFn({ method: "POST" })
       link: "/patient",
     });
 
+    // Best-effort admin notification (the patient initiated this cancellation).
+    await createAdminNotification(admin, {
+      type: "appointment_cancelled",
+      title: "Appointment cancelled by patient",
+      body: `Appointment ${(row.appointment_no as string | null) ?? data.id} was cancelled by the patient.`,
+      link: "/admin/appointments",
+      dedupKey: buildAdminNotificationDedupKey("appointment_cancelled", data.id),
+    });
+
     return { error: null };
   });
 
@@ -1964,6 +2006,22 @@ export const patientRescheduleAppointment = createServerFn({ method: "POST" })
       link: "/patient",
     });
 
+    // Best-effort admin notification (the patient initiated this reschedule).
+    // The dedup key includes the new slot so a genuine second reschedule still
+    // notifies, while a retry of the same request does not.
+    await createAdminNotification(admin, {
+      type: "appointment_rescheduled",
+      title: "Appointment rescheduled by patient",
+      body: `An appointment was moved to ${data.date}${
+        data.time ? ` at ${data.time.slice(0, 5)}` : ""
+      } by the patient.`,
+      link: "/admin/appointments",
+      dedupKey: buildAdminNotificationDedupKey(
+        "appointment_rescheduled",
+        `${data.id}:${data.date}${data.time ?? ""}`,
+      ),
+    });
+
     return { error: null };
   });
 
@@ -2006,6 +2064,48 @@ export const patientMarkAllNotificationsRead = createServerFn({ method: "POST" }
       .update({ read_at: new Date().toISOString() })
       .eq("user_id", context.patientId)
       .is("read_at", null);
+    return { error: error?.message ?? null };
+  });
+
+// ---------------------------------------------------------------------------
+// Admin — in-app notification center
+// ---------------------------------------------------------------------------
+
+export const adminGetMyNotifications = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async ({ context }) => {
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin
+      .from("admin_notifications")
+      .select("*")
+      .or(`recipient_id.eq.${context.adminUserId},recipient_id.is.null`)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    return { error: error?.message ?? null, notifications: data ?? [] };
+  });
+
+export const adminMarkNotificationRead = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(z.object({ id: uuidSchema }))
+  .handler(async ({ data, context }) => {
+    const { error } = await getSupabaseAdmin()
+      .from("admin_notifications")
+      .update({ read_at: new Date().toISOString() })
+      .eq("id", data.id)
+      .or(`recipient_id.eq.${context.adminUserId},recipient_id.is.null`);
+    return { error: error?.message ?? null };
+  });
+
+export const adminMarkAllNotificationsRead = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async ({ context }) => {
+    const { error } = await getSupabaseAdmin()
+      .from("admin_notifications")
+      .update({ read_at: new Date().toISOString() })
+      .is("read_at", null)
+      .or(`recipient_id.eq.${context.adminUserId},recipient_id.is.null`);
     return { error: error?.message ?? null };
   });
 
@@ -2319,6 +2419,17 @@ export const placeOrder = createServerFn({ method: "POST" })
             link: "/patient/orders",
           });
         }
+
+        // Best-effort admin notification (authed + guest). No payer contact
+        // details are included — just the order reference for the admin page.
+        await createAdminNotification(admin, {
+          type: "new_order",
+          title: "New order received",
+          body: `Order ${orderNo} was placed and awaits payment.`,
+          link: "/admin/orders",
+          dedupKey: buildAdminNotificationDedupKey("new_order", orderId),
+        });
+
         return { error: null, orderNo, orderId, total };
       }
       const isCodeCollision = orderError.code === "23505" && /order_no/i.test(orderError.message);
@@ -2696,7 +2807,8 @@ export const submitSupportMessage = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    const { error } = await getSupabaseAdmin()
+    const admin = getSupabaseAdmin();
+    const { data: inserted, error } = await admin
       .from("support_messages")
       .insert({
         name: data.name,
@@ -2705,8 +2817,23 @@ export const submitSupportMessage = createServerFn({ method: "POST" })
         subject: data.subject ?? "",
         message: data.message,
         status: "new",
-      });
-    return { error: error?.message ?? null };
+      })
+      .select("id")
+      .single();
+    if (error) return { error: error?.message ?? null };
+
+    // Best-effort admin notification. Safe summary — no email/phone/body.
+    await createAdminNotification(admin, {
+      type: "support_message",
+      title: "New support message",
+      body: data.subject?.trim()
+        ? `New support message from ${data.name}: ${data.subject.trim()}`
+        : `New support message from ${data.name}.`,
+      link: "/admin/support",
+      dedupKey: buildAdminNotificationDedupKey("support_message", inserted.id as string),
+    });
+
+    return { error: null };
   });
 
 // ---------------------------------------------------------------------------

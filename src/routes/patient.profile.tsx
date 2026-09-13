@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Loader2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -44,9 +44,12 @@ function PatientProfile() {
   });
   const [message, setMessage] = useState("");
   const [saveError, setSaveError] = useState(false);
+  // Once the user edits anything, stop re-syncing the form from the profile so
+  // a profile refetch can never discard their typed values.
+  const dirty = useRef(false);
 
   useEffect(() => {
-    if (profile) {
+    if (profile && !dirty.current) {
       setForm({
         full_name: profile.full_name ?? "",
         phone: profile.phone ?? "",
@@ -73,6 +76,7 @@ function PatientProfile() {
       return;
     }
     await refreshProfile();
+    dirty.current = false;
     setMessage("Profile updated.");
   }
 
@@ -98,7 +102,10 @@ function PatientProfile() {
               id="profile-name"
               autoComplete="name"
               value={form.full_name}
-              onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+              onChange={(e) => {
+                dirty.current = true;
+                setForm({ ...form, full_name: e.target.value });
+              }}
               className="mt-1"
               placeholder="Your full name"
             />
@@ -112,7 +119,10 @@ function PatientProfile() {
               type="tel"
               autoComplete="tel"
               value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              onChange={(e) => {
+                dirty.current = true;
+                setForm({ ...form, phone: e.target.value });
+              }}
               className="mt-1"
               placeholder="+92 3XX XXXXXXX"
             />
@@ -125,7 +135,10 @@ function PatientProfile() {
               id="profile-dob"
               type="date"
               value={form.date_of_birth}
-              onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })}
+              onChange={(e) => {
+                dirty.current = true;
+                setForm({ ...form, date_of_birth: e.target.value });
+              }}
               className="mt-1"
             />
             {(() => {
@@ -139,7 +152,13 @@ function PatientProfile() {
           </div>
           <div>
             <label className="text-sm font-medium text-foreground">Gender</label>
-            <Select value={form.gender} onValueChange={(v) => setForm({ ...form, gender: v })}>
+            <Select
+              value={form.gender}
+              onValueChange={(v) => {
+                dirty.current = true;
+                setForm({ ...form, gender: v });
+              }}
+            >
               <SelectTrigger className="mt-1">
                 <SelectValue placeholder="Select" />
               </SelectTrigger>
@@ -159,7 +178,10 @@ function PatientProfile() {
               id="profile-address"
               autoComplete="street-address"
               value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
+              onChange={(e) => {
+                dirty.current = true;
+                setForm({ ...form, address: e.target.value });
+              }}
               className="mt-1"
               placeholder="Your address"
             />

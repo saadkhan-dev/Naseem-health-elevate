@@ -13,6 +13,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { StaffAuthProvider } from "@/hooks/useStaffAuth";
 import { AssistantChat } from "@/components/chat/AssistantChat";
 import { FloatingRestore } from "@/components/chat/FloatingRestore";
+import { PatientNotificationsRealtime } from "@/components/notifications/PatientNotificationsRealtime";
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -155,6 +156,7 @@ function RootComponent() {
           <Outlet />
           {!isAdminRoute && <AssistantChat />}
           {!isAdminRoute && <FloatingRestore />}
+          {!isAdminRoute && <PatientNotificationsRealtime />}
         </AuthProvider>
       </StaffAuthProvider>
     </QueryClientProvider>

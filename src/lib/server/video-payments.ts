@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createPatientNotification } from "./patient-notifications";
+import {
+  createAdminNotification,
+  createPatientNotification,
+  buildAdminNotificationDedupKey,
+} from "./patient-notifications";
 
 /**
  * Server-side prepaid Video Consultation payment operations.
@@ -83,6 +87,8 @@ export async function submitVideoPaymentForAppointment(
 
   if (!method) return { error: "That payment method is not available." };
 
+  const submittedAt = new Date().toISOString();
+
   const { error } = await admin
     .from("appointments")
     .update({
@@ -90,11 +96,27 @@ export async function submitVideoPaymentForAppointment(
       payment_method: method.name,
       payment_reference: input.reference,
       payment_payer_name: input.payerName,
-      payment_submitted_at: new Date().toISOString(),
+      payment_submitted_at: submittedAt,
     })
     .eq("id", input.appointmentId);
+  if (error) return { error: error?.message ?? null };
 
-  return { error: error?.message ?? null };
+  // Best-effort admin notification that a video-payment proof needs
+  // verification. pre-submission gap: this path previously sent nothing.
+  // The dedup key is scoped to this submission attempt so a REJECTED payment
+  // that is submitted again still notifies the clinic.
+  await createAdminNotification(admin, {
+    type: "payment_update",
+    title: "Payment proof submitted",
+    body: "A payment proof was submitted for a video consultation.",
+    link: "/admin/payments",
+    dedupKey: buildAdminNotificationDedupKey(
+      "payment_update",
+      `video:${loaded.row.id}:${submittedAt}`,
+    ),
+  });
+
+  return { error: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -290,16 +312,31 @@ export async function submitVideoPaymentReceipt(
     methodName = method.name;
   }
 
+  const submittedAt = new Date().toISOString();
   const { error: updateError } = await admin
     .from("appointments")
     .update({
       payment_status: "payment_submitted",
       payment_method: methodName,
       payment_receipt_url: path,
-      payment_submitted_at: new Date().toISOString(),
+      payment_submitted_at: submittedAt,
     })
     .eq("id", loaded.row.id);
   if (updateError) return { error: updateError.message };
+
+  // Best-effort admin notification that a receipt needs verification. The
+  // dedup key is scoped to this submission attempt so a REJECTED payment
+  // that is submitted again still notifies the clinic.
+  await createAdminNotification(admin, {
+    type: "payment_update",
+    title: "Payment proof submitted",
+    body: `A payment receipt was uploaded for video consultation ${loaded.row.appointment_no ?? ""}.`,
+    link: "/admin/payments",
+    dedupKey: buildAdminNotificationDedupKey(
+      "payment_update",
+      `video:${loaded.row.id}:${submittedAt}`,
+    ),
+  });
 
   // Signed-in patients get an in-app notification that proof was received.
   if (loaded.row.patient_id) {
@@ -361,6 +398,7 @@ export async function submitVideoPaymentByIdentifier(
     methodName = method.name;
   }
 
+  const submittedAt = new Date().toISOString();
   const { error: updateError } = await admin
     .from("appointments")
     .update({
@@ -368,10 +406,24 @@ export async function submitVideoPaymentByIdentifier(
       payment_method: methodName,
       payment_reference: input.reference.trim(),
       payment_payer_name: input.payerName.trim(),
-      payment_submitted_at: new Date().toISOString(),
+      payment_submitted_at: submittedAt,
     })
     .eq("id", loaded.row.id);
   if (updateError) return { error: updateError.message };
+
+  // Best-effort admin notification that a video-payment proof needs
+  // verification. The dedup key is scoped to this submission attempt so a
+  // REJECTED payment that is submitted again still notifies the clinic.
+  await createAdminNotification(admin, {
+    type: "payment_update",
+    title: "Payment proof submitted",
+    body: `A payment proof was submitted for video consultation ${loaded.row.appointment_no ?? ""}.`,
+    link: "/admin/payments",
+    dedupKey: buildAdminNotificationDedupKey(
+      "payment_update",
+      `video:${loaded.row.id}:${submittedAt}`,
+    ),
+  });
 
   // Signed-in patients get an in-app notification that proof was received.
   if (loaded.row.patient_id) {

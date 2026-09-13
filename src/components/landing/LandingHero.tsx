@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { motion, useScroll, useTransform } from "framer-motion";
 import {
   ChevronDown,
@@ -8,6 +9,7 @@ import {
   ShieldCheck,
   Video,
   HeartPulse,
+  User,
   Youtube,
 } from "lucide-react";
 import { SectionLink } from "@/components/site/SectionLink";
@@ -143,6 +145,13 @@ export function LandingHero() {
             <HeartPulse className="h-4 w-4 text-emerald-400" />
             Conditions We Treat
           </SectionLink>
+          <Link
+            to="/patient"
+            className="liquid-glass inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-medium text-white transition-all hover:bg-white/10 hover:shadow-glass"
+          >
+            <User className="h-4 w-4 text-emerald-400" />
+            Digital Patient Portal
+          </Link>
         </motion.div>
 
         {/* Social Icons & WhatsApp Quick Connect */}

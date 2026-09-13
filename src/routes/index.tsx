@@ -8,7 +8,6 @@ import { ClinicStatsBar } from "@/components/landing/ClinicStatsBar";
 import { AboutSection } from "@/components/landing/AboutSection";
 import { FeaturedVideoSection } from "@/components/landing/FeaturedVideoSection";
 import { LandingServicesSection } from "@/components/landing/LandingServicesSection";
-import { QuickActionsSection } from "@/components/landing/QuickActionsSection";
 import { LandingBookingSection } from "@/components/landing/LandingBookingSection";
 import { LandingDarkWrap } from "@/components/landing/LandingDarkWrap";
 import { ContactSection } from "@/components/landing/ContactSection";
@@ -125,7 +124,6 @@ function Index() {
         <AboutSection />
         <FeaturedVideoSection />
         <LandingServicesSection />
-        <QuickActionsSection />
         <LandingBookingSection />
         <LandingDarkWrap id="products">
           <ConsultationProducts />

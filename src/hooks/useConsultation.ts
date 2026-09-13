@@ -67,6 +67,51 @@ export function useStaffConsultationHistory(filters: StaffHistoryFilters = {}) {
   });
 }
 
+/**
+ * Keep the dashboard chat lists and unread badges live without manual refresh.
+ * Subscribes to message and participant events and invalidates the history +
+ * unread queries on every change. Realtime delivers only rows the caller's RLS
+ * allows, so a patient only sees their own conversations' events and staff see
+ * the conversations they can access.
+ */
+export function useConsultationRealtime(client: SupabaseClient) {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const channel = client
+      .channel("consultation-dashboard-realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "consultation_messages" },
+        refreshAll,
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "consultation_messages" },
+        refreshAll,
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "consultation_messages" },
+        refreshAll,
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "consultation_participants" },
+        refreshAll,
+      )
+      .subscribe();
+
+    return () => {
+      client.removeChannel(channel);
+    };
+
+    function refreshAll() {
+      qc.invalidateQueries({ queryKey: ["consultation", "history"] });
+      qc.invalidateQueries({ queryKey: consultationKeys.unread() });
+    }
+  }, [client, qc]);
+}
+
 // --- Conversation lifecycle -------------------------------------------------
 
 export function useConsultationDetail(conversationId: string, enabled = true) {

@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createPatientNotification } from "./patient-notifications";
+import {
+  createAdminNotification,
+  createPatientNotification,
+  buildAdminNotificationDedupKey,
+} from "./patient-notifications";
 
 /**
  * Server-side order payment operations.
@@ -88,6 +92,7 @@ export async function submitOrderPaymentForOrder(
     .maybeSingle();
   if (!method) return { error: "That payment method is not available." };
 
+  const submittedAt = new Date().toISOString();
   const { error } = await admin
     .from("orders")
     .update({
@@ -97,11 +102,34 @@ export async function submitOrderPaymentForOrder(
       payment_payer_name: input.payerName.trim(),
       payment_payer_phone: input.payerPhone?.trim() || null,
       payment_payer_email: input.payerEmail?.trim().toLowerCase() || null,
-      payment_submitted_at: new Date().toISOString(),
+      payment_submitted_at: submittedAt,
       payment_amount: order.payment_amount ?? order.payment_amount,
     })
     .eq("id", input.orderId);
-  return { error: error?.message ?? null };
+  if (error) return { error: error?.message ?? null };
+
+  if (order.patient_id) {
+    await createPatientNotification(admin, {
+      userId: order.patient_id,
+      type: "payment",
+      title: "Payment proof received",
+      body: `Your payment for order ${order.order_no ?? ""} was submitted. The clinic will verify it.`,
+      link: "/patient/orders",
+    });
+  }
+
+  // Best-effort admin notification (guest + authed flows share this path).
+  // The dedup key is scoped to this submission attempt so a REJECTED payment
+  // that is submitted again still notifies the clinic.
+  await createAdminNotification(admin, {
+    type: "payment_update",
+    title: "Payment proof submitted",
+    body: `A payment proof was submitted for order ${order.order_no ?? ""}.`,
+    link: "/admin/payments",
+    dedupKey: buildAdminNotificationDedupKey("payment_update", `order:${order.id}:${submittedAt}`),
+  });
+
+  return { error: null };
 }
 
 /**
@@ -196,6 +224,16 @@ export async function submitOrderPaymentByIdentifier(
       link: "/patient/orders",
     });
   }
+
+  // Best-effort admin notification (guest + authed flows share this path).
+  await createAdminNotification(admin, {
+    type: "payment_update",
+    title: "Payment proof submitted",
+    body: `A payment proof was submitted for order ${order.order_no ?? ""}.`,
+    link: "/admin/payments",
+    dedupKey: buildAdminNotificationDedupKey("payment_update", `order:${order.id}`),
+  });
+
   return { error: error?.message ?? null };
 }
 
@@ -258,6 +296,7 @@ export async function submitOrderPaymentReceipt(
     methodName = method.name;
   }
 
+  const submittedAt = new Date().toISOString();
   const { error: updateError } = await admin
     .from("orders")
     .update({
@@ -266,7 +305,7 @@ export async function submitOrderPaymentReceipt(
       payment_receipt_url: path,
       payment_payer_phone: input.phone?.trim() || null,
       payment_payer_email: input.email?.trim().toLowerCase() || null,
-      payment_submitted_at: new Date().toISOString(),
+      payment_submitted_at: submittedAt,
     })
     .eq("id", order.id);
   if (updateError) return { error: updateError.message };
@@ -280,6 +319,18 @@ export async function submitOrderPaymentReceipt(
       link: "/patient/orders",
     });
   }
+
+  // Best-effort admin notification that a receipt needs verification. The
+  // dedup key is scoped to this submission attempt so a REJECTED payment
+  // that is submitted again still notifies the clinic.
+  await createAdminNotification(admin, {
+    type: "payment_update",
+    title: "Payment proof submitted",
+    body: `A payment receipt was uploaded for order ${order.order_no ?? ""}.`,
+    link: "/admin/payments",
+    dedupKey: buildAdminNotificationDedupKey("payment_update", `order:${order.id}:${submittedAt}`),
+  });
+
   return { error: null };
 }
 

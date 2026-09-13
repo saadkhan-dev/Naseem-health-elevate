@@ -16,6 +16,7 @@ import { Link, useLocation, useRouter } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { SectionLink } from "@/components/site/SectionLink";
+import { PatientNotificationsBell } from "@/components/site/PatientNotificationsBell";
 import { useCart } from "@/lib/cart";
 
 interface SectionNavLink {
@@ -201,6 +202,7 @@ export function Nav() {
 
           {user ? (
             <div className="flex items-center gap-1.5">
+              <PatientNotificationsBell />
               <Link
                 to="/patient"
                 className={`inline-flex h-9 max-w-[150px] items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 text-[13px] font-medium text-white transition-colors hover:border-emerald-400/40 ${focusRing}`}
@@ -242,13 +244,16 @@ export function Nav() {
             )}
           </Link>
           {user && (
-            <Link
-              to="/patient"
-              aria-label="My account"
-              className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-emerald-400 transition-colors hover:border-emerald-400/40 ${focusRing}`}
-            >
-              <UserCircle2 className="h-4 w-4" />
-            </Link>
+            <>
+              <PatientNotificationsBell />
+              <Link
+                to="/patient"
+                aria-label="My account"
+                className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-emerald-400 transition-colors hover:border-emerald-400/40 ${focusRing}`}
+              >
+                <UserCircle2 className="h-4 w-4" />
+              </Link>
+            </>
           )}
           <button
             onClick={() => setMenuOpen((o) => !o)}

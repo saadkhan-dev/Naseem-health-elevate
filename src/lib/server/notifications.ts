@@ -19,14 +19,18 @@ import {
   buildStatusChangeMessages,
   buildVideoReadyMessages,
   getNotificationConfig,
+  normalizeE164Phone,
   resolveNotificationChannels,
+  whatsAppContentVariables,
   type AppointmentNotificationDetails,
   type NotificationChannel,
+  type NotificationDeliveryOptions,
   type NotificationEnv,
   type NotificationResult,
   type RescheduleNotificationDetails,
   type StatusChangeNotificationDetails,
   type VideoReadyNotificationDetails,
+  type WhatsAppTemplateId,
 } from "@/lib/notifications";
 
 /** Read a server env var from process.env (Node) or import.meta.env (Vite/Workers). */
@@ -52,8 +56,24 @@ export function getServerNotificationEnv(): NotificationEnv {
     TWILIO_AUTH_TOKEN: readEnv("TWILIO_AUTH_TOKEN"),
     TWILIO_SMS_FROM: readEnv("TWILIO_SMS_FROM"),
     TWILIO_WHATSAPP_FROM: readEnv("TWILIO_WHATSAPP_FROM"),
+    TWILIO_WHATSAPP_CONTENT_SID_APPOINTMENT: readEnv("TWILIO_WHATSAPP_CONTENT_SID_APPOINTMENT"),
+    TWILIO_WHATSAPP_CONTENT_SID_STATUS: readEnv("TWILIO_WHATSAPP_CONTENT_SID_STATUS"),
+    TWILIO_WHATSAPP_CONTENT_SID_RESCHEDULE: readEnv("TWILIO_WHATSAPP_CONTENT_SID_RESCHEDULE"),
+    TWILIO_WHATSAPP_CONTENT_SID_VIDEO: readEnv("TWILIO_WHATSAPP_CONTENT_SID_VIDEO"),
+    PHONE_COUNTRY_CODE: readEnv("PHONE_COUNTRY_CODE"),
   };
 }
+
+/** Which env var holds the approved content-template SID per message kind. */
+const WHATSAPP_CONTENT_SID_ENV: Record<
+  WhatsAppTemplateId,
+  Exclude<keyof NotificationEnv, "PHONE_COUNTRY_CODE">
+> = {
+  appointment: "TWILIO_WHATSAPP_CONTENT_SID_APPOINTMENT",
+  status: "TWILIO_WHATSAPP_CONTENT_SID_STATUS",
+  reschedule: "TWILIO_WHATSAPP_CONTENT_SID_RESCHEDULE",
+  video: "TWILIO_WHATSAPP_CONTENT_SID_VIDEO",
+};
 
 /** Public site URL used to build the status-check link in messages. */
 export function getSiteUrl(): string | undefined {
@@ -129,11 +149,26 @@ async function sendTwilioMessage(
   channel: "sms" | "whatsapp",
   to: string,
   body: string,
+  content?: { contentSid?: string; contentVariables?: string[] },
 ): Promise<NotificationResult> {
   try {
     const accountSid = env.TWILIO_ACCOUNT_SID!;
     const from = channel === "whatsapp" ? env.TWILIO_WHATSAPP_FROM! : env.TWILIO_SMS_FROM!;
     const target = channel === "whatsapp" ? `whatsapp:${to}` : to;
+
+    // Twilio accepts both To & From in either E.164 or WhatsApp URI form for
+    // SMS/WhatsApp; `to` is always normalized E.164 by the delivery loop.
+    const params = new URLSearchParams({ To: target, From: from, Body: body });
+    if (channel === "whatsapp" && content?.contentSid) {
+      // WhatsApp Business Platform requires an approved content template for
+      // out-of-session recipients. Body stays as a fallback; the template text
+      // is rendered from ContentVariables keyed {{1}}..{{n}}.
+      params.set("ContentSid", content.contentSid);
+      params.set(
+        "ContentVariables",
+        JSON.stringify(whatsAppContentVariables(content.contentVariables ?? [])),
+      );
+    }
 
     const res = await fetch(
       `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
@@ -143,7 +178,7 @@ async function sendTwilioMessage(
           Authorization: `Basic ${basicAuth(accountSid, env.TWILIO_AUTH_TOKEN ?? "")}`,
           "Content-Type": "application/x-www-form-urlencoded",
         },
-        body: new URLSearchParams({ To: target, From: from, Body: body }).toString(),
+        body: params.toString(),
       },
     );
 
@@ -177,8 +212,15 @@ async function sendTwilioMessage(
 export async function sendAppointmentNotifications(
   details: AppointmentNotificationDetails,
   env: NotificationEnv = getServerNotificationEnv(),
+  options?: NotificationDeliveryOptions,
 ): Promise<NotificationResult[]> {
-  return deliverToChannels({ env, details, messages: buildAppointmentMessages(details) });
+  return deliverToChannels({
+    env,
+    details,
+    messages: buildAppointmentMessages(details),
+    template: "appointment",
+    options,
+  });
 }
 
 /**
@@ -189,8 +231,15 @@ export async function sendAppointmentNotifications(
 export async function sendVideoReadyNotifications(
   details: VideoReadyNotificationDetails,
   env: NotificationEnv = getServerNotificationEnv(),
+  options?: NotificationDeliveryOptions,
 ): Promise<NotificationResult[]> {
-  return deliverToChannels({ env, details, messages: buildVideoReadyMessages(details) });
+  return deliverToChannels({
+    env,
+    details,
+    messages: buildVideoReadyMessages(details),
+    template: "video",
+    options,
+  });
 }
 
 /**
@@ -201,8 +250,15 @@ export async function sendVideoReadyNotifications(
 export async function sendStatusChangeNotifications(
   details: StatusChangeNotificationDetails,
   env: NotificationEnv = getServerNotificationEnv(),
+  options?: NotificationDeliveryOptions,
 ): Promise<NotificationResult[]> {
-  return deliverToChannels({ env, details, messages: buildStatusChangeMessages(details) });
+  return deliverToChannels({
+    env,
+    details,
+    messages: buildStatusChangeMessages(details),
+    template: "status",
+    options,
+  });
 }
 
 /**
@@ -212,8 +268,22 @@ export async function sendStatusChangeNotifications(
 export async function sendRescheduleNotifications(
   details: RescheduleNotificationDetails,
   env: NotificationEnv = getServerNotificationEnv(),
+  options?: NotificationDeliveryOptions,
 ): Promise<NotificationResult[]> {
-  return deliverToChannels({ env, details, messages: buildRescheduleMessages(details) });
+  return deliverToChannels({
+    env,
+    details,
+    messages: buildRescheduleMessages(details),
+    template: "reschedule",
+    options,
+  });
+}
+
+/** Log a provider failure so failures are visible server-side, not just in the UI. */
+function logDeliveryError(result: NotificationResult): void {
+  console.error(
+    `[notifications] ${result.channel} delivery failed for ${result.to}: ${result.detail ?? "unknown error"}`,
+  );
 }
 
 /** Shared delivery loop: config check → provider call per channel. */
@@ -221,6 +291,8 @@ async function deliverToChannels({
   env,
   details,
   messages,
+  template,
+  options,
 }: {
   env: NotificationEnv;
   details: Pick<AppointmentNotificationDetails, "phone" | "email">;
@@ -229,15 +301,26 @@ async function deliverToChannels({
     emailText: string;
     smsText: string;
     whatsappText: string;
+    whatsappContentVariables: string[];
   };
+  template: WhatsAppTemplateId;
+  options?: NotificationDeliveryOptions;
 }): Promise<NotificationResult[]> {
   const config = getNotificationConfig(env);
-  const channels = resolveNotificationChannels(details, config);
+  const channels = resolveNotificationChannels(details, config, options);
   const results: NotificationResult[] = [];
 
+  // SMS/WhatsApp must reach Twilio in E.164 form. Normalize once for all phone
+  // channels; a raw (never-normalized) value fails loudly instead of being sent.
+  const phone = normalizeE164Phone(
+    details.phone ?? "",
+    options?.defaultCountryCode ?? env.PHONE_COUNTRY_CODE ?? "+92",
+  );
+
   for (const channel of channels) {
-    const to = channel === "email" ? details.email! : details.phone!;
     const cfg = config[channel];
+    const to = channel === "email" ? details.email! : details.phone!;
+    const destination = channel === "email" ? to : phone;
 
     if (!cfg.configured) {
       results.push({
@@ -249,13 +332,36 @@ async function deliverToChannels({
       continue;
     }
 
-    if (channel === "email") {
-      results.push(await sendResendEmail(env, to, messages));
-    } else if (channel === "whatsapp") {
-      results.push(await sendTwilioMessage(env, channel, to, messages.whatsappText));
-    } else {
-      results.push(await sendTwilioMessage(env, channel, to, messages.smsText));
+    if (channel !== "email" && !destination) {
+      const result: NotificationResult = {
+        channel,
+        status: "error",
+        to,
+        detail: `Invalid phone number for ${channel}. Expected a 6–15 digit international number like +92 300 1234567.`,
+      };
+      logDeliveryError(result);
+      results.push(result);
+      continue;
     }
+
+    let result: NotificationResult;
+    if (channel === "email") {
+      result = await sendResendEmail(env, to, messages);
+    } else {
+      // `phone` is normalized E.164 or null; the guard above already rejected
+      // missing/invalid numbers, so it is safe to send from here.
+      const twilioTo = phone!;
+      result =
+        channel === "whatsapp"
+          ? await sendTwilioMessage(env, channel, twilioTo, messages.whatsappText, {
+              contentSid: env[WHATSAPP_CONTENT_SID_ENV[template]],
+              contentVariables: messages.whatsappContentVariables,
+            })
+          : await sendTwilioMessage(env, channel, twilioTo, messages.smsText);
+    }
+
+    if (result.status === "error") logDeliveryError(result);
+    results.push(result);
   }
 
   return results;

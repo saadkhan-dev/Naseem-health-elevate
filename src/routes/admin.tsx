@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Outlet, Link, useLocation, useRouter, createFileRoute } from "@tanstack/react-router";
 import {
   LayoutDashboard,
@@ -23,6 +23,9 @@ import {
 } from "lucide-react";
 import { staffSupabase } from "@/lib/supabase";
 import { useStaffAuth } from "@/hooks/useStaffAuth";
+import { useStaffConsultationHistory, useConsultationRealtime } from "@/hooks/useConsultation";
+import { AdminNotificationsBell } from "@/components/admin/AdminNotificationsBell";
+import { AdminNotificationsRealtime } from "@/components/notifications/AdminNotificationsRealtime";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -57,6 +60,13 @@ function AdminLayout() {
   const { user, profile, loading } = useStaffAuth();
   const router = useRouter();
   const location = useLocation();
+  // Live chat badges: new messages & read-state changes refresh instantly.
+  useConsultationRealtime(staffSupabase);
+  const { data: staffHistory } = useStaffConsultationHistory({});
+  const staffUnread = useMemo(
+    () => (staffHistory ?? []).reduce((sum, c) => sum + (c.unreadCount ?? 0), 0),
+    [staffHistory],
+  );
 
   const isAdmin = profile?.role === "admin" || profile?.role === "doctor";
   const isLoginPage = location.pathname === "/admin/login";
@@ -92,6 +102,7 @@ function AdminLayout() {
 
   return (
     <div className="flex min-h-screen flex-col overflow-x-clip bg-muted/30 lg:flex-row">
+      <AdminNotificationsRealtime />
       <header className="flex items-center justify-between gap-2 border-b bg-card px-4 py-3 lg:hidden">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-bold">
@@ -126,6 +137,14 @@ function AdminLayout() {
             >
               <Icon className="h-3.5 w-3.5" />
               {label}
+              {href === "/admin/consultations" && staffUnread > 0 && (
+                <span
+                  className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold text-primary-foreground"
+                  aria-label={`${staffUnread} unread consultations`}
+                >
+                  {staffUnread > 99 ? "99+" : staffUnread}
+                </span>
+              )}{" "}
             </Link>
           );
         })}
@@ -157,7 +176,17 @@ function AdminLayout() {
               >
                 <Icon className="h-4 w-4" />
                 {label}
-                {active && <ChevronRight className="ml-auto h-4 w-4" />}
+                {href === "/admin/consultations" && staffUnread > 0 && (
+                  <span
+                    className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground"
+                    aria-label={`${staffUnread} unread consultations`}
+                  >
+                    {staffUnread > 99 ? "99+" : staffUnread}
+                  </span>
+                )}
+                {active && href !== "/admin/consultations" && (
+                  <ChevronRight className="ml-auto h-4 w-4" />
+                )}
               </Link>
             );
           })}
@@ -176,6 +205,10 @@ function AdminLayout() {
 
       <main className="flex-1 overflow-auto">
         <div className="mx-auto max-w-6xl p-4 md:p-6 lg:p-8">
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <div className="text-sm font-medium text-muted-foreground">Admin Panel</div>
+            <AdminNotificationsBell />
+          </div>
           <Outlet />
         </div>
       </main>

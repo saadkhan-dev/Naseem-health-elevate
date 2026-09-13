@@ -29,6 +29,7 @@ export interface PatientNotification {
   link: string | null;
   read_at: string | null;
   created_at: string;
+  dedup_key?: string | null;
 }
 
 export type PatientDocumentStatus = "available" | "sent_to_doctor" | "received";

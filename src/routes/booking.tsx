@@ -68,6 +68,9 @@ function BookingPage() {
   const [name, setName] = React.useState("");
   const [phone, setPhone] = React.useState("");
   const [email, setEmail] = React.useState("");
+  const nameTouched = React.useRef(false);
+  const phoneTouched = React.useRef(false);
+  const emailTouched = React.useRef(false);
   const [formError, setFormError] = React.useState("");
   const [confirmed, setConfirmed] = React.useState(false);
   const [appointmentId, setAppointmentId] = React.useState<string | null>(null);
@@ -100,10 +103,13 @@ function BookingPage() {
   }, [isVideoMode, bookingServices]);
 
   // Prefill the contact fields from the signed-in patient's trusted profile.
+  // A field is only filled once while it is still untouched — typing or
+  // clearing it marks it as edited, so the profile never overwrites the user's
+  // input and every field stays editable.
   React.useEffect(() => {
-    if (profile?.full_name && !name) setName(profile.full_name);
-    if (profile?.phone && !phone) setPhone(profile.phone);
-    if (user?.email && !email) setEmail(user.email);
+    if (profile?.full_name && !name && !nameTouched.current) setName(profile.full_name);
+    if (profile?.phone && !phone && !phoneTouched.current) setPhone(profile.phone);
+    if (user?.email && !email && !emailTouched.current) setEmail(user.email);
   }, [profile, user, name, phone, email]);
 
   const openDays = React.useMemo(
@@ -348,7 +354,10 @@ function BookingPage() {
                           <Input
                             value={name}
                             autoComplete="name"
-                            onChange={(e) => setName(e.target.value)}
+                            onChange={(e) => {
+                              nameTouched.current = true;
+                              setName(e.target.value);
+                            }}
                             placeholder="Full name"
                             className="h-11 rounded-xl"
                           />
@@ -361,7 +370,10 @@ function BookingPage() {
                             value={phone}
                             type="tel"
                             autoComplete="tel"
-                            onChange={(e) => setPhone(e.target.value)}
+                            onChange={(e) => {
+                              phoneTouched.current = true;
+                              setPhone(e.target.value);
+                            }}
                             placeholder="+92 3XX XXXXXXX"
                             className="h-11 rounded-xl"
                           />
@@ -374,7 +386,10 @@ function BookingPage() {
                             type="email"
                             autoComplete="email"
                             value={email}
-                            onChange={(e) => setEmail(e.target.value)}
+                            onChange={(e) => {
+                              emailTouched.current = true;
+                              setEmail(e.target.value);
+                            }}
                             placeholder="you@example.com"
                             className="h-11 rounded-xl"
                           />
@@ -478,7 +493,10 @@ function BookingPage() {
                           <Input
                             value={name}
                             autoComplete="name"
-                            onChange={(e) => setName(e.target.value)}
+                            onChange={(e) => {
+                              nameTouched.current = true;
+                              setName(e.target.value);
+                            }}
                             placeholder="Full name"
                             className="h-11 rounded-xl"
                           />
@@ -491,7 +509,10 @@ function BookingPage() {
                             value={phone}
                             type="tel"
                             autoComplete="tel"
-                            onChange={(e) => setPhone(e.target.value)}
+                            onChange={(e) => {
+                              phoneTouched.current = true;
+                              setPhone(e.target.value);
+                            }}
                             placeholder="+92 3XX XXXXXXX"
                             className="h-11 rounded-xl"
                           />
@@ -504,7 +525,10 @@ function BookingPage() {
                             type="email"
                             autoComplete="email"
                             value={email}
-                            onChange={(e) => setEmail(e.target.value)}
+                            onChange={(e) => {
+                              emailTouched.current = true;
+                              setEmail(e.target.value);
+                            }}
                             placeholder="you@example.com"
                             className="h-11 rounded-xl"
                           />

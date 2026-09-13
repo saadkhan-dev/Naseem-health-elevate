@@ -19,7 +19,8 @@ import {
 } from "lucide-react";
 import { signOut } from "@/lib/auth";
 import { useAuth } from "@/hooks/useAuth";
-import { usePatientConsultationUnread } from "@/hooks/useConsultation";
+import { supabase } from "@/lib/supabase";
+import { usePatientConsultationUnread, useConsultationRealtime } from "@/hooks/useConsultation";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { Nav } from "@/components/site/Nav";
 import { SiteFooter } from "@/components/site/SiteFooter";
@@ -52,6 +53,8 @@ function PatientLayout() {
   const { redirect } = Route.useSearch();
   const [authOpen, setAuthOpen] = useState(false);
   const { data: unreadCount } = usePatientConsultationUnread();
+  // Live chat badges: new messages & read-state changes refresh instantly.
+  useConsultationRealtime(supabase);
 
   // Safe internal redirect target only — never an off-site or protocol URL.
   const redirectTarget =

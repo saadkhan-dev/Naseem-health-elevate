@@ -2,15 +2,13 @@ import { useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { format } from "date-fns";
 import {
-  Bell,
-  CheckCheck,
   Video,
   CalendarX,
   Loader2,
+  CheckCheck,
   Calendar,
   Package,
   FolderOpen,
-  Inbox,
   FlaskConical,
   Link2,
   Copy,
@@ -43,6 +41,7 @@ import { formatTimeDisplay } from "@/lib/bookings";
 import { scrollToHash } from "@/lib/scroll";
 import { APPOINTMENT_STATUS_LABELS, type AppointmentStatusValue } from "@/lib/notifications";
 import { QueryError } from "@/components/admin/QueryError";
+import { NotificationList } from "@/components/notifications/NotificationList";
 
 export const Route = createFileRoute("/patient/")({
   component: PatientDashboard,
@@ -59,64 +58,22 @@ const statusStyles: Record<string, string> = {
 };
 
 function NotificationsPanel() {
-  const { data: notifications, isError, error } = useMyNotifications();
+  const { data: notifications, isLoading, isError, error } = useMyNotifications();
   const markRead = useMarkNotificationRead();
   const markAll = useMarkAllNotificationsRead();
   const unread = (notifications ?? []).filter((n) => !n.read_at).length;
 
   return (
-    <div className="rounded-2xl border border-border bg-card shadow-soft">
-      <div className="flex items-center justify-between border-b border-border px-5 py-4">
-        <div className="flex items-center gap-2 font-display font-semibold text-foreground">
-          <Bell className="h-4 w-4 text-primary" />
-          Notifications
-          {unread > 0 && (
-            <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-primary-foreground">
-              {unread}
-            </span>
-          )}
-        </div>
-        {unread > 0 && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 text-xs"
-            onClick={() => markAll.mutate()}
-          >
-            <CheckCheck className="h-3.5 w-3.5" /> Mark all read
-          </Button>
-        )}
-      </div>
-      {isError && (
-        <div className="p-4">
-          <QueryError error={error} />
-        </div>
-      )}
-      <div className="max-h-48 overflow-auto lg:max-h-72">
-        {(notifications ?? []).length === 0 ? (
-          <div className="flex flex-col items-center gap-2 p-8 text-center">
-            <Inbox className="h-8 w-8 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">No notifications yet</p>
-          </div>
-        ) : (
-          (notifications ?? []).map((n) => (
-            <button
-              key={n.id}
-              onClick={() => !n.read_at && markRead.mutate(n.id)}
-              className={`block w-full border-b border-border/60 px-5 py-3 text-left last:border-0 ${
-                n.read_at ? "opacity-60" : "bg-primary/5"
-              }`}
-            >
-              <div className="text-sm font-medium text-foreground">{n.title}</div>
-              <div className="mt-0.5 text-xs text-muted-foreground">{n.body}</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                {format(new Date(n.created_at), "MMM d, h:mm a")}
-              </div>
-            </button>
-          ))
-        )}
-      </div>
-    </div>
+    <NotificationList
+      className="rounded-2xl border border-border bg-card shadow-soft"
+      notifications={notifications ?? []}
+      unread={unread}
+      isLoading={isLoading}
+      isError={isError}
+      error={error}
+      onMarkRead={(id) => markRead.mutate(id)}
+      onMarkAll={() => markAll.mutate()}
+    />
   );
 }
 

@@ -19,6 +19,71 @@ export interface NotificationResult {
   detail?: string;
 }
 
+/** Which WhatsApp "kind" a send maps to (Connects a send to a Twilio content template SID). */
+export type WhatsAppTemplateId = "appointment" | "status" | "reschedule" | "video";
+
+/** Delivery overrides for the shared senders. */
+export interface NotificationDeliveryOptions {
+  /**
+   * When provided, deliver only to these channels (e.g. an admin-chosen
+   * reminder channel). Channels still resolve first from the booking details,
+   * so a requested channel is simply excluded when the patient has no matching
+   * contact on file.
+   */
+  only?: NotificationChannel[];
+  /**
+   * Force the phone channel when both SMS and WhatsApp are configured, instead
+   * of the default WhatsApp preference. An unavailable requested channel is
+   * reported rather than silently swapped for the other.
+   */
+  phoneChannel?: "whatsapp" | "sms";
+  /**
+   * Dial prefix used to normalize local numbers written without a country code
+   * (defaults to the `PHONE_COUNTRY_CODE` env var, then "+92").
+   */
+  defaultCountryCode?: string;
+}
+
+/**
+ * Normalize a phone number to international E.164 form so Twilio can route it.
+ * Local ("0312…", "312…", "92 312…") and international ("+92 312…", "00 92…")
+ * forms of the default country are converted; the result is rejected (null)
+ * when it cannot be made a valid 6–15 digit E.164 number.
+ */
+export function normalizeE164Phone(raw: string, defaultCountryCode = "+92"): string | null {
+  let s = raw.trim();
+  if (!s) return null;
+  // Strip common separators — never digits, '+' or the ITU "00" prefix.
+  s = s.replace(/[\s().\-/]/g, "");
+  if (s.startsWith("00")) s = `+${s.slice(2)}`;
+  if (!s.startsWith("+")) {
+    const prefix = defaultCountryCode.replace("+", "");
+    if (s.startsWith(prefix)) {
+      // Already carries the country code, just missing the leading mark.
+      s = `+${s}`;
+    } else {
+      if (s.startsWith("0")) s = s.slice(1);
+      s = `+${prefix}${s}`;
+    }
+  }
+  const digits = s.slice(1);
+  if (!/^[0-9]{6,15}$/.test(digits)) return null;
+  return `+${digits}`;
+}
+
+/**
+ * Build the numbered object the Twilio Content API expects for a WhatsApp
+ * template: the n-th value maps to placeholder {{n}}. The n-th position in the
+ * caller-provided array must match the template the clinic approves.
+ */
+export function whatsAppContentVariables(values: string[]): Record<string, string> {
+  const vars: Record<string, string> = {};
+  values.forEach((value, index) => {
+    vars[String(index + 1)] = value;
+  });
+  return vars;
+}
+
 export interface AppointmentNotificationDetails {
   appointmentId: string;
   patientName: string;
@@ -109,6 +174,13 @@ export interface NotificationEnv {
   TWILIO_AUTH_TOKEN?: string;
   TWILIO_SMS_FROM?: string;
   TWILIO_WHATSAPP_FROM?: string;
+  /** Optional approved Twilio WhatsApp content templates (absent = free-form Body). */
+  TWILIO_WHATSAPP_CONTENT_SID_APPOINTMENT?: string;
+  TWILIO_WHATSAPP_CONTENT_SID_STATUS?: string;
+  TWILIO_WHATSAPP_CONTENT_SID_RESCHEDULE?: string;
+  TWILIO_WHATSAPP_CONTENT_SID_VIDEO?: string;
+  /** Dial prefix used to normalize phone numbers written without a country code. */
+  PHONE_COUNTRY_CODE?: string;
 }
 
 export interface ChannelConfig {
@@ -161,15 +233,32 @@ export function getNotificationConfig(env: NotificationEnv): NotificationConfig 
 /**
  * Decide which channels a booking should be notified on.
  * - email present -> email (Resend)
- * - phone present -> WhatsApp when Twilio WhatsApp is configured, otherwise SMS
+ * - phone present -> WhatsApp when configured, otherwise SMS; an explicit
+ *   `phoneChannel` preference overrides the WhatsApp default, and an `only`
+ *   allow-list can restrict delivery to exactly the requested channels.
  */
 export function resolveNotificationChannels(
   details: Pick<AppointmentNotificationDetails, "phone" | "email">,
   config: NotificationConfig,
+  options?: NotificationDeliveryOptions,
 ): NotificationChannel[] {
   const channels: NotificationChannel[] = [];
   if (details.email) channels.push("email");
-  if (details.phone) channels.push(config.whatsapp.configured ? "whatsapp" : "sms");
+  if (details.phone) {
+    // An allow-listed phone channel both forces the choice and forbids the
+    // other one (so { only: ["sms"] } really sends SMS, never WhatsApp).
+    const onlyPhone = options?.only?.filter(
+      (c): c is "sms" | "whatsapp" => c === "sms" || c === "whatsapp",
+    );
+    if (onlyPhone && onlyPhone.length === 1) channels.push(onlyPhone[0]);
+    else if (options?.phoneChannel === "sms") channels.push("sms");
+    else if (options?.phoneChannel === "whatsapp") channels.push("whatsapp");
+    else channels.push(config.whatsapp.configured ? "whatsapp" : "sms");
+  }
+  if (options?.only && options.only.length > 0) {
+    const allowed = new Set(options.only);
+    return channels.filter((channel) => allowed.has(channel));
+  }
   return channels;
 }
 
@@ -179,6 +268,7 @@ export function buildAppointmentMessages(details: AppointmentNotificationDetails
   emailText: string;
   smsText: string;
   whatsappText: string;
+  whatsappContentVariables: string[];
 } {
   const lines = [
     `Your appointment is requested with Dr. Naseem Ahmed Khan.`,
@@ -214,15 +304,22 @@ export function buildAppointmentMessages(details: AppointmentNotificationDetails
     emailText: text,
     smsText: text,
     whatsappText: text,
+    whatsappContentVariables: [
+      details.appointmentId,
+      details.patientName,
+      details.serviceName,
+      details.date,
+      details.time,
+      ...(details.statusUrl ? [details.statusUrl] : []),
+    ],
   };
 }
-
-/** Build the message text when an appointment's status changes. */
 export function buildStatusChangeMessages(details: StatusChangeNotificationDetails): {
   emailSubject: string;
   emailText: string;
   smsText: string;
   whatsappText: string;
+  whatsappContentVariables: string[];
 } {
   const phrase = STATUS_CHANGE_PHRASES[details.newStatus] ?? details.newStatus;
   const lines = [
@@ -244,6 +341,14 @@ export function buildStatusChangeMessages(details: StatusChangeNotificationDetai
     emailText: text,
     smsText: text,
     whatsappText: text,
+    whatsappContentVariables: [
+      details.appointmentId,
+      details.patientName,
+      details.serviceName ?? "Your appointment",
+      details.date,
+      details.time,
+      ...(details.statusUrl ? [details.statusUrl] : []),
+    ],
   };
 }
 
@@ -271,6 +376,7 @@ export function buildVideoReadyMessages(details: VideoReadyNotificationDetails):
   emailText: string;
   smsText: string;
   whatsappText: string;
+  whatsappContentVariables: string[];
 } {
   const lines = [
     `Your online video consultation is ready.`,
@@ -294,6 +400,16 @@ export function buildVideoReadyMessages(details: VideoReadyNotificationDetails):
     emailText: text,
     smsText: text,
     whatsappText: text,
+    whatsappContentVariables: [
+      details.appointmentId,
+      details.patientName,
+      details.serviceName,
+      details.date,
+      details.time,
+      details.vcNo,
+      details.joinUrl,
+      ...(details.statusUrl ? [details.statusUrl] : []),
+    ],
   };
 }
 
@@ -303,6 +419,7 @@ export function buildRescheduleMessages(details: RescheduleNotificationDetails):
   emailText: string;
   smsText: string;
   whatsappText: string;
+  whatsappContentVariables: string[];
 } {
   const lines = [
     `Your appointment has been rescheduled by the clinic.`,
@@ -328,5 +445,13 @@ export function buildRescheduleMessages(details: RescheduleNotificationDetails):
     emailText: text,
     smsText: text,
     whatsappText: text,
+    whatsappContentVariables: [
+      details.appointmentId,
+      details.patientName,
+      details.serviceName ?? "Your appointment",
+      details.date,
+      details.time,
+      ...(details.statusUrl ? [details.statusUrl] : []),
+    ],
   };
 }

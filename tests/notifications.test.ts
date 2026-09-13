@@ -4,8 +4,11 @@ import {
   buildAppointmentMessages,
   buildStatusChangeMessages,
   buildVideoReadyMessages,
+  buildRescheduleMessages,
+  normalizeE164Phone,
   resolveNotificationChannels,
   STATUS_CHANGE_PHRASES,
+  whatsAppContentVariables,
   type NotificationEnv,
 } from "../src/lib/notifications";
 import { videoJoinUrl } from "../src/lib/video-join";
@@ -83,6 +86,129 @@ describe("resolveNotificationChannels", () => {
     expect(
       resolveNotificationChannels({ phone: "+92 300 0000000", email: "a@b.com" }, cfg),
     ).toEqual(["email", "whatsapp"]);
+  });
+});
+
+describe("normalizeE164Phone", () => {
+  it("keeps a valid international number and strips separators", () => {
+    expect(normalizeE164Phone("+92 300 1234567")).toBe("+923001234567");
+    expect(normalizeE164Phone("+1 (312) 555-0148")).toBe("+13125550148");
+  });
+
+  it("converts Pakistani local numbers to +92 E.164", () => {
+    expect(normalizeE164Phone("03152968384")).toBe("+923152968384");
+    expect(normalizeE164Phone("3152968384")).toBe("+923152968384");
+    expect(normalizeE164Phone("0315 2968384")).toBe("+923152968384");
+  });
+
+  it("handles numbers already carrying the country code or an 00 prefix", () => {
+    expect(normalizeE164Phone("923001234567")).toBe("+923001234567");
+    expect(normalizeE164Phone("00 92 300 1234567")).toBe("+923001234567");
+  });
+
+  it("supports an alternate default country code", () => {
+    expect(normalizeE164Phone("312 555 0148", "+1")).toBe("+13125550148");
+  });
+
+  it("rejects values that cannot be a valid E.164 number", () => {
+    expect(normalizeE164Phone("not-a-phone")).toBeNull();
+    expect(normalizeE164Phone("123")).toBeNull();
+    expect(normalizeE164Phone("")).toBeNull();
+  });
+});
+
+describe("whatsAppContentVariables", () => {
+  it("maps array values to numbered placeholders {1..n}", () => {
+    expect(whatsAppContentVariables(["abc", "Ali"])).toEqual({ "1": "abc", "2": "Ali" });
+  });
+});
+
+describe("resolveNotificationChannels with delivery options", () => {
+  const cfg = getNotificationConfig(FULL_ENV);
+
+  it("uses the requested phone channel instead of the WhatsApp default", () => {
+    expect(
+      resolveNotificationChannels({ phone: "+92 300 0000000" }, cfg, { phoneChannel: "sms" }),
+    ).toEqual(["sms"]);
+    expect(
+      resolveNotificationChannels({ phone: "+92 300 0000000" }, cfg, { phoneChannel: "whatsapp" }),
+    ).toEqual(["whatsapp"]);
+  });
+
+  it("delivers only to an allow-listed channel", () => {
+    expect(
+      resolveNotificationChannels({ phone: "+92 300 0000000", email: "a@b.com" }, cfg, {
+        only: ["email"],
+      }),
+    ).toEqual(["email"]);
+    expect(
+      resolveNotificationChannels({ phone: "+92 300 0000000", email: "a@b.com" }, cfg, {
+        only: ["sms"],
+      }),
+    ).toEqual(["sms"]);
+  });
+
+  it("excludes a requested phone channel when no phone is on file", () => {
+    expect(resolveNotificationChannels({ email: "a@b.com" }, cfg, { only: ["sms"] })).toEqual([]);
+  });
+});
+
+describe("message builders expose WhatsApp content template variables", () => {
+  it("appointment variables are ordered Appointment ID, name, service, date, time, URL", () => {
+    const msgs = buildAppointmentMessages({
+      appointmentId: "id-123",
+      patientName: "Ali",
+      serviceName: "Homeopathy Consultation",
+      date: "2026-09-01",
+      time: "19:00",
+      statusUrl: "https://clinic.example/appointment-status",
+    });
+    expect(msgs.whatsappContentVariables).toEqual([
+      "id-123",
+      "Ali",
+      "Homeopathy Consultation",
+      "2026-09-01",
+      "19:00",
+      "https://clinic.example/appointment-status",
+    ]);
+  });
+
+  it("video variables append the VC code and join link", () => {
+    const msgs = buildVideoReadyMessages({
+      appointmentId: "APT-1",
+      patientName: "Ali",
+      serviceName: "Online Video Consultation",
+      date: "2026-09-01",
+      time: "19:00",
+      vcNo: "VC-8F3K21",
+      joinUrl: "https://clinic.example/video/VC-8F3K21",
+    });
+    expect(msgs.whatsappContentVariables).toEqual([
+      "APT-1",
+      "Ali",
+      "Online Video Consultation",
+      "2026-09-01",
+      "19:00",
+      "VC-8F3K21",
+      "https://clinic.example/video/VC-8F3K21",
+    ]);
+  });
+
+  it("reschedule variables mirror appointment variables", () => {
+    const msgs = buildRescheduleMessages({
+      appointmentId: "APT-2",
+      patientName: "Ali",
+      serviceName: null,
+      date: "2026-09-02",
+      time: "10:00",
+    });
+    expect(msgs.whatsappContentVariables).toEqual([
+      "APT-2",
+      "Ali",
+      "Your appointment",
+      "2026-09-02",
+      "10:00",
+    ]);
   });
 });
 
@@ -316,6 +442,82 @@ describe("sendAppointmentNotifications when configured", () => {
       expect(results[0]).toMatchObject({ channel: "sms", status: "sent" });
       expect(calls.some((u) => u.includes("api.twilio.com"))).toBe(true);
       expect(calls.some((u) => u.includes("api.resend.com"))).toBe(false);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it("adds ContentSid + ContentVariables to WhatsApp when a template SID is configured", async () => {
+    const calls: string[] = [];
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(String(init?.body ?? ""));
+      return new Response("{}", { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      const env: NotificationEnv = {
+        ...FULL_ENV,
+        TWILIO_WHATSAPP_CONTENT_SID_APPOINTMENT: "HXdeadbeef",
+      };
+      const results = await sendAppointmentNotifications(
+        {
+          appointmentId: "abc-123",
+          patientName: "Ali",
+          serviceName: "S",
+          date: "2026-09-01",
+          time: "19:00",
+          statusUrl: "https://clinic.example/appointment-status",
+          phone: "+923001234567",
+          email: "a@b.com",
+        },
+        env,
+      );
+
+      expect(results.map((r) => r.channel)).toEqual(["email", "whatsapp"]);
+      expect(results.every((r) => r.status === "sent")).toBe(true);
+
+      const twilioBody = calls.find((b) => b.includes("api.twilio.com") || b.includes("To=")) ?? "";
+      // Fake-fetch captured the full URLSearchParams string (not the URL).
+      const body = decodeURIComponent(twilioBody).replace(/\+/g, " ");
+      expect(body).toContain("ContentSid=HXdeadbeef");
+      expect(body).toContain('"1":"abc-123"');
+      expect(body).toContain('"6":"https://clinic.example/appointment-status"');
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it("reports an error instead of sending SMS/WhatsApp to a non-E.164 phone", async () => {
+    const calls: string[] = [];
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      calls.push(typeof input === "string" ? input : input.url);
+      return new Response("{}", { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      const results = await sendAppointmentNotifications(
+        {
+          appointmentId: "zzz",
+          patientName: "Ali",
+          serviceName: "S",
+          date: "2026-09-01",
+          time: "19:00",
+          phone: "not a phone",
+          email: "a@b.com",
+        },
+        FULL_ENV,
+      );
+
+      expect(results.map((r) => r.channel)).toEqual(["email", "whatsapp"]);
+      expect(results.find((r) => r.channel === "email")?.status).toBe("sent");
+      const whatsapp = results.find((r) => r.channel === "whatsapp")!;
+      expect(whatsapp.status).toBe("error");
+      expect(whatsapp.detail).toContain("Invalid phone number");
+      // Email was attempted, but no Twilio request was made for a bad number.
+      expect(calls.some((u) => u.includes("api.twilio.com"))).toBe(false);
+      expect(calls.some((u) => u.includes("api.resend.com"))).toBe(true);
     } finally {
       globalThis.fetch = origFetch;
     }

@@ -118,8 +118,9 @@ export interface AdminReminder {
   appointment_id: string;
   channel: "email" | "sms" | "whatsapp";
   remind_at: string;
-  status: "scheduled" | "sent" | "failed" | "cancelled";
+  status: "scheduled" | "processing" | "sent" | "failed" | "cancelled";
   sent_at: string | null;
+  updated_at: string | null;
   error: string;
   created_at: string;
   appointments?: {

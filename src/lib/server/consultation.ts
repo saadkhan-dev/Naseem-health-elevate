@@ -14,6 +14,7 @@ import {
   type ConsultationSaveSummaryInput,
   type SenderRole,
 } from "../consultation-types";
+import { createAdminNotification, buildAdminNotificationDedupKey } from "./patient-notifications";
 
 /**
  * Server-only business logic for the Consultation Communication system.
@@ -978,6 +979,20 @@ export async function sendMessage(
     .select(MESSAGE_FULL_SELECT)
     .single();
   if (error) throw new Error(`Could not send the message: ${error.message}`);
+
+  // Best-effort admin notification for patient → doctor messages only. The
+  // doctor → patient direction is already covered by the
+  // `consultation_notify_patient` trigger, so nothing is added here for it.
+  if (input.senderRole === "patient") {
+    await createAdminNotification(admin, {
+      type: "patient_message",
+      title: "New patient message",
+      body: "A patient sent a new message in a consultation.",
+      link: `/admin/consultations/${input.conversationId}`,
+      dedupKey: buildAdminNotificationDedupKey("patient_message", (data as { id: string }).id),
+    });
+  }
+
   return data as unknown as ConsultationMessageRow;
 }
 
@@ -1087,6 +1102,19 @@ export async function createFileMessage(
   if (attError) {
     throw new Error(`Could not save the attachment record: ${attError.message}`);
   }
+
+  // Best-effort admin notification for patient-sent file/attachment messages
+  // (mirrors the text-message notification in `sendMessage`).
+  if (input.senderRole === "patient") {
+    await createAdminNotification(admin, {
+      type: "patient_message",
+      title: "New patient message",
+      body: "A patient uploaded a file in a consultation.",
+      link: `/admin/consultations/${input.conversationId}`,
+      dedupKey: buildAdminNotificationDedupKey("patient_message", message.id),
+    });
+  }
+
   const { data: full } = await admin
     .from("consultation_messages")
     .select(MESSAGE_FULL_SELECT)

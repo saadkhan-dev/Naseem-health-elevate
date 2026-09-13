@@ -52,6 +52,17 @@ function notificationNote(notifications: NotificationResult[]): string | null {
   return null;
 }
 
+function notificationWarning(notifications: NotificationResult[]): string | null {
+  const unsent = notifications.filter((n) => n.status !== "sent");
+  if (unsent.length === 0) return null;
+
+  const labels = unsent
+    .map((n) => CHANNEL_LABELS[n.channel])
+    .filter((v, i, a) => a.indexOf(v) === i);
+
+  return `We could not reach you by ${labels.join(" and ")} right now. Please save your Appointment ID above — you will need it to check your appointment status.`;
+}
+
 export function BookingConfirmation({
   serviceName,
   patientName,
@@ -64,6 +75,7 @@ export function BookingConfirmation({
 }: BookingConfirmationProps) {
   const [copied, setCopied] = useState(false);
   const note = appointmentNo ? notificationNote(notifications) : null;
+  const warning = appointmentNo ? notificationWarning(notifications) : null;
 
   async function copyNo() {
     if (!appointmentNo) return;
@@ -115,6 +127,9 @@ export function BookingConfirmation({
       )}
 
       {note && <p className="mt-3 max-w-xs text-[13px] text-muted-foreground sm:text-xs">{note}</p>}
+      {warning && (
+        <p className="mt-2 max-w-xs text-[13px] font-medium text-amber-600 sm:text-xs">{warning}</p>
+      )}
 
       <div className="mt-4 w-full max-w-xs space-y-2 rounded-xl bg-muted p-4 text-left text-[15px] sm:text-sm">
         {patientName && <Row label="Patient" value={patientName} />}

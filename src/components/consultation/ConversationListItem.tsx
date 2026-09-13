@@ -58,6 +58,14 @@ export function ConversationListItem({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="truncate text-sm font-semibold text-foreground">{title}</span>
+            {item.unreadCount > 0 && (
+              <span
+                className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground"
+                aria-label={`${item.unreadCount} unread message${item.unreadCount === 1 ? "" : "s"}`}
+              >
+                {item.unreadCount > 99 ? "99+" : item.unreadCount}
+              </span>
+            )}
             {contactName && <GenderBadge gender={patientGender} />}
             <StatusBadge status={item.status} />
           </div>
