@@ -17,6 +17,7 @@ import {
   adminSetVideoPricing,
   adminGetVideoPaymentStatus,
   adminRescheduleAppointment,
+  adminApplyRescheduleAppointment,
   adminGetVideoOffers,
   adminCreateVideoOffer,
   adminUpdateVideoOffer,
@@ -52,6 +53,8 @@ export interface VideoPaymentStatusView {
   paymentSubmittedAt: string | null;
   paymentVerifiedAt: string | null;
   paymentAmount: number | null;
+  /** Private storage path of the uploaded receipt screenshot (Option 2). */
+  paymentReceiptUrl: string | null;
   offerTitle: string | null;
 }
 
@@ -89,9 +92,19 @@ export interface AppointmentWithDetails {
   payment_submitted_at: string | null;
   payment_verified_at: string | null;
   payment_amount: number | null;
+  /** Private storage path of the uploaded receipt screenshot (Option 2). */
+  payment_receipt_url: string | null;
   offer_title: string | null;
   /** Latest video session state (video consultations only). */
   video_session_status: "scheduled" | "active" | "completed" | null;
+  /** Pending reschedule request state (two-sided confirmation flow). */
+  reschedule_status: "none" | "pending";
+  reschedule_requested_by: "patient" | "staff" | null;
+  reschedule_date: string | null;
+  reschedule_time: string | null;
+  reschedule_requested_at: string | null;
+  /** When the last accepted reschedule actually moved the appointment. */
+  last_rescheduled_at: string | null;
 }
 
 // --- Appointments ---
@@ -115,10 +128,17 @@ interface AppointmentRow {
   payment_payer_name?: string | null;
   payment_submitted_at?: string | null;
   payment_verified_at?: string | null;
+  payment_receipt_url?: string | null;
   payment_amount?: number | null;
   duration_minutes?: number | null;
   video_offers?: { title?: string | null } | null;
   video_sessions?: { status?: string | null; created_at?: string | null }[] | null;
+  reschedule_status?: string | null;
+  reschedule_requested_by?: string | null;
+  reschedule_date?: string | null;
+  reschedule_time?: string | null;
+  reschedule_requested_at?: string | null;
+  last_rescheduled_at?: string | null;
   profiles?: { full_name?: string | null; phone?: string | null } | null;
   services?: { name?: string | null } | null;
 }
@@ -158,9 +178,19 @@ function mapAppointment(a: AppointmentRow): AppointmentWithDetails {
     payment_submitted_at: a.payment_submitted_at ?? null,
     payment_verified_at: a.payment_verified_at ?? null,
     payment_amount: a.payment_amount ?? null,
+    payment_receipt_url: a.payment_receipt_url ?? null,
     offer_title: a.video_offers?.title ?? null,
     duration_minutes: a.duration_minutes ?? null,
     video_session_status: latestVideoSessionStatus(a),
+    reschedule_status:
+      (a.reschedule_status as AppointmentWithDetails["reschedule_status"] | null) ?? "none",
+    reschedule_requested_by:
+      (a.reschedule_requested_by as AppointmentWithDetails["reschedule_requested_by"] | null) ??
+      null,
+    reschedule_date: a.reschedule_date ?? null,
+    reschedule_time: (a.reschedule_time as string | null)?.slice(0, 5) ?? null,
+    reschedule_requested_at: a.reschedule_requested_at ?? null,
+    last_rescheduled_at: a.last_rescheduled_at ?? null,
   };
 }
 
@@ -404,6 +434,11 @@ export async function setVideoPricing(price: number): Promise<{ error: string | 
 
 export async function rescheduleAppointment(id: string, date: string, time: string | null) {
   return adminRescheduleAppointment({ data: { id, date, time } });
+}
+
+/** Admin approves or rejects a pending reschedule request raised by the patient. */
+export async function applyReschedule(id: string, action: "approve" | "reject") {
+  return adminApplyRescheduleAppointment({ data: { id, action } });
 }
 
 // --- Video Consultation offers ---

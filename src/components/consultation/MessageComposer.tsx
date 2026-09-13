@@ -20,7 +20,7 @@ import {
   useUploadConsultationAttachment,
   useSendConsultationMessage,
 } from "@/hooks/useConsultation";
-import type { AttachmentKind, SenderRole } from "@/lib/consultation-types";
+import type { AttachmentKind, AuthSurface, SenderRole } from "@/lib/consultation-types";
 import { cn } from "@/lib/utils";
 
 const ATTACHMENT_LABELS: { value: AttachmentKind; label: string }[] = [
@@ -36,6 +36,10 @@ interface Props {
   client: SupabaseClient;
   conversationId: string;
   myUserId: string;
+  /** The browser-session surface these sends are issued from ("public" patient
+   *  portal vs "staff" admin/doctor), so messages are always authored by the
+   *  right identity even when a browser holds BOTH sessions. */
+  authSurface: AuthSurface;
   disabled: boolean;
   replyingTo?: { id: string; body: string; senderRole: SenderRole | null } | null;
   onClearReply?: () => void;
@@ -46,17 +50,22 @@ export function MessageComposer({
   client,
   conversationId,
   myUserId,
+  authSurface,
   disabled,
   replyingTo,
   onClearReply,
   nameLabel,
 }: Props) {
   const [body, setBody] = useState("");
-  const sendMutation = useSendConsultationMessage(conversationId);
-  const uploadMutation = useUploadConsultationAttachment(client, {
-    conversationId,
-    userId: myUserId,
-  });
+  const sendMutation = useSendConsultationMessage(conversationId, authSurface);
+  const uploadMutation = useUploadConsultationAttachment(
+    client,
+    {
+      conversationId,
+      userId: myUserId,
+    },
+    authSurface,
+  );
 
   const [attachOpen, setAttachOpen] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);

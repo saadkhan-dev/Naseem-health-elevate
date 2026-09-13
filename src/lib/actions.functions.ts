@@ -26,6 +26,7 @@ import {
   createPatientNotification,
   createAdminNotification,
   buildAdminNotificationDedupKey,
+  resolvePatientName,
 } from "./server/patient-notifications";
 import { validateAppointmentSlot } from "./server/slot-validation";
 import {
@@ -688,7 +689,7 @@ export const adminUpdateAppointmentStatus = createServerFn({ method: "POST" })
     const { data: row } = await admin
       .from("appointments")
       .select(
-        "id, patient_id, appointment_no, patient_name, patient_phone, patient_email, date, time, status, services:service_id (name)",
+        "id, patient_id, appointment_no, patient_name, patient_phone, patient_email, date, time, status, payment_status, services:service_id (name)",
       )
       .eq("id", data.id)
       .maybeSingle();
@@ -701,6 +702,114 @@ export const adminUpdateAppointmentStatus = createServerFn({ method: "POST" })
     // duplicate patient notification / status-change messages entirely.
     if (row.status === data.status) {
       return { error: null, id: data.id, status: data.status, notifications: [] };
+    }
+
+    // ── Workflow validation ────────────────────────────────────────────────
+    // Enforce a strict state-based workflow on the server so invalid
+    // transitions (e.g. approving before payment verification, no-show before
+    // approval) are rejected even if the frontend is bypassed.
+    const services = row.services as unknown as { name: string | null } | null;
+    const serviceName = services?.name ?? "";
+    const isVideo = serviceName.toLowerCase().includes("video consultation");
+    const currentStatus = row.status as string;
+    const targetStatus = data.status;
+    const paymentStatus = row.payment_status as string | null;
+    const paymentSettled = paymentStatus === "payment_verified" || paymentStatus === "waived";
+    const TERMINAL = new Set(["rejected", "completed", "no_show", "cancelled"]);
+
+    if (TERMINAL.has(currentStatus)) {
+      return {
+        error: "This appointment is already closed and cannot be changed.",
+        id: data.id,
+        status: null,
+        notifications: [],
+      };
+    }
+
+    switch (targetStatus) {
+      case "confirmed": {
+        if (currentStatus !== "pending") {
+          return {
+            error: "Only pending appointments can be approved.",
+            id: data.id,
+            status: null,
+            notifications: [],
+          };
+        }
+        if (isVideo && !paymentSettled) {
+          return {
+            error:
+              "The payment must be verified (or waived) before a video consultation can be approved.",
+            id: data.id,
+            status: null,
+            notifications: [],
+          };
+        }
+        break;
+      }
+      case "rejected": {
+        if (currentStatus !== "pending" && currentStatus !== "confirmed") {
+          return {
+            error: "This appointment cannot be rejected in its current state.",
+            id: data.id,
+            status: null,
+            notifications: [],
+          };
+        }
+        break;
+      }
+      case "arrived": {
+        if (currentStatus !== "confirmed") {
+          return {
+            error: "Only confirmed appointments can be marked as arrived.",
+            id: data.id,
+            status: null,
+            notifications: [],
+          };
+        }
+        break;
+      }
+      case "completed": {
+        if (currentStatus !== "confirmed" && currentStatus !== "arrived") {
+          return {
+            error: "Only confirmed or arrived appointments can be completed.",
+            id: data.id,
+            status: null,
+            notifications: [],
+          };
+        }
+        break;
+      }
+      case "no_show": {
+        if (currentStatus !== "confirmed" && currentStatus !== "arrived") {
+          return {
+            error: "No-show can only be set for approved (confirmed or arrived) appointments.",
+            id: data.id,
+            status: null,
+            notifications: [],
+          };
+        }
+        break;
+      }
+      case "cancelled": {
+        if (currentStatus !== "pending" && currentStatus !== "confirmed") {
+          return {
+            error: "Only pending or confirmed appointments can be cancelled.",
+            id: data.id,
+            status: null,
+            notifications: [],
+          };
+        }
+        break;
+      }
+      case "pending": {
+        return {
+          error: "Cannot revert an appointment to pending status.",
+          id: data.id,
+          status: null,
+          notifications: [],
+        };
+      }
     }
 
     const { error } = await admin
@@ -738,7 +847,6 @@ export const adminUpdateAppointmentStatus = createServerFn({ method: "POST" })
 
     // Best-effort patient notification of the status change. Unconfigured
     // channels are reported as not_configured — never faked.
-    const services = row.services as unknown as { name: string | null } | null;
     const siteUrl = getSiteUrl();
     const notifications = await sendStatusChangeNotifications({
       appointmentId: (row.appointment_no as string | null) ?? (row.id as string),
@@ -787,9 +895,10 @@ export const adminUpdateAvailability = createServerFn({ method: "POST" })
 const serviceInputSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(200),
   description: z.string().max(2000).optional(),
-  // null = flexible (no fixed slot) — e.g. Home Visit, confirmed by the doctor.
-  duration_minutes: z.number().int().min(5).max(480).nullable(),
-  price: z.number().min(0),
+  // null/undefined = flexible (no fixed slot) — e.g. Home Visit, confirmed by the doctor.
+  duration_minutes: z.number().int().min(5).max(480).nullable().optional(),
+  // null/undefined = free / "mention on call" — a service can be created with no price.
+  price: z.number().min(0).nullable().optional(),
   is_active: z.boolean().optional(),
 });
 
@@ -797,7 +906,13 @@ export const adminCreateService = createServerFn({ method: "POST" })
   .middleware([adminMiddleware])
   .validator(serviceInputSchema)
   .handler(async ({ data }) => {
-    const { error } = await getSupabaseAdmin().from("services").insert(data);
+    const { error } = await getSupabaseAdmin()
+      .from("services")
+      .insert({
+        ...data,
+        duration_minutes: data.duration_minutes ?? null,
+        price: data.price ?? 0,
+      });
     return { error: error?.message ?? null };
   });
 
@@ -805,7 +920,10 @@ export const adminUpdateService = createServerFn({ method: "POST" })
   .middleware([adminMiddleware])
   .validator(z.object({ id: uuidSchema, data: serviceInputSchema.partial() }))
   .handler(async ({ data }) => {
-    const { error } = await getSupabaseAdmin().from("services").update(data.data).eq("id", data.id);
+    const { error } = await getSupabaseAdmin()
+      .from("services")
+      .update({ ...data.data, duration_minutes: data.data.duration_minutes ?? null })
+      .eq("id", data.id);
     return { error: error?.message ?? null };
   });
 
@@ -1451,7 +1569,7 @@ export const adminGetVideoPaymentStatus = createServerFn({ method: "POST" })
     const { data: row } = await getSupabaseAdmin()
       .from("appointments")
       .select(
-        "id, status, payment_status, payment_method, payment_reference, payment_payer_name, payment_submitted_at, payment_verified_at, payment_amount, offer_id, video_offers:offer_id (title)",
+        "id, status, payment_status, payment_method, payment_reference, payment_payer_name, payment_submitted_at, payment_verified_at, payment_amount, payment_receipt_url, offer_id, video_offers:offer_id (title)",
       )
       .eq("id", data.appointmentId)
       .maybeSingle();
@@ -1469,6 +1587,7 @@ export const adminGetVideoPaymentStatus = createServerFn({ method: "POST" })
         paymentSubmittedAt: row.payment_submitted_at,
         paymentVerifiedAt: row.payment_verified_at,
         paymentAmount: row.payment_amount,
+        paymentReceiptUrl: row.payment_receipt_url,
         offerTitle: offer?.title ?? null,
       },
     };
@@ -1588,15 +1707,14 @@ export const adminRescheduleAppointment = createServerFn({ method: "POST" })
     const { data: row } = await admin
       .from("appointments")
       .select(
-        "id, patient_id, date, time, status, duration_minutes, patient_name, patient_phone, patient_email, appointment_no, service_id, services:service_id (name, duration_minutes)",
+        "id, patient_id, date, time, status, duration_minutes, patient_name, patient_phone, patient_email, appointment_no, reschedule_status, service_id, services:service_id (name, duration_minutes)",
       )
       .eq("id", data.id)
       .maybeSingle();
 
     if (!row) return { error: "Appointment not found." };
 
-    // Moving the appointment to the exact same date/time is a no-op: skip the
-    // write, slot validation, and the duplicate reschedule notifications.
+    // Moving the appointment to the exact same date/time is a no-op.
     const sameDay = row.date === data.date;
     const sameTime = ((row.time as string | null)?.slice(0, 5) ?? null) === (data.time ?? null);
     if (sameDay && sameTime) {
@@ -1621,46 +1739,69 @@ export const adminRescheduleAppointment = createServerFn({ method: "POST" })
     });
     if (slotError) return { error: slotError };
 
-    const { error } = await admin
-      .from("appointments")
-      .update({ date: data.date, time: data.time ?? null })
-      .eq("id", data.id);
-    if (error) {
-      const isSlotCollision = error.code === "23505" || error.code === "23P01";
-      return {
-        error: isSlotCollision
-          ? "That slot was just taken. Please pick another time."
-          : error.message,
-      };
+    // Guest appointments (no account to confirm from) are moved immediately,
+    // exactly like before; the visitor is told on the phone/SMS/email. Signed-in
+    // patients get a PENDING request they Accept/OK from their dashboard.
+    if (!row.patient_id) {
+      const { error: moveError } = await admin
+        .from("appointments")
+        .update({
+          date: data.date,
+          time: data.time ?? null,
+          last_rescheduled_at: new Date().toISOString(),
+        })
+        .eq("id", data.id);
+      if (moveError) {
+        const isSlotCollision = moveError.code === "23505" || moveError.code === "23P01";
+        return {
+          error: isSlotCollision
+            ? "That slot was just taken. Please pick another time."
+            : moveError.message,
+        };
+      }
+      const siteUrl = getSiteUrl();
+      await sendRescheduleNotifications({
+        appointmentId: (row.appointment_no as string | null) ?? (row.id as string),
+        patientName: row.patient_name ?? "Patient",
+        serviceName: services?.name ?? null,
+        date: data.date,
+        time: (data.time ?? null)?.slice(0, 5) ?? "Flexible",
+        statusUrl: siteUrl ? `${siteUrl}/appointment-status` : undefined,
+        phone: row.patient_phone ?? undefined,
+        email: row.patient_email ?? undefined,
+        previousDate: row.date as string,
+        previousTime: (row.time as string | null)?.slice(0, 5) ?? undefined,
+      });
+      return { error: null, notifications: [] };
     }
 
-    // Signed-in patients get an in-app notification of the new slot.
+    // Store a PENDING request instead of moving the appointment right away:
+    // the patient must Accept/OK the new slot from their dashboard before the
+    // date/time actually changes. A newer request replaces the old one.
+    const { error } = await admin
+      .from("appointments")
+      .update({
+        reschedule_status: "pending",
+        reschedule_requested_by: "staff",
+        reschedule_date: data.date,
+        reschedule_time: data.time ?? null,
+        reschedule_requested_at: new Date().toISOString(),
+      })
+      .eq("id", data.id);
+    if (error) return { error: error.message };
+
+    // Signed-in patients get an in-app notification to confirm the slot.
     if (row.patient_id) {
       await createPatientNotification(admin, {
         userId: row.patient_id as string,
         type: "appointment_rescheduled",
-        title: "Appointment rescheduled",
-        body: `Your appointment ${(row.appointment_no as string | null) ?? data.id} was moved to ${data.date}${data.time ? ` at ${data.time.slice(0, 5)}` : ""}.`,
+        title: "Reschedule request — please confirm",
+        body: `Your appointment ${(row.appointment_no as string | null) ?? data.id} is proposed to move to ${data.date}${data.time ? ` at ${data.time.slice(0, 5)}` : ""}. Please accept or decline it from your dashboard.`,
         link: "/patient",
       });
     }
 
-    // Notify the patient of the new slot.
-    const siteUrl = getSiteUrl();
-    const notifications = await sendRescheduleNotifications({
-      appointmentId: (row.appointment_no as string | null) ?? (row.id as string),
-      patientName: row.patient_name ?? "Patient",
-      serviceName: services?.name ?? null,
-      date: data.date,
-      time: (data.time ?? null)?.slice(0, 5) ?? "Flexible",
-      statusUrl: siteUrl ? `${siteUrl}/appointment-status` : undefined,
-      phone: row.patient_phone ?? undefined,
-      email: row.patient_email ?? undefined,
-      previousDate: row.date as string,
-      previousTime: (row.time as string | null)?.slice(0, 5) ?? undefined,
-    });
-
-    return { error: null, notifications };
+    return { error: null, notifications: [] };
   });
 
 // ---------------------------------------------------------------------------
@@ -1752,14 +1893,29 @@ export interface PatientAppointment {
   notes: string | null;
   createdAt: string;
   serviceName: string | null;
+  /** Service duration at booking time (NULL = flexible, e.g. Home Visit). */
+  durationMinutes: number | null;
   isVideo: boolean;
   paymentStatus: string | null;
+  paymentMethod: string | null;
+  paymentReference: string | null;
+  paymentPayerName: string | null;
+  paymentSubmittedAt: string | null;
+  paymentVerifiedAt: string | null;
   paymentAmount: number | null;
   offerTitle: string | null;
   vcNo: string | null;
   videoSessionStatus: "scheduled" | "active" | "completed" | null;
   canCancel: boolean;
   canReschedule: boolean;
+  /** Pending reschedule request state (two-sided confirmation flow). */
+  rescheduleStatus: "none" | "pending";
+  rescheduleRequestedBy: "patient" | "staff" | null;
+  rescheduleDate: string | null;
+  rescheduleTime: string | null;
+  rescheduleRequestedAt: string | null;
+  /** When the last accepted reschedule actually moved the appointment. */
+  lastRescheduledAt: string | null;
 }
 
 function mapPatientAppointment(row: {
@@ -1772,6 +1928,18 @@ function mapPatientAppointment(row: {
   created_at: string;
   payment_status: string | null;
   payment_amount: number | null;
+  payment_method: string | null;
+  payment_reference: string | null;
+  payment_payer_name: string | null;
+  payment_submitted_at: string | null;
+  payment_verified_at: string | null;
+  duration_minutes?: number | null;
+  reschedule_status?: string | null;
+  reschedule_requested_by?: string | null;
+  reschedule_date?: string | null;
+  reschedule_time?: string | null;
+  reschedule_requested_at?: string | null;
+  last_rescheduled_at?: string | null;
   services?: unknown;
   video_offers?: unknown;
   video_sessions?: unknown;
@@ -1794,14 +1962,28 @@ function mapPatientAppointment(row: {
     notes: row.notes,
     createdAt: row.created_at,
     serviceName,
+    durationMinutes: row.duration_minutes ?? null,
     isVideo,
     paymentStatus: row.payment_status,
+    paymentMethod: row.payment_method ?? null,
+    paymentReference: row.payment_reference ?? null,
+    paymentPayerName: row.payment_payer_name ?? null,
+    paymentSubmittedAt: row.payment_submitted_at ?? null,
+    paymentVerifiedAt: row.payment_verified_at ?? null,
     paymentAmount: row.payment_amount,
     offerTitle: offerRow?.title ?? null,
     vcNo: latest?.vc_no ?? null,
     videoSessionStatus: (latest?.status as "scheduled" | "active" | "completed" | null) ?? null,
     canCancel: mutable && row.date >= todayInClinic(),
     canReschedule: mutable && row.date >= todayInClinic(),
+    rescheduleStatus:
+      (row.reschedule_status as PatientAppointment["rescheduleStatus"] | null) ?? "none",
+    rescheduleRequestedBy:
+      (row.reschedule_requested_by as PatientAppointment["rescheduleRequestedBy"] | null) ?? null,
+    rescheduleDate: row.reschedule_date ?? null,
+    rescheduleTime: (row.reschedule_time as string | null)?.slice(0, 5) ?? null,
+    rescheduleRequestedAt: row.reschedule_requested_at ?? null,
+    lastRescheduledAt: row.last_rescheduled_at ?? null,
   };
 }
 
@@ -1814,8 +1996,11 @@ export const patientGetMyAppointments = createServerFn({ method: "POST" })
       .from("appointments")
       .select(
         `
-        id, appointment_no, status, date, time, notes, created_at,
-        payment_status, payment_amount,
+        id, appointment_no, status, date, time, notes, created_at, duration_minutes,
+        payment_status, payment_amount, payment_method, payment_reference,
+        payment_payer_name, payment_submitted_at, payment_verified_at,
+        reschedule_status, reschedule_requested_by, reschedule_date, reschedule_time,
+        reschedule_requested_at, last_rescheduled_at,
         services:service_id (name),
         video_offers:offer_id (title),
         video_sessions:video_sessions (vc_no, status, created_at)
@@ -1927,10 +2112,13 @@ export const patientCancelAppointment = createServerFn({ method: "POST" })
     });
 
     // Best-effort admin notification (the patient initiated this cancellation).
+    const cancellingName = await resolvePatientName(admin, { patientId: context.patientId });
     await createAdminNotification(admin, {
       type: "appointment_cancelled",
       title: "Appointment cancelled by patient",
-      body: `Appointment ${(row.appointment_no as string | null) ?? data.id} was cancelled by the patient.`,
+      body: `Appointment ${(row.appointment_no as string | null) ?? data.id} was cancelled by ${
+        cancellingName ?? "the patient"
+      }.`,
       link: "/admin/appointments",
       dedupKey: buildAdminNotificationDedupKey("appointment_cancelled", data.id),
     });
@@ -1951,7 +2139,7 @@ export const patientRescheduleAppointment = createServerFn({ method: "POST" })
     const { data: row } = await admin
       .from("appointments")
       .select(
-        "id, patient_id, status, date, time, duration_minutes, services:service_id (name, duration_minutes)",
+        "id, patient_id, status, date, time, duration_minutes, appointment_no, reschedule_status, services:service_id (name, duration_minutes)",
       )
       .eq("id", data.id)
       .maybeSingle();
@@ -1985,9 +2173,256 @@ export const patientRescheduleAppointment = createServerFn({ method: "POST" })
     });
     if (slotError) return { error: slotError };
 
+    // Store a PENDING request: the admin must approve the proposed new slot
+    // from the dashboard before the date/time actually changes.
     const { error } = await admin
       .from("appointments")
-      .update({ date: data.date, time: data.time ?? null })
+      .update({
+        reschedule_status: "pending",
+        reschedule_requested_by: "patient",
+        reschedule_date: data.date,
+        reschedule_time: data.time ?? null,
+        reschedule_requested_at: new Date().toISOString(),
+      })
+      .eq("id", data.id);
+    if (error) {
+      const isSlotCollision = error.code === "23505" || error.code === "23P01";
+      return {
+        error: isSlotCollision
+          ? "That slot was just taken. Please pick another time."
+          : error.message,
+      };
+    }
+
+    const reschedulingName = await resolvePatientName(admin, { patientId: context.patientId });
+    await createAdminNotification(admin, {
+      type: "appointment_rescheduled",
+      title: "Patient requested reschedule",
+      body: `${reschedulingName ?? "A patient"} would like to move appointment ${(row.appointment_no as string | null) ?? data.id} to ${data.date}${data.time ? ` at ${data.time.slice(0, 5)}` : ""}.`,
+      link: "/admin/appointments",
+      dedupKey: buildAdminNotificationDedupKey(
+        "reschedule_requested",
+        `${data.id}:${data.date}${data.time ?? ""}`,
+      ),
+    });
+
+    return { error: null };
+  });
+
+// ---------------------------------------------------------------------------
+// Admin — apply / decline a pending reschedule request
+// (the request came from the patient; admin decides: admin's call)
+// ---------------------------------------------------------------------------
+
+export const adminApplyRescheduleAppointment = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(z.object({ id: uuidSchema, action: z.enum(["approve", "reject"]) }))
+  .handler(async ({ data }) => {
+    const admin = getSupabaseAdmin();
+
+    const { data: row } = await admin
+      .from("appointments")
+      .select(
+        "id, patient_id, date, time, reschedule_status, reschedule_date, reschedule_time, duration_minutes, patient_name, patient_phone, patient_email, appointment_no, service_id, services:service_id (name, duration_minutes)",
+      )
+      .eq("id", data.id)
+      .maybeSingle();
+
+    if (!row) return { error: "Appointment not found." };
+    if (row.reschedule_status !== "pending") return { error: "No pending reschedule request." };
+
+    const targetDate = row.reschedule_date as string | null;
+    const targetTime = (row.reschedule_time as string | null)?.slice(0, 5) ?? null;
+    if (!targetDate) return { error: "Missing reschedule date." };
+
+    const services = row.services as unknown as {
+      name: string | null;
+      duration_minutes: number | null;
+    } | null;
+    const serviceName = services?.name ?? "";
+
+    const clearPendingFields = {
+      reschedule_status: "none",
+      reschedule_requested_by: null,
+      reschedule_date: null,
+      reschedule_time: null,
+      reschedule_requested_at: null,
+    } as const;
+
+    if (data.action === "reject") {
+      const { error } = await admin
+        .from("appointments")
+        .update(clearPendingFields)
+        .eq("id", data.id);
+      if (error) return { error: error.message };
+      if (row.patient_id) {
+        await createPatientNotification(admin, {
+          userId: row.patient_id as string,
+          type: "appointment_rescheduled",
+          title: "Reschedule request declined",
+          body: `Your reschedule request was not approved. Your appointment remains on ${row.date}${
+            (row.time as string | null) ? ` at ${(row.time as string).slice(0, 5)}` : ""
+          }.`,
+          link: "/patient",
+        });
+      }
+      return { error: null };
+    }
+
+    // approve → actually move the appointment, re-validating in case the slot
+    // was booked by somebody else while the request was pending.
+    const isHomeVisit = serviceName.toLowerCase().includes("home visit");
+    const isVideo = serviceName.toLowerCase().includes("video consultation");
+    const duration = isVideo ? 15 : (services?.duration_minutes ?? row.duration_minutes ?? 30);
+
+    const slotError = await validateAppointmentSlot(admin, {
+      date: targetDate,
+      time: targetTime,
+      durationMinutes: duration,
+      isHomeVisit,
+      excludeId: data.id,
+    });
+    if (slotError) {
+      return {
+        error: `That time is no longer available — ${slotError}. Please pick another slot.`,
+      };
+    }
+
+    const { error } = await admin
+      .from("appointments")
+      .update({
+        ...clearPendingFields,
+        date: targetDate,
+        time: targetTime,
+        last_rescheduled_at: new Date().toISOString(),
+      })
+      .eq("id", data.id);
+    if (error) {
+      const isSlotCollision = error.code === "23505" || error.code === "23P01";
+      return {
+        error: isSlotCollision
+          ? "That slot was just taken. Please pick another time."
+          : error.message,
+      };
+    }
+
+    if (row.patient_id) {
+      await createPatientNotification(admin, {
+        userId: row.patient_id as string,
+        type: "appointment_rescheduled",
+        title: "Appointment rescheduled",
+        body: `Your reschedule request was approved — your appointment is now on ${targetDate}${
+          targetTime ? ` at ${targetTime}` : ""
+        }.`,
+        link: "/patient",
+      });
+    }
+
+    // Full notification of the new slot (email / SMS / WhatsApp).
+    const siteUrl = getSiteUrl();
+    await sendRescheduleNotifications({
+      appointmentId: (row.appointment_no as string | null) ?? (row.id as string),
+      patientName: row.patient_name ?? "Patient",
+      serviceName: serviceName || null,
+      date: targetDate,
+      time: targetTime ?? "Flexible",
+      statusUrl: siteUrl ? `${siteUrl}/appointment-status` : undefined,
+      phone: row.patient_phone ?? undefined,
+      email: row.patient_email ?? undefined,
+      previousDate: row.date as string,
+      previousTime: (row.time as string | null)?.slice(0, 5) ?? undefined,
+    });
+
+    return { error: null };
+  });
+
+// ---------------------------------------------------------------------------
+// Patient — accept / decline the clinic's reschedule request
+// ---------------------------------------------------------------------------
+
+export const patientApplyRescheduleAppointment = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator(z.object({ id: uuidSchema, action: z.enum(["accept", "decline"]) }))
+  .handler(async ({ data, context }) => {
+    const admin = getSupabaseAdmin();
+
+    const { data: row } = await admin
+      .from("appointments")
+      .select(
+        "id, patient_id, date, time, reschedule_status, reschedule_date, reschedule_time, duration_minutes, patient_name, patient_phone, patient_email, appointment_no, service_id, services:service_id (name, duration_minutes)",
+      )
+      .eq("id", data.id)
+      .maybeSingle();
+
+    if (!row) return { error: "Appointment not found." };
+    if (row.patient_id !== context.patientId) return { error: "Forbidden" };
+    if (row.reschedule_status !== "pending") return { error: "No pending reschedule request." };
+
+    const targetDate = row.reschedule_date as string | null;
+    const targetTime = (row.reschedule_time as string | null)?.slice(0, 5) ?? null;
+    if (!targetDate) return { error: "Missing reschedule date." };
+
+    const services = row.services as unknown as {
+      name: string | null;
+      duration_minutes: number | null;
+    } | null;
+    const serviceName = services?.name ?? "";
+
+    const clearPendingFields = {
+      reschedule_status: "none",
+      reschedule_requested_by: null,
+      reschedule_date: null,
+      reschedule_time: null,
+      reschedule_requested_at: null,
+    } as const;
+
+    if (data.action === "decline") {
+      const { error } = await admin
+        .from("appointments")
+        .update(clearPendingFields)
+        .eq("id", data.id);
+      if (error) return { error: error.message };
+      await createAdminNotification(admin, {
+        type: "appointment_rescheduled",
+        title: "Patient declined reschedule",
+        body: `The patient declined the proposed move to ${targetDate}${
+          targetTime ? ` at ${targetTime}` : ""
+        }. The appointment stays on ${row.date}${
+          (row.time as string | null) ? ` at ${(row.time as string).slice(0, 5)}` : ""
+        }.`,
+        link: "/admin/appointments",
+        dedupKey: buildAdminNotificationDedupKey("reschedule_declined", row.id as string),
+      });
+      return { error: null };
+    }
+
+    // accept → actually move the appointment, re-validating in case the slot
+    // was booked by somebody else while the request was pending.
+    const isHomeVisit = serviceName.toLowerCase().includes("home visit");
+    const isVideo = serviceName.toLowerCase().includes("video consultation");
+    const duration = isVideo ? 15 : (services?.duration_minutes ?? row.duration_minutes ?? 30);
+
+    const slotError = await validateAppointmentSlot(admin, {
+      date: targetDate,
+      time: targetTime,
+      durationMinutes: duration,
+      isHomeVisit,
+      excludeId: data.id,
+    });
+    if (slotError) {
+      return {
+        error: `That time is no longer available — ${slotError}. Please pick another slot.`,
+      };
+    }
+
+    const { error } = await admin
+      .from("appointments")
+      .update({
+        ...clearPendingFields,
+        date: targetDate,
+        time: targetTime,
+        last_rescheduled_at: new Date().toISOString(),
+      })
       .eq("id", data.id);
     if (error) {
       const isSlotCollision = error.code === "23505" || error.code === "23P01";
@@ -2002,24 +2437,34 @@ export const patientRescheduleAppointment = createServerFn({ method: "POST" })
       userId: context.patientId,
       type: "appointment_rescheduled",
       title: "Appointment rescheduled",
-      body: `Your appointment was moved to ${data.date}${data.time ? ` at ${data.time.slice(0, 5)}` : ""}.`,
+      body: `Your appointment is confirmed on ${targetDate}${
+        targetTime ? ` at ${targetTime}` : ""
+      }.`,
       link: "/patient",
     });
 
-    // Best-effort admin notification (the patient initiated this reschedule).
-    // The dedup key includes the new slot so a genuine second reschedule still
-    // notifies, while a retry of the same request does not.
     await createAdminNotification(admin, {
       type: "appointment_rescheduled",
-      title: "Appointment rescheduled by patient",
-      body: `An appointment was moved to ${data.date}${
-        data.time ? ` at ${data.time.slice(0, 5)}` : ""
-      } by the patient.`,
+      title: "Patient confirmed the reschedule",
+      body: `The patient accepted the new slot — the appointment is now on ${targetDate}${
+        targetTime ? ` at ${targetTime}` : ""
+      }.`,
       link: "/admin/appointments",
-      dedupKey: buildAdminNotificationDedupKey(
-        "appointment_rescheduled",
-        `${data.id}:${data.date}${data.time ?? ""}`,
-      ),
+      dedupKey: buildAdminNotificationDedupKey("reschedule_accepted", row.id as string),
+    });
+
+    const siteUrl = getSiteUrl();
+    await sendRescheduleNotifications({
+      appointmentId: (row.appointment_no as string | null) ?? (row.id as string),
+      patientName: row.patient_name ?? "Patient",
+      serviceName: serviceName || null,
+      date: targetDate,
+      time: targetTime ?? "Flexible",
+      statusUrl: siteUrl ? `${siteUrl}/appointment-status` : undefined,
+      phone: row.patient_phone ?? undefined,
+      email: row.patient_email ?? undefined,
+      previousDate: row.date as string,
+      previousTime: (row.time as string | null)?.slice(0, 5) ?? undefined,
     });
 
     return { error: null };
@@ -2425,7 +2870,7 @@ export const placeOrder = createServerFn({ method: "POST" })
         await createAdminNotification(admin, {
           type: "new_order",
           title: "New order received",
-          body: `Order ${orderNo} was placed and awaits payment.`,
+          body: `${data.name || "A customer"} placed order ${orderNo} and awaits payment.`,
           link: "/admin/orders",
           dedupKey: buildAdminNotificationDedupKey("new_order", orderId),
         });

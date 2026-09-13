@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, staffSupabase } from "@/lib/supabase";
 import { fallbackConditionsFor, FALLBACK_REVIEWS } from "./fallback-content";
 import {
   adminCreateCondition,
@@ -111,10 +111,15 @@ export async function deleteCondition(id: string) {
   return adminDeleteCondition({ data: { id } });
 }
 
-// --- Admin: Reviews ---
-
+// Admin: Reviews
+//
+// Reads through the STAFF-authenticated client (not the public one). The public
+// client has no staff session, so the anon RLS policy would only return
+// approved+live rows — pending patient submissions (and rejected ones) would
+// never reach the moderation dashboard. The staff client satisfies the
+// `reviews_read_all_admin` policy (`is_admin()`), so every row shows up.
 export async function getAllReviews(): Promise<Review[]> {
-  const { data } = await supabase
+  const { data } = await staffSupabase
     .from("reviews")
     .select("*")
     .order("created_at", { ascending: false });

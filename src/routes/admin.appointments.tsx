@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { Loader2, Video } from "lucide-react";
+import { Banknote, Loader2, Video, ExternalLink, FileImage, X } from "lucide-react";
 import { ensureConsultationConversation } from "@/lib/consultation-data";
 import {
   useAppointments,
   useUpdateAppointmentStatus,
   useRescheduleAppointment,
+  useApplyReschedule,
   useSetVideoPaymentStatus,
   useAdminAvailability,
 } from "@/hooks/queries/useAdmin";
@@ -35,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { QueryError } from "@/components/admin/QueryError";
+import { staffSupabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/admin/appointments")({
   component: AdminAppointments,
@@ -96,12 +98,154 @@ function PaymentBadge({ status }: { status: string }) {
   return <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${badge}`}>{label}</span>;
 }
 
+/** Admin view of a video consultation's payment proof (Option 1 details +
+ *  Option 2 receipt screenshot). The receipt is a private-storage path, so it
+ *  is opened through a short-lived signed URL generated with the staff client —
+ *  storage RLS still applies (admin/doctor only). */
+function PaymentProofDialog({
+  appointment,
+  onClose,
+}: {
+  appointment: AppointmentWithDetails;
+  onClose: () => void;
+}) {
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [receiptLoading, setReceiptLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setReceiptUrl(null);
+    if (appointment.payment_receipt_url) {
+      setReceiptLoading(true);
+      staffSupabase.storage
+        .from("payment-receipts")
+        .createSignedUrl(appointment.payment_receipt_url, 300)
+        .then(({ data }) => {
+          if (!cancelled) setReceiptUrl(data?.signedUrl ?? null);
+        })
+        .finally(() => {
+          if (!cancelled) setReceiptLoading(false);
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [appointment.id, appointment.payment_receipt_url]);
+
+  const row = (label: string, value: ReactNode) => (
+    <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      <span className="min-w-0 break-words text-right font-medium text-foreground">{value}</span>
+    </div>
+  );
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Payment details</DialogTitle>
+          <DialogDescription>
+            Prepaid video consultation proof — verify before unlocking the session.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 text-sm">
+          {row("Patient", appointment.patient_name ?? "—")}
+          {row(
+            "Service",
+            <div className="text-right">
+              <div>{appointment.service_name ?? "—"}</div>
+              {appointment.offer_title && (
+                <div className="text-xs text-primary">{appointment.offer_title}</div>
+              )}
+            </div>,
+          )}
+          {row(
+            "Date",
+            appointment.date
+              ? format(new Date(appointment.date + "T00:00:00"), "MMM d, yyyy")
+              : "—",
+          )}
+          {row("Time", formatTimeDisplay(appointment.time ?? "Flexible"))}
+          {row(
+            "Status",
+            <span className="inline-flex items-center gap-1.5">
+              <PaymentBadge status={appointment.payment_status} />
+            </span>,
+          )}
+          {appointment.payment_amount != null &&
+            row("Amount", `Rs. ${Number(appointment.payment_amount).toLocaleString()}`)}
+          {row("Method", appointment.payment_method ?? "—")}
+          {row(
+            "Reference / Transaction ID",
+            appointment.payment_reference ? (
+              <span className="font-mono">{appointment.payment_reference}</span>
+            ) : (
+              "—"
+            ),
+          )}
+          {row("Payer name", appointment.payment_payer_name ?? "—")}
+          {row(
+            "Submitted",
+            appointment.payment_submitted_at
+              ? format(new Date(appointment.payment_submitted_at), "MMM d, yyyy, h:mm a")
+              : "—",
+          )}
+          {row(
+            "Verified",
+            appointment.payment_verified_at
+              ? format(new Date(appointment.payment_verified_at), "MMM d, yyyy, h:mm a")
+              : "—",
+          )}
+        </div>
+
+        {appointment.payment_receipt_url && (
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground">
+                <FileImage className="h-4 w-4 text-primary" /> Uploaded receipt screenshot
+              </span>
+              {receiptUrl && (
+                <a
+                  href={receiptUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" /> Open in new tab
+                </a>
+              )}
+            </div>
+            <div className="flex max-h-[45vh] items-center justify-center overflow-hidden rounded-xl border border-border bg-muted/40">
+              {receiptLoading ? (
+                <div className="flex items-center justify-center p-10 text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading…
+                </div>
+              ) : receiptUrl ? (
+                <img
+                  src={receiptUrl}
+                  alt="Payment receipt"
+                  className="max-h-[45vh] w-full object-contain"
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-2 p-8 text-sm text-muted-foreground">
+                  <X className="h-6 w-6" /> Could not load the receipt.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function AdminAppointments() {
   const navigate = useNavigate();
   const { data: appointments, isLoading, isError, error } = useAppointments();
   const { data: availability } = useAdminAvailability();
   const updateStatus = useUpdateAppointmentStatus();
   const reschedule = useRescheduleAppointment();
+  const applyReschedule = useApplyReschedule();
   const setPayment = useSetVideoPaymentStatus();
   const createVideo = useCreateVideoSession();
 
@@ -116,15 +260,27 @@ function AdminAppointments() {
     vcNo: string;
     meetUrl: string;
   } | null>(null);
+  const [paymentDialog, setPaymentDialog] = useState<AppointmentWithDetails | null>(null);
   const [callDuration, setCallDuration] = useState(20);
+  const [joinLinkInput, setJoinLinkInput] = useState("");
   const [videoError, setVideoError] = useState("");
   const [joiningCall, setJoiningCall] = useState(false);
+  const [rowFeedback, setRowFeedback] = useState<
+    Record<string, { kind: "success" | "error"; message: string }>
+  >({});
 
   const [rescheduleTarget, setRescheduleTarget] = useState<AppointmentWithDetails | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState("");
   const [rescheduleTime, setRescheduleTime] = useState("");
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   const [loadingTimes, setLoadingTimes] = useState(false);
+
+  const patientJoinLink = videoDialog?.vcNo
+    ? `${window.location.origin}/video/${videoDialog.vcNo}`
+    : "";
+  useEffect(() => {
+    setJoinLinkInput(patientJoinLink);
+  }, [patientJoinLink]);
 
   const today = todayInClinic();
 
@@ -187,14 +343,52 @@ function AdminAppointments() {
   }, [rescheduleTarget, rescheduleDate, availability, today]);
 
   const busy =
-    updateStatus.isPending || reschedule.isPending || setPayment.isPending || createVideo.isPending;
+    updateStatus.isPending ||
+    reschedule.isPending ||
+    applyReschedule.isPending ||
+    setPayment.isPending ||
+    createVideo.isPending;
+
+  /** Shows a short-lived success/error message under the appointment's actions. */
+  function flashRow(id: string, kind: "success" | "error", message: string) {
+    setRowFeedback((prev) => ({ ...prev, [id]: { kind, message } }));
+    window.setTimeout(() => {
+      setRowFeedback((prev) => {
+        if (prev[id]?.message !== message) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }, 6000);
+  }
+
+  const STATUS_DONE_LABELS: Record<string, string> = {
+    confirmed: "Appointment approved",
+    rejected: "Appointment rejected",
+    completed: "Appointment completed",
+    cancelled: "Appointment cancelled",
+    arrived: "Marked as arrived",
+    no_show: "Marked as no-show",
+  };
+
+  const PAYMENT_DONE_LABELS: Record<string, string> = {
+    payment_verified: "Payment verified",
+    payment_failed: "Payment marked not received",
+    refunded: "Payment refunded",
+    waived: "Marked as free (payment waived)",
+  };
 
   async function changeStatus(
     id: string,
     status: "confirmed" | "rejected" | "completed" | "cancelled" | "arrived" | "no_show",
   ) {
     const result = await updateStatus.mutateAsync({ id, status });
-    if (result.error) alert(result.error);
+    if (result.error) {
+      flashRow(id, "error", result.error);
+      alert(result.error);
+    } else {
+      flashRow(id, "success", STATUS_DONE_LABELS[status] ?? "Updated");
+    }
   }
 
   async function changePayment(
@@ -202,7 +396,58 @@ function AdminAppointments() {
     status: "payment_verified" | "payment_failed" | "refunded" | "waived",
   ) {
     const result = await setPayment.mutateAsync({ appointmentId, status });
-    if (result.error) alert(result.error);
+    if (result.error) {
+      flashRow(appointmentId, "error", result.error);
+      alert(result.error);
+    } else {
+      flashRow(appointmentId, "success", PAYMENT_DONE_LABELS[status] ?? "Payment updated");
+    }
+  }
+
+  /** Confirmation wrapper for destructive status changes. */
+  function confirmAndChangeStatus(
+    a: AppointmentWithDetails,
+    status: "confirmed" | "rejected" | "completed" | "cancelled" | "arrived" | "no_show",
+  ) {
+    if (status === "rejected") {
+      if (!window.confirm("Reject this appointment? This cannot be undone.")) return;
+    } else if (status === "no_show") {
+      if (!window.confirm("Mark this appointment as a no-show? This cannot be undone.")) return;
+    }
+    void changeStatus(a.id, status);
+  }
+
+  /** Confirmation wrapper for destructive payment changes. */
+  function confirmAndChangePayment(
+    a: AppointmentWithDetails,
+    status: "payment_verified" | "payment_failed" | "refunded" | "waived",
+  ) {
+    if (status === "payment_failed") {
+      if (
+        !window.confirm(
+          "Mark this payment as NOT received? The patient's payment will be marked failed.",
+        )
+      )
+        return;
+    } else if (status === "refunded") {
+      if (!window.confirm("Refund this payment? This action cannot be undone.")) return;
+    }
+    void changePayment(a.id, status);
+  }
+
+  /** Admin responds to a reschedule request raised by the patient. */
+  async function handleApplyReschedule(id: string, action: "approve" | "reject") {
+    const result = await applyReschedule.mutateAsync({ id, action });
+    if (result.error) {
+      flashRow(id, "error", result.error);
+      alert(result.error);
+    } else {
+      flashRow(
+        id,
+        "success",
+        action === "approve" ? "Reschedule approved" : "Reschedule request rejected",
+      );
+    }
   }
 
   function openVideoDialog(appointmentId: string) {
@@ -249,7 +494,7 @@ function AdminAppointments() {
     }
     setJoiningCall(true);
     try {
-      const result = await ensureConsultationConversation(show.appointmentId);
+      const result = await ensureConsultationConversation(show.appointmentId, "staff");
       setVideoDialog(null);
       navigate({ to: "/admin/consultations/$id", params: { id: result.conversationId } });
     } catch {
@@ -278,12 +523,242 @@ function AdminAppointments() {
     }
   }
 
-  function renderActions(a: AppointmentWithDetails): ReactNode {
-    if (a.is_video) return renderVideoActions(a);
-    return renderNormalActions(a);
+  /** A video payment counts as settled once verified or waived (free). */
+  function paymentSettled(paymentStatus: string): boolean {
+    return paymentStatus === "payment_verified" || paymentStatus === "waived";
   }
 
-  function renderNormalActions(a: AppointmentWithDetails): ReactNode {
+  function renderActions(a: AppointmentWithDetails): ReactNode {
+    // Pending reschedule request raised by the patient → admin decides.
+    if (
+      a.status !== "cancelled" &&
+      a.status !== "rejected" &&
+      a.reschedule_status === "pending" &&
+      a.reschedule_requested_by === "patient"
+    ) {
+      return (
+        <>
+          <Button
+            size="sm"
+            variant="default"
+            className="bg-emerald-600 hover:bg-emerald-700"
+            disabled={busy}
+            onClick={() => handleApplyReschedule(a.id, "approve")}
+          >
+            Approve Reschedule
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-red-600"
+            disabled={busy}
+            onClick={() => handleApplyReschedule(a.id, "reject")}
+          >
+            Reject
+          </Button>
+        </>
+      );
+    }
+
+    const actions: ReactNode[] = [];
+    const sessionDone = a.video_session_status === "completed";
+    const settled = paymentSettled(a.payment_status);
+    const canReschedule = !a.reschedule_status || a.reschedule_status === "none";
+
+    // ── Video Consultation: payment gate → approval → operations ───────────
+    if (a.is_video) {
+      // Stage 1 — payment not settled yet: proof + verification only.
+      if (a.status === "pending" && !settled) {
+        actions.push(
+          <Button
+            key="proof"
+            size="sm"
+            variant="outline"
+            onClick={() => setPaymentDialog(a)}
+            disabled={busy}
+          >
+            <Banknote className="mr-1 h-3 w-3" /> View Payment Proof
+          </Button>,
+        );
+        if (a.payment_status === "payment_submitted") {
+          actions.push(
+            <Button
+              key="verify"
+              size="sm"
+              variant="default"
+              onClick={() => changePayment(a.id, "payment_verified")}
+              disabled={busy}
+            >
+              Verify Payment
+            </Button>,
+            <Button
+              key="not-received"
+              size="sm"
+              variant="outline"
+              className="text-red-600"
+              onClick={() => confirmAndChangePayment(a, "payment_failed")}
+              disabled={busy}
+            >
+              Payment Not Received
+            </Button>,
+          );
+        } else {
+          actions.push(
+            <Button
+              key="waive"
+              size="sm"
+              variant="outline"
+              onClick={() => confirmAndChangePayment(a, "waived")}
+              disabled={busy}
+            >
+              Waive / Free
+            </Button>,
+          );
+        }
+        return <div className="flex flex-wrap gap-1">{actions}</div>;
+      }
+
+      // Stage 2 — payment settled: approve or reject.
+      if (a.status === "pending" && settled) {
+        actions.push(
+          <Button
+            key="approve"
+            size="sm"
+            variant="default"
+            onClick={() => changeStatus(a.id, "confirmed")}
+            disabled={busy}
+          >
+            Approve
+          </Button>,
+          <Button
+            key="reject"
+            size="sm"
+            variant="outline"
+            className="text-red-600"
+            onClick={() => confirmAndChangeStatus(a, "rejected")}
+            disabled={busy}
+          >
+            Reject
+          </Button>,
+        );
+        if (a.payment_status === "payment_verified") {
+          actions.push(
+            <Button
+              key="refund"
+              size="sm"
+              variant="outline"
+              onClick={() => confirmAndChangePayment(a, "refunded")}
+              disabled={busy}
+            >
+              Refund Payment
+            </Button>,
+          );
+        }
+        return <div className="flex flex-wrap gap-1">{actions}</div>;
+      }
+
+      // Stage 3 — approved: start the call and finish the visit.
+      if (a.status === "confirmed" || a.status === "arrived") {
+        if (!settled) {
+          // Legacy rows confirmed before the payment gate — finish payment first.
+          actions.push(
+            <Button
+              key="proof"
+              size="sm"
+              variant="outline"
+              onClick={() => setPaymentDialog(a)}
+              disabled={busy}
+            >
+              <Banknote className="mr-1 h-3 w-3" /> View Payment Proof
+            </Button>,
+          );
+          if (a.payment_status === "payment_submitted") {
+            actions.push(
+              <Button
+                key="verify"
+                size="sm"
+                variant="default"
+                onClick={() => changePayment(a.id, "payment_verified")}
+                disabled={busy}
+              >
+                Verify Payment
+              </Button>,
+              <Button
+                key="not-received"
+                size="sm"
+                variant="outline"
+                className="text-red-600"
+                onClick={() => confirmAndChangePayment(a, "payment_failed")}
+                disabled={busy}
+              >
+                Payment Not Received
+              </Button>,
+            );
+          }
+        } else if (!sessionDone) {
+          actions.push(
+            <Button
+              key="video"
+              size="sm"
+              variant="default"
+              onClick={() => openVideoDialog(a.id)}
+              disabled={busy}
+            >
+              {createVideo.isPending ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              ) : (
+                <Video className="mr-1 h-3 w-3" />
+              )}
+              Video Call
+            </Button>,
+          );
+        }
+
+        actions.push(
+          <Button
+            key="complete"
+            size="sm"
+            variant="outline"
+            onClick={() => changeStatus(a.id, "completed")}
+            disabled={busy}
+          >
+            Complete
+          </Button>,
+        );
+        if (a.status === "confirmed") {
+          actions.push(
+            <Button
+              key="no-show"
+              size="sm"
+              variant="outline"
+              className="text-red-600"
+              onClick={() => confirmAndChangeStatus(a, "no_show")}
+              disabled={busy}
+            >
+              No-Show
+            </Button>,
+          );
+          if (canReschedule) {
+            actions.push(
+              <Button
+                key="reschedule"
+                size="sm"
+                variant="outline"
+                onClick={() => openReschedule(a)}
+                disabled={busy}
+              >
+                Reschedule
+              </Button>,
+            );
+          }
+        }
+        return <div className="flex flex-wrap gap-1">{actions}</div>;
+      }
+
+      return <span className="text-xs text-muted-foreground">—</span>;
+    }
+
+    // ── In-Clinic: previous behaviour (no payment gate) ────────────────────
     if (a.status === "pending") {
       return (
         <>
@@ -299,14 +774,16 @@ function AdminAppointments() {
             size="sm"
             variant="outline"
             className="text-red-600"
-            onClick={() => changeStatus(a.id, "rejected")}
+            onClick={() => confirmAndChangeStatus(a, "rejected")}
             disabled={busy}
           >
             Reject
           </Button>
-          <Button size="sm" variant="outline" onClick={() => openReschedule(a)} disabled={busy}>
-            Reschedule
-          </Button>
+          {canReschedule ? (
+            <Button size="sm" variant="outline" onClick={() => openReschedule(a)} disabled={busy}>
+              Reschedule
+            </Button>
+          ) : null}
         </>
       );
     }
@@ -321,14 +798,16 @@ function AdminAppointments() {
           >
             Arrived
           </Button>
-          <Button size="sm" variant="outline" onClick={() => openReschedule(a)} disabled={busy}>
-            Reschedule
-          </Button>
+          {canReschedule ? (
+            <Button size="sm" variant="outline" onClick={() => openReschedule(a)} disabled={busy}>
+              Reschedule
+            </Button>
+          ) : null}
           <Button
             size="sm"
             variant="outline"
             className="text-red-600"
-            onClick={() => changeStatus(a.id, "no_show")}
+            onClick={() => confirmAndChangeStatus(a, "no_show")}
             disabled={busy}
           >
             No-Show
@@ -336,201 +815,19 @@ function AdminAppointments() {
         </>
       );
     }
-    return <span className="text-xs text-muted-foreground">—</span>;
-  }
-
-  function renderVideoActions(a: AppointmentWithDetails): ReactNode {
-    if (a.status === "pending") {
+    if (a.status === "arrived") {
       return (
-        <>
-          <Button
-            size="sm"
-            variant="default"
-            onClick={() => changeStatus(a.id, "confirmed")}
-            disabled={busy}
-          >
-            Approve
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-red-600"
-            onClick={() => changeStatus(a.id, "rejected")}
-            disabled={busy}
-          >
-            Reject
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => openReschedule(a)} disabled={busy}>
-            Reschedule
-          </Button>
-        </>
-      );
-    }
-    if (a.status !== "confirmed") {
-      return <span className="text-xs text-muted-foreground">—</span>;
-    }
-
-    const actions: ReactNode[] = [];
-    const sessionDone = a.video_session_status === "completed";
-
-    if (a.payment_status === "payment_submitted") {
-      actions.push(
         <Button
-          key="verify"
-          size="sm"
-          variant="default"
-          onClick={() => changePayment(a.id, "payment_verified")}
-          disabled={busy}
-        >
-          Verify Payment
-        </Button>,
-        <Button
-          key="reject-payment"
-          size="sm"
-          variant="outline"
-          className="text-red-600"
-          onClick={() => changePayment(a.id, "payment_failed")}
-          disabled={busy}
-        >
-          Reject Payment
-        </Button>,
-        <Button
-          key="waive"
-          size="sm"
-          variant="outline"
-          onClick={() => changePayment(a.id, "waived")}
-          disabled={busy}
-        >
-          Waive / Free
-        </Button>,
-      );
-    } else if (a.payment_status === "payment_pending") {
-      actions.push(
-        <Button
-          key="waive"
-          size="sm"
-          variant="outline"
-          onClick={() => changePayment(a.id, "waived")}
-          disabled={busy}
-        >
-          Waive / Free
-        </Button>,
-      );
-    } else if (a.payment_status === "payment_verified") {
-      if (!sessionDone) {
-        actions.push(
-          <Button
-            key="video"
-            size="sm"
-            variant="default"
-            onClick={() => openVideoDialog(a.id)}
-            disabled={busy}
-          >
-            {createVideo.isPending ? (
-              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-            ) : (
-              <Video className="mr-1 h-3 w-3" />
-            )}
-            Video Call
-          </Button>,
-        );
-      }
-      actions.push(
-        <Button
-          key="refund"
-          size="sm"
-          variant="outline"
-          onClick={() => changePayment(a.id, "refunded")}
-          disabled={busy}
-        >
-          Refund
-        </Button>,
-        <Button
-          key="complete"
           size="sm"
           variant="outline"
           onClick={() => changeStatus(a.id, "completed")}
           disabled={busy}
         >
           Complete
-        </Button>,
-      );
-    } else if (a.payment_status === "waived") {
-      if (!sessionDone) {
-        actions.push(
-          <Button
-            key="video"
-            size="sm"
-            variant="default"
-            onClick={() => openVideoDialog(a.id)}
-            disabled={busy}
-          >
-            {createVideo.isPending ? (
-              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-            ) : (
-              <Video className="mr-1 h-3 w-3" />
-            )}
-            Video Call
-          </Button>,
-        );
-      }
-      actions.push(
-        <Button
-          key="complete"
-          size="sm"
-          variant="outline"
-          onClick={() => changeStatus(a.id, "completed")}
-          disabled={busy}
-        >
-          Complete
-        </Button>,
-      );
-    } else if (a.payment_status === "refunded") {
-      actions.push(
-        <Button
-          key="complete"
-          size="sm"
-          variant="outline"
-          onClick={() => changeStatus(a.id, "completed")}
-          disabled={busy}
-        >
-          Complete
-        </Button>,
+        </Button>
       );
     }
-
-    if (
-      a.payment_status !== "payment_verified" &&
-      a.payment_status !== "payment_failed" &&
-      a.payment_status !== "refunded"
-    ) {
-      actions.push(
-        <Button
-          key="no-show"
-          size="sm"
-          variant="outline"
-          className="text-red-600"
-          onClick={() => changeStatus(a.id, "no_show")}
-          disabled={busy}
-        >
-          No-Show
-        </Button>,
-      );
-    }
-
-    actions.push(
-      <Button
-        key="reschedule"
-        size="sm"
-        variant="outline"
-        onClick={() => openReschedule(a)}
-        disabled={busy}
-      >
-        Reschedule
-      </Button>,
-    );
-
-    return <div className="flex flex-wrap gap-1">{actions}</div>;
+    return <span className="text-xs text-muted-foreground">—</span>;
   }
 
   return (
@@ -656,15 +953,61 @@ function AdminAppointments() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      {a.date ? format(new Date(a.date + "T00:00:00"), "MMM d, yyyy") : "—"}
+                      {a.reschedule_status === "pending" && a.reschedule_date ? (
+                        <div className="text-xs">
+                          <span className="text-muted-foreground line-through">
+                            {a.date ? format(new Date(a.date + "T00:00:00"), "MMM d, yyyy") : "—"}
+                          </span>
+                          <span className="ml-1 font-medium text-amber-600">
+                            → {format(new Date(a.reschedule_date + "T00:00:00"), "MMM d, yyyy")}
+                          </span>
+                        </div>
+                      ) : a.date ? (
+                        format(new Date(a.date + "T00:00:00"), "MMM d, yyyy")
+                      ) : (
+                        "—"
+                      )}
                     </td>
-                    <td className="px-4 py-3">{formatTimeDisplay(a.time ?? "Flexible")}</td>
                     <td className="px-4 py-3">
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusBadgeClasses(a.status)}`}
-                      >
-                        {APPOINTMENT_STATUS_LABELS[a.status as AppointmentStatusValue] ?? a.status}
-                      </span>
+                      {a.reschedule_status === "pending" && a.reschedule_date ? (
+                        <span className="text-xs">
+                          <span className="text-muted-foreground line-through">
+                            {formatTimeDisplay(a.time ?? null)}
+                          </span>
+                          <span className="ml-1 font-medium text-amber-600">
+                            → {formatTimeDisplay(a.reschedule_time ?? null)}
+                          </span>
+                        </span>
+                      ) : (
+                        formatTimeDisplay(a.time ?? null)
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col items-start gap-1">
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusBadgeClasses(a.status)}`}
+                        >
+                          {APPOINTMENT_STATUS_LABELS[a.status as AppointmentStatusValue] ??
+                            a.status}
+                        </span>
+                        {a.reschedule_status === "pending" &&
+                          a.reschedule_requested_by === "patient" && (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                              Reschedule Request
+                            </span>
+                          )}
+                        {a.reschedule_status === "pending" &&
+                          a.reschedule_requested_by === "staff" && (
+                            <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-700">
+                              Awaiting patient
+                            </span>
+                          )}
+                        {a.reschedule_status === "none" && a.last_rescheduled_at && (
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                            Rescheduled
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       {a.is_video ? (
@@ -675,6 +1018,18 @@ function AdminAppointments() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">{renderActions(a)}</div>
+                      {rowFeedback[a.id] && (
+                        <p
+                          className={`mt-1 text-xs ${
+                            rowFeedback[a.id].kind === "success"
+                              ? "text-emerald-600"
+                              : "text-red-600"
+                          }`}
+                        >
+                          {rowFeedback[a.id].kind === "success" ? "✓ " : "⚠ "}
+                          {rowFeedback[a.id].message}
+                        </p>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -808,8 +1163,8 @@ function AdminAppointments() {
                 </label>
                 <div className="mt-1 flex items-center gap-2">
                   <input
-                    readOnly
-                    value={`${window.location.origin}/video/${videoDialog.vcNo}`}
+                    value={joinLinkInput}
+                    onChange={(e) => setJoinLinkInput(e.target.value)}
                     className="min-w-0 flex-1 rounded border bg-background px-3 py-2 text-sm"
                     onClick={(e) => (e.target as HTMLInputElement).select()}
                   />
@@ -817,9 +1172,7 @@ function AdminAppointments() {
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      navigator.clipboard.writeText(
-                        `${window.location.origin}/video/${videoDialog.vcNo}`,
-                      );
+                      navigator.clipboard.writeText(joinLinkInput);
                     }}
                   >
                     Copy
@@ -876,6 +1229,10 @@ function AdminAppointments() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {paymentDialog && (
+        <PaymentProofDialog appointment={paymentDialog} onClose={() => setPaymentDialog(null)} />
+      )}
     </div>
   );
 }

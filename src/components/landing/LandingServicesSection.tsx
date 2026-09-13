@@ -1,8 +1,18 @@
-import { useRef } from "react";
+import { useRef, useMemo } from "react";
 import { motion, useInView, useMotionValue, useSpring, useTransform } from "framer-motion";
-import { ArrowUpRight, Check, Sparkles, Activity } from "lucide-react";
+import {
+  ArrowUpRight,
+  Check,
+  Sparkles,
+  Activity,
+  House,
+  Stethoscope,
+  HeartPulse,
+} from "lucide-react";
 import { SectionLink } from "@/components/site/SectionLink";
 import { usePauseOffscreenVideo } from "@/hooks/usePauseOffscreenVideo";
+import { useServices } from "@/hooks/queries/useBookings";
+import { getServiceFeeLabel } from "@/lib/bookings";
 
 const SERVICE_CARDS = [
   {
@@ -151,6 +161,28 @@ export function LandingServicesSection() {
   const ref = useRef<HTMLElement>(null);
   const inView = useInView(ref, { once: true, margin: "-80px" });
 
+  // Admin-managed services appear below the two showpiece video cards, so
+  // Add/Edit/Remove in Admin → Services shows up on the website immediately.
+  // Video consultation is excluded (it has its own booking flow + section),
+  // and homeopathy/physiotherapy are already represented by the cards above.
+  const { data: services } = useServices();
+  const extraServices = useMemo(() => {
+    const coveredCategories = ["homeopath", "physio", "rehab"];
+    return (services ?? []).filter((s) => {
+      const n = s.name.toLowerCase();
+      if (n.includes("video consultation")) return false;
+      return !coveredCategories.some((k) => n.includes(k));
+    });
+  }, [services]);
+
+  function serviceIcon(s: { name: string }) {
+    const n = s.name.toLowerCase();
+    if (n.includes("home visit")) return <House className="h-5 w-5" />;
+    if (n.includes("consult") || n.includes("appointment"))
+      return <Stethoscope className="h-5 w-5" />;
+    return <HeartPulse className="h-5 w-5" />;
+  }
+
   return (
     <section
       ref={ref}
@@ -170,7 +202,7 @@ export function LandingServicesSection() {
               <strong>Complete Patient Care</strong>
             </span>
             <h2 className="mt-2 font-serif-display text-4xl tracking-tight text-white md:text-5xl lg:text-6xl">
-              Homeopathy & Physiotherapy Care
+              Our Services
             </h2>
           </div>
           <span className="text-sm text-white/50">
@@ -183,6 +215,45 @@ export function LandingServicesSection() {
             <TiltCard key={card.title} card={card} index={index} inView={inView} />
           ))}
         </div>
+
+        {extraServices.length > 0 && (
+          <div className="mt-12">
+            <div className="mb-6 text-center text-xs font-semibold tracking-widest text-white/40 uppercase">
+              <strong>More Services</strong>
+            </div>
+            <div className="mx-auto grid max-w-3xl grid-cols-1 gap-4 sm:grid-cols-2">
+              {extraServices.map((s, index) => (
+                <motion.div
+                  key={s.id}
+                  initial={{ opacity: 0, y: 28 }}
+                  animate={inView ? { opacity: 1, y: 0 } : {}}
+                  transition={{ duration: 0.6, delay: 0.3 + index * 0.08 }}
+                  className="flex items-start gap-4 rounded-2xl border border-white/10 bg-white/5 p-5 shadow-lg backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:border-emerald-400/30 hover:bg-white/10"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-400/20 text-emerald-400 ring-1 ring-emerald-400/30">
+                    {serviceIcon(s)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold text-white">{s.name}</div>
+                    {s.description && (
+                      <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-white/50">
+                        {s.description}
+                      </p>
+                    )}
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-white/40">
+                      {(s.duration_minutes ?? 0) > 0 && <span>{s.duration_minutes} min</span>}
+                      {getServiceFeeLabel(s) && (
+                        <span className="font-semibold text-emerald-400/80">
+                          {getServiceFeeLabel(s)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );

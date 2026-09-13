@@ -17,12 +17,17 @@ create table if not exists public.conditions (
 );
 
 -- --- reviews table ---
+-- No seed rows: the website's "Website Reviews" section shows ONLY real web /
+-- patient reviews. Google reviews are fetched live from Google Places in a
+-- separate block (see GoogleReviewsBlock) and must never be seeded here.
 create table if not exists public.reviews (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   rating int not null default 5 check (rating between 1 and 5),
   text text not null default '',
   is_active boolean not null default true,
+  patient_id uuid references auth.users (id) on delete set null,
+  status text not null default 'approved' check (status in ('pending', 'approved', 'rejected')),
   created_at timestamptz not null default now()
 );
 
@@ -45,14 +50,3 @@ from (
     ('physiotherapy', 'Movement & Posture Problems', 'Professional guidance to improve posture, movement patterns and physical function.', 6, true)
 ) as v(category, title, description, sort_order, is_active)
 where not exists (select 1 from public.conditions);
-
--- --- Seed reviews ---
-insert into public.reviews (name, rating, text, is_active)
-select v.name, v.rating, v.text, v.is_active
-from (
-  values
-    ('Google Reviewer', 5, 'Professional and caring service with a comfortable and welcoming environment.', true),
-    ('Google Reviewer', 5, 'Very good experience with the treatment and professional guidance.', true),
-    ('Google Reviewer', 5, 'A positive experience with attentive care and proper guidance.', true)
-) as v(name, rating, text, is_active)
-where not exists (select 1 from public.reviews);

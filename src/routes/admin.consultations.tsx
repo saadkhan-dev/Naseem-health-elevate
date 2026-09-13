@@ -35,7 +35,7 @@ function AdminConsultations() {
   const [suggestOpen, setSuggestOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const { data, isLoading, isError, error } = useStaffConsultationHistory(filters);
-  const detail = useConsultationDetail(selectedId ?? "", !!selectedId);
+  const detail = useConsultationDetail(selectedId ?? "", !!selectedId, "staff");
 
   const viewingChat = !!selectedId;
 
@@ -233,6 +233,7 @@ function AdminConsultations() {
                 onSelect={() => setSelectedId(item.conversationId)}
                 contactName={item.patientName}
                 patientGender={item.patientGender}
+                listFor="staff"
               />
             ))
           )}

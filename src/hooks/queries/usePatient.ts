@@ -4,6 +4,7 @@ import {
   claimAppointment,
   cancelMyAppointment,
   rescheduleMyAppointment,
+  respondRescheduleRequest,
   getMyNotifications,
   markNotificationRead,
   markAllNotificationsRead,
@@ -65,6 +66,19 @@ export function useRescheduleMyAppointment() {
   return useMutation({
     mutationFn: ({ id, date, time }: { id: string; date: string; time: string | null }) =>
       rescheduleMyAppointment(id, date, time),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["patient", "appointments"] });
+      qc.invalidateQueries({ queryKey: ["bookedSlots"] });
+    },
+  });
+}
+
+/** Patient accepts or declines a reschedule request raised by the clinic. */
+export function useRespondRescheduleRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, action }: { id: string; action: "accept" | "decline" }) =>
+      respondRescheduleRequest(id, action),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["patient", "appointments"] });
       qc.invalidateQueries({ queryKey: ["bookedSlots"] });

@@ -9,6 +9,15 @@
 
 export type ConsultationRole = "patient" | "doctor" | "admin";
 export type ConversationStatus = "active" | "read_only";
+/**
+ * Which browser session surface a consultation server-function call is issued
+ * from. The browser keeps TWO sessions side by side (the public/patient client
+ * `supabase` and the staff client `staffSupabase`); `surface` tells the auth
+ * middleware which identity to use, so a message is always authored by the
+ * user on the surface that sent it ("staff" → staff token, "public" → patient
+ * token) — never guessed via the endpoint's default preference.
+ */
+export type AuthSurface = "public" | "staff";
 export type SenderRole = "patient" | "doctor";
 export type MessageType = "text" | "file" | "system";
 export type AttachmentKind =

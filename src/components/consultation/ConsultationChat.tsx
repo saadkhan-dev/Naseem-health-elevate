@@ -16,7 +16,6 @@ import {
   Pin,
   PinOff,
   Trash2,
-  Video,
   X,
 } from "lucide-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -43,6 +42,7 @@ import { ConsultationSidePanel } from "@/components/consultation/ConsultationSid
 import { formatAppointmentDate } from "@/components/consultation/shared";
 import { PATIENT_MESSAGE_MODIFY_WINDOW_MS } from "@/lib/consultation-types";
 import type {
+  AuthSurface,
   ConsultationDetailView,
   ConsultationMessageRow,
   ConsultationRole,
@@ -77,6 +77,12 @@ const FILE_ICON: Record<string, string> = {
 };
 
 /**
+ * WhatsApp-style grouping: consecutive messages from the same sender within
+ * this window are stacked (one tail, time shown only on the last bubble).
+ */
+const GROUP_GAP_MS = 3 * 60 * 1000;
+
+/**
  * Scroll to the latest message. On desktop/mobile-internal-scroll layouts the
  * messages list has its own overflow; on the mobile consultations page the list
  * can grow to natural height and the PAGE scrolls instead — in that case fall
@@ -106,13 +112,15 @@ export function ConsultationChat({
   doctorLabel,
 }: Props) {
   const isStaff = viewer.role !== "patient";
+  // Which browser session identity this surface speaks as (see AuthSurface).
+  const authSurface: AuthSurface = isStaff ? "staff" : "public";
   const { messages, hasMore, loadOlder, total } = useConsultationMessages(client, conversationId);
 
-  const markRead = useMarkConversationRead(client, conversationId, viewer.id);
+  const markRead = useMarkConversationRead(client, conversationId, viewer);
   const setStatus = useSetConsultationStatus(conversationId);
-  const editMutation = useEditConsultationMessage(conversationId);
-  const deleteMutation = useDeleteConsultationMessage(conversationId);
-  const pinMutation = useToggleConsultationPin(conversationId);
+  const editMutation = useEditConsultationMessage(conversationId, authSurface);
+  const deleteMutation = useDeleteConsultationMessage(conversationId, authSurface);
+  const pinMutation = useToggleConsultationPin(conversationId, authSurface);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const panelScrollRef = useRef<HTMLDivElement>(null);
@@ -137,6 +145,8 @@ export function ConsultationChat({
 
   const rows = useMemo(() => messages.data ?? [], [messages.data]);
   // Realtime refresh of the recipient's read marker so the ticks update live.
+  // UPDATE fires on every mark-read; INSERT covers the other side joining for
+  // the first time (e.g. a staff member creating their own participant row).
   useEffect(() => {
     if (!conversationId) return;
     const channel = client
@@ -145,6 +155,18 @@ export function ConsultationChat({
         "postgres_changes",
         {
           event: "UPDATE",
+          schema: "public",
+          table: "consultation_participants",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        () => {
+          qc.invalidateQueries({ queryKey: consultationKeys.detail(conversationId) });
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
           schema: "public",
           table: "consultation_participants",
           filter: `conversation_id=eq.${conversationId}`,
@@ -215,22 +237,46 @@ export function ConsultationChat({
     setNewBelow(0);
   }
 
-  // Mark read only when the user is actually viewing (pinned to bottom). Not
-  // merely because the component mounted or loaded older history.
+  // Mark read once the viewer has actually seen the thread up to the newest:
+  //   1. Newest is the VIEWER'S OWN message — sending implies they just read
+  //      everything above it, so this clears earlier unread (this is what lets
+  //      a staff member's own latest reply clear the older patient messages).
+  //   2. Newest belongs to the other participant and the viewer is pinned to
+  //      the bottom (looking at the newest messages).
+  // New messages arriving while scrolled up stay unread until the viewer gets
+  // back to the bottom. Mark-read is per-user, so this never clears the other
+  // viewer's unread.
   const newest = rows[rows.length - 1];
   useEffect(() => {
     if (!newest || !detail) return;
-    if (newest.sender_id === viewer.id) return; // own messages don't count as unread
-    if (!nearBottomRef.current) return;
     if (lastReadMsgRef.current === newest.id) return;
+    const ownLatest = newest.sender_id === viewer.id;
+    if (!ownLatest && !nearBottomRef.current) return;
     lastReadMsgRef.current = newest.id;
-    const t = window.setTimeout(() => {
-      void markRead.mutate();
-    }, 400);
+    const t = window.setTimeout(
+      () => {
+        void markRead.mutate();
+      },
+      ownLatest ? 0 : 400,
+    );
     return () => window.clearTimeout(t);
   }, [newest?.id, newest, detail, markRead, viewer.id]);
 
   const pinned = useMemo(() => rows.filter((m) => m.is_pinned && !m.deleted_at), [rows]);
+
+  // Distinct senders across the loaded thread. WhatsApp shows the contact name
+  // above an incoming group only when MORE than one other person could send
+  // (e.g. doctor AND admin), not for a plain doctor↔patient conversation.
+  const uniqueSenderCount = useMemo(() => new Set(rows.map((m) => m.sender_id ?? "")).size, [rows]);
+
+  /** Resolve a sender's display name (for the WhatsApp group header label). */
+  function senderLabel(m: ConsultationMessageRow): string {
+    const p = detail?.participants.find((x) => x.userId === m.sender_id);
+    if (p?.fullName) return p.fullName;
+    if (m.sender_role === "patient") return detail?.appointment?.patientName ?? "Patient";
+    if (m.sender_role === "doctor") return "Doctor";
+    return "Doctor";
+  }
 
   // The recipient's read marker — the "other" participant of this conversation.
   const otherReadAt = useMemo<string | null>(() => {
@@ -256,7 +302,11 @@ export function ConsultationChat({
     setErrorMsg(null);
     setPendingDownloadId(m.id);
     try {
-      const { url, fileName } = await getConsultationAttachmentUrl(conversationId, m.id);
+      const { url, fileName } = await getConsultationAttachmentUrl(
+        conversationId,
+        m.id,
+        authSurface,
+      );
       openSignedDownload(url, fileName || m.attachments?.[0]?.file_name || "download");
     } catch (e) {
       setErrorMsg(
@@ -348,24 +398,6 @@ export function ConsultationChat({
                   <X className="h-4 w-4" />
                 </Button>
               )}
-              {detail?.appointment?.vcNo && (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  aria-label="Open video call"
-                  title="Open video call"
-                  className="h-9 w-9 shrink-0"
-                  onClick={() =>
-                    window.open(
-                      `/video/${detail.appointment!.vcNo}${isStaff ? "?as=doctor" : ""}`,
-                      "_blank",
-                      "noopener,noreferrer",
-                    )
-                  }
-                >
-                  <Video className="h-4 w-4 text-primary" />
-                </Button>
-              )}
             </div>
           </div>
         </div>
@@ -417,22 +449,6 @@ export function ConsultationChat({
                     aria-label="Toggle follow-up chat"
                   />
                 </label>
-              )}
-              {detail?.appointment?.vcNo && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() =>
-                    window.open(
-                      `/video/${detail.appointment!.vcNo}${isStaff ? "?as=doctor" : ""}`,
-                      "_blank",
-                      "noopener,noreferrer",
-                    )
-                  }
-                >
-                  <Video className="h-4 w-4 text-primary" /> Open Video
-                </Button>
               )}
               <Button
                 variant="outline"
@@ -500,10 +516,25 @@ export function ConsultationChat({
                 <div className="space-y-1">
                   {rows.map((m, i) => {
                     const prev = rows[i - 1];
-                    const isDayBoundary =
-                      !prev ||
-                      new Date(m.created_at).getDate() !== new Date(prev.created_at).getDate();
+                    const next = rows[i + 1];
+                    const sameDay = (a: string, b: string) =>
+                      new Date(a).getDate() === new Date(b).getDate();
+                    const isDayBoundary = !prev || !sameDay(prev.created_at, m.created_at);
+                    const groupedWithPrev =
+                      !isDayBoundary &&
+                      prev.sender_id === m.sender_id &&
+                      Date.parse(m.created_at) - Date.parse(prev.created_at) <= GROUP_GAP_MS;
+                    const groupedWithNext =
+                      !!next &&
+                      sameDay(m.created_at, next.created_at) &&
+                      next.sender_id === m.sender_id &&
+                      Date.parse(next.created_at) - Date.parse(m.created_at) <= GROUP_GAP_MS;
+                    // Deleted placeholders break the group (they render their
+                    // own plain box and must not inherit a stacked corner).
+                    const firstOfGroup = !m.deleted_at && !groupedWithPrev;
+                    const lastOfGroup = !m.deleted_at && !groupedWithNext;
                     const mine = m.sender_id === viewer.id;
+                    const showHeader = !mine && firstOfGroup && uniqueSenderCount > 2;
                     return (
                       <div key={m.id}>
                         {isDayBoundary && (
@@ -513,7 +544,19 @@ export function ConsultationChat({
                             </span>
                           </div>
                         )}
-                        <div id={`msg-${m.id}`} className="group py-1">
+                        <div
+                          id={`msg-${m.id}`}
+                          className={cn(
+                            "group",
+                            firstOfGroup && lastOfGroup
+                              ? "py-1"
+                              : firstOfGroup
+                                ? "pt-1 pb-0.5"
+                                : lastOfGroup
+                                  ? "pt-0.5 pb-1"
+                                  : "py-0.5",
+                          )}
+                        >
                           <div
                             className={cn(
                               "flex w-full min-w-0",
@@ -526,6 +569,11 @@ export function ConsultationChat({
                                 mine ? "items-end" : "items-start",
                               )}
                             >
+                              {showHeader && (
+                                <div className="mb-0.5 ml-1 text-[11px] font-semibold text-muted-foreground">
+                                  {senderLabel(m)}
+                                </div>
+                              )}
                               {m.deleted_at ? (
                                 <div className="max-w-full wrap-anywhere rounded-2xl bg-muted/60 px-4 py-2 text-xs italic text-muted-foreground">
                                   Message deleted
@@ -587,8 +635,28 @@ export function ConsultationChat({
                                       className={cn(
                                         "min-w-0 max-w-full rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm",
                                         mine
-                                          ? "rounded-br-md bg-primary text-primary-foreground"
-                                          : "rounded-bl-md border border-border bg-card text-foreground",
+                                          ? cn(
+                                              "bg-primary text-primary-foreground",
+                                              firstOfGroup && lastOfGroup && "rounded-br-md",
+                                              firstOfGroup && !lastOfGroup && "rounded-br-none",
+                                              !firstOfGroup &&
+                                                lastOfGroup &&
+                                                "rounded-tr-none rounded-br-md",
+                                              !firstOfGroup &&
+                                                !lastOfGroup &&
+                                                "rounded-tr-none rounded-br-none",
+                                            )
+                                          : cn(
+                                              "border border-border bg-card text-foreground",
+                                              firstOfGroup && lastOfGroup && "rounded-bl-md",
+                                              firstOfGroup && !lastOfGroup && "rounded-bl-none",
+                                              !firstOfGroup &&
+                                                lastOfGroup &&
+                                                "rounded-tl-none rounded-bl-md",
+                                              !firstOfGroup &&
+                                                !lastOfGroup &&
+                                                "rounded-tl-none rounded-bl-none",
+                                            ),
                                       )}
                                     >
                                       {m.message_type === "file" ? (
@@ -614,13 +682,15 @@ export function ConsultationChat({
                                         {m.is_pinned && (
                                           <Pin className="h-3 w-3" aria-label="Pinned" />
                                         )}
-                                        <span className="whitespace-nowrap">
-                                          {formatConversationTime(m.created_at)}
-                                        </span>
-                                        {m.edited_at && (
+                                        {lastOfGroup && (
+                                          <span className="whitespace-nowrap">
+                                            {formatConversationTime(m.created_at)}
+                                          </span>
+                                        )}
+                                        {m.edited_at && lastOfGroup && (
                                           <span className="whitespace-nowrap">· edited</span>
                                         )}
-                                        {mine && (
+                                        {mine && lastOfGroup && (
                                           <ReadTicks
                                             read={isReadByRecipient(m)}
                                             className={cn(
@@ -750,6 +820,7 @@ export function ConsultationChat({
             client={client}
             conversationId={conversationId}
             myUserId={viewer.id}
+            authSurface={authSurface}
             disabled={readOnly}
             replyingTo={replyingTo}
             onClearReply={() => setReplyingTo(null)}
@@ -781,6 +852,7 @@ export function ConsultationChat({
                   client={client}
                   conversationId={conversationId}
                   isStaff={isStaff}
+                  authSurface={authSurface}
                   detail={detail}
                 />
               </div>

@@ -98,7 +98,10 @@ function AdminServices() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Services</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Manage consultation services</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Full CRUD for consultation services — changes appear on the website's “Service
+            Professional” section and the booking page.
+          </p>
         </div>
         <Button onClick={openCreate}>
           <Plus className="h-4 w-4" /> Add Service
@@ -199,9 +202,19 @@ function AdminServices() {
                 <label className="text-sm font-medium text-foreground">Price (Rs.)</label>
                 <Input
                   type="number"
-                  value={form.price}
-                  onChange={(e) => setForm({ ...form, price: +e.target.value })}
+                  placeholder="Free / decide on call"
+                  value={form.price || ""}
+                  onChange={(e) => {
+                    const raw = +e.target.value;
+                    setForm({
+                      ...form,
+                      price: e.target.value === "" || Number.isNaN(raw) ? 0 : raw,
+                    });
+                  }}
                 />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Leave empty when the fee is discussed separately with the patient.
+                </p>
               </div>
             </div>
             <div className="flex items-center justify-between rounded-xl border border-border px-4 py-3">

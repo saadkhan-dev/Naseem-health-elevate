@@ -17,12 +17,14 @@ import {
   sendConsultationMessage,
   uploadConsultationAttachment,
   markConversationRead,
+  markStaffConversationRead,
   fetchConversationAttachments,
   type SaveSummaryInput,
   type StaffHistoryFilters,
 } from "@/lib/consultation-data";
 import type {
   AttachmentKind,
+  AuthSurface,
   ConsultationMessageRow,
   ConsultationRole,
   ConversationStatus,
@@ -99,6 +101,20 @@ export function useConsultationRealtime(client: SupabaseClient) {
         { event: "UPDATE", schema: "public", table: "consultation_participants" },
         refreshAll,
       )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "consultation_participants" },
+        refreshAll,
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "consultation_conversations",
+        },
+        refreshAll,
+      )
       .subscribe();
 
     return () => {
@@ -114,27 +130,39 @@ export function useConsultationRealtime(client: SupabaseClient) {
 
 // --- Conversation lifecycle -------------------------------------------------
 
-export function useConsultationDetail(conversationId: string, enabled = true) {
+export function useConsultationDetail(
+  conversationId: string,
+  enabled = true,
+  surface: AuthSurface,
+) {
   return useQuery({
     queryKey: consultationKeys.detail(conversationId),
-    queryFn: () => getConsultationDetail(conversationId),
+    queryFn: () => getConsultationDetail(conversationId, surface),
     enabled: enabled && !!conversationId,
   });
 }
 
-export function useConsultationEnsure(appointmentId: string | null, enabled = true) {
+export function useConsultationEnsure(
+  appointmentId: string | null,
+  enabled = true,
+  surface: AuthSurface,
+) {
   return useQuery({
     queryKey: ["consultation", "ensure", appointmentId ?? "__none__"],
-    queryFn: () => ensureConsultationConversation(appointmentId!),
+    queryFn: () => ensureConsultationConversation(appointmentId!, surface),
     enabled: enabled && !!appointmentId,
     retry: false,
   });
 }
 
-export function useConsultationTimeline(conversationId: string, enabled = true) {
+export function useConsultationTimeline(
+  conversationId: string,
+  enabled = true,
+  surface: AuthSurface,
+) {
   return useQuery({
     queryKey: consultationKeys.timeline(conversationId),
-    queryFn: () => getConsultationTimeline(conversationId),
+    queryFn: () => getConsultationTimeline(conversationId, surface),
     enabled: enabled && !!conversationId,
   });
 }
@@ -298,10 +326,10 @@ export function useConsultationMessages(
 
 // --- Sending ----------------------------------------------------------------
 
-export function useSendConsultationMessage(conversationId: string) {
+export function useSendConsultationMessage(conversationId: string, surface: AuthSurface) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: string) => sendConsultationMessage({ conversationId, body }),
+    mutationFn: (body: string) => sendConsultationMessage({ conversationId, body }, surface),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["consultation", "history"] });
       qc.invalidateQueries({ queryKey: consultationKeys.unread() });
@@ -313,16 +341,21 @@ export function useSendConsultationMessage(conversationId: string) {
 export function useUploadConsultationAttachment(
   client: SupabaseClient,
   input: { conversationId: string; userId: string },
+  surface: AuthSurface,
 ) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ file, attachmentType }: { file: File; attachmentType: AttachmentKind }) =>
-      uploadConsultationAttachment(client, {
-        conversationId: input.conversationId,
-        userId: input.userId,
-        file,
-        attachmentType,
-      }),
+      uploadConsultationAttachment(
+        client,
+        {
+          conversationId: input.conversationId,
+          userId: input.userId,
+          file,
+          attachmentType,
+        },
+        surface,
+      ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["consultation", "history"] });
       qc.invalidateQueries({ queryKey: consultationKeys.unread() });
@@ -334,11 +367,18 @@ export function useUploadConsultationAttachment(
 export function useMarkConversationRead(
   client: SupabaseClient,
   conversationId: string,
-  userId: string,
+  viewer: { id: string; role: ConsultationRole },
 ) {
   const qc = useQueryClient();
+  // Patients mark read through the direct RLS path (their row always exists);
+  // staff go through the server function, which upserts a participant row when
+  // the viewer (e.g. an admin) isn't already one.
+  const isStaff = viewer.role !== "patient";
   return useMutation({
-    mutationFn: () => markConversationRead(client, conversationId, userId),
+    mutationFn: () =>
+      isStaff
+        ? markStaffConversationRead(conversationId)
+        : markConversationRead(client, conversationId, viewer.id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["consultation", "history"] });
       qc.invalidateQueries({ queryKey: consultationKeys.unread() });
@@ -348,19 +388,19 @@ export function useMarkConversationRead(
 
 // --- Message actions --------------------------------------------------------
 
-export function useEditConsultationMessage(conversationId: string) {
+export function useEditConsultationMessage(conversationId: string, surface: AuthSurface) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ messageId, body }: { messageId: string; body: string }) =>
-      editConsultationMessage(messageId, body),
+      editConsultationMessage(messageId, body, surface),
     onSuccess: () => qc.invalidateQueries({ queryKey: consultationKeys.messages(conversationId) }),
   });
 }
 
-export function useDeleteConsultationMessage(conversationId: string) {
+export function useDeleteConsultationMessage(conversationId: string, surface: AuthSurface) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (messageId: string) => deleteConsultationMessage(messageId),
+    mutationFn: (messageId: string) => deleteConsultationMessage(messageId, surface),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: consultationKeys.messages(conversationId) });
       qc.invalidateQueries({ queryKey: ["consultation", "history"] });
@@ -368,11 +408,11 @@ export function useDeleteConsultationMessage(conversationId: string) {
   });
 }
 
-export function useToggleConsultationPin(conversationId: string) {
+export function useToggleConsultationPin(conversationId: string, surface: AuthSurface) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ messageId, pinned }: { messageId: string; pinned: boolean }) =>
-      togglePinConsultationMessage(messageId, pinned),
+      togglePinConsultationMessage(messageId, pinned, surface),
     onSuccess: () => qc.invalidateQueries({ queryKey: consultationKeys.messages(conversationId) }),
   });
 }

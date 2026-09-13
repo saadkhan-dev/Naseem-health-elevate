@@ -225,7 +225,7 @@ export const FALLBACK_SERVICES: Service[] = [
   },
 ];
 
-/** All 7 approved reviews currently shown on the live site (newest first). */
+/** Approved reviews currently shown on the live site (newest first). */
 export const FALLBACK_REVIEWS: Review[] = [
   {
     id: "b5ef872c-9700-4651-81d4-e28359d7f083",
@@ -266,36 +266,6 @@ export const FALLBACK_REVIEWS: Review[] = [
     status: "approved",
     patient_id: null,
     created_at: "2026-08-13T16:23:10.548709+00:00",
-  },
-  {
-    id: "664751ab-0acb-4a74-aff1-5f2c4c8c1e8a",
-    name: "Google Reviewer",
-    rating: 5,
-    text: "Professional and caring service with a comfortable and welcoming environment.",
-    is_active: true,
-    status: "approved",
-    patient_id: null,
-    created_at: SEED_TS,
-  },
-  {
-    id: "037389bb-83f5-4cf7-b1b1-a7a2b1212d4d",
-    name: "Google Reviewer",
-    rating: 5,
-    text: "Very good experience with the treatment and professional guidance.",
-    is_active: true,
-    status: "approved",
-    patient_id: null,
-    created_at: SEED_TS,
-  },
-  {
-    id: "63ad4c66-5cea-4831-99d3-28152a846fdf",
-    name: "Google Reviewer",
-    rating: 5,
-    text: "A positive experience with attentive care and proper guidance.",
-    is_active: true,
-    status: "approved",
-    patient_id: null,
-    created_at: SEED_TS,
   },
 ];
 

@@ -11,6 +11,7 @@ import {
   getStaffHistory,
   getTimeline,
   getUnreadTotalForUser,
+  markConversationReadServer,
   saveSummary,
   setConversationStatus,
   editMessage,
@@ -48,47 +49,94 @@ const uuidSchema = z.string().uuid("Invalid id");
 /**
  * Identity-aware auth middleware for consultation server functions.
  *
- * The browser keeps TWO independent sessions — the public/patient client
- * (`supabase`) and the staff client (`staffSupabase`), in separate storage
- * keys — so one request can carry tokens for TWO different users. When both
- * exist, choosing the wrong one made patient-only endpoints run their check
- * against the STAFF identity and throw "Forbidden" for real patients.
+ * ROOT-CAUSE FIX (sender misattribution): the browser keeps TWO independent
+ * sessions — the public/patient client (`supabase`) and the staff client
+ * (`staffSupabase`), in separate storage keys — so one request can carry
+ * tokens for TWO different users. `consultationSendMessage` etc. always
+ * inserted with `context.userId` = whichever token won, which used to default
+ * to the endpoint's `prefer` order. When a staff member's browser ALSO stored
+ * a public (patient) session — both apps share one origin — a staff message
+ * was inserted with the PATIENT's user id and the patient side rendered it as
+ * their own message (green bubble, "mine"). The same class of bug let a
+ * patient-only check run against a staff identity.
  *
- * `roles` declares which identities this endpoint may run as; `prefer` decides
- * which session's token is tried first. A token is ONLY accepted when it
- * resolves to a profile whose role is in `roles`, so one session can never
- * impersonate the other. Patient-only endpoints prefer the public token, so a
- * lingering admin/doctor session can never break the patient side.
+ * The fix: the caller declares `surface: "public" | "staff"` in the payload
+ * (`data.surface`, stripped by the zod validators before the handlers). When
+ * declared, the CLIENT middleware sends ONLY that session's token (the other
+ * one is dropped and never leaves the browser), and the SERVER middleware
+ * considers ONLY that surface's token — an unambiguous single identity per
+ * call, with the endpoint's `prefer` order kept purely as the fallback for
+ * legacy callers that do not pass `surface`.
+ *
+ * `roles` declares which identities this endpoint may run as. A token is ONLY
+ * accepted when it resolves to a profile whose role is in `roles`, so one
+ * session can never impersonate the other even via the fallback path.
  */
 interface ConsultAuthContract {
   roles: ConsultationRole[];
   prefer: "public" | "staff";
 }
 
+/** Read the caller-declared surface from the raw payload (never validated/stripped yet). */
+function surfaceOf(data: unknown): "public" | "staff" | null {
+  if (typeof data !== "object" || data === null) return null;
+  const candidate = (data as Record<string, unknown>).surface;
+  return candidate === "public" || candidate === "staff" ? candidate : null;
+}
+
+/** Token bundle the middleware carries between browser and server. */
+type TokenBundle = { publicToken: string | null; staffToken: string | null };
+
+/**
+ * Declared on every consultation validator the data layer sends `surface`
+ * through. Routed by the auth middleware BEFORE validation, then ignored by
+ * the handlers (zod keeps it in the parsed output but nothing reads it).
+ */
+const surfaceField = z.enum(["public", "staff"]).optional();
+
 const consultationAuthMiddleware = ({ roles, prefer }: ConsultAuthContract) =>
   createMiddleware({ type: "function" })
-    .client(async ({ next }) => {
-      const publicToken =
+    .client(async ({ next, data }) => {
+      const publicToken: string | null =
         typeof window !== "undefined"
           ? ((await supabase.auth.getSession()).data.session?.access_token ?? null)
           : null;
-      const staffToken =
+      const staffToken: string | null =
         typeof window !== "undefined"
           ? ((await staffSupabase.auth.getSession()).data.session?.access_token ?? null)
           : null;
-      return next({ sendContext: { publicToken, staffToken } });
+      const surface = surfaceOf(data);
+      // Always send the SAME `{ publicToken, staffToken }` shape; the declared
+      // surface's sibling token is simply dropped (null) so it never leaves
+      // the browser and the identity is unambiguous on the server.
+      if (surface === "public") {
+        return next({
+          sendContext: { publicToken, staffToken: null } as TokenBundle,
+        });
+      }
+      if (surface === "staff") {
+        return next({
+          sendContext: { publicToken: null, staffToken } as TokenBundle,
+        });
+      }
+      return next({ sendContext: { publicToken, staffToken } as TokenBundle });
     })
-    .server(async ({ next, context }) => {
+    .server(async ({ next, context, data }) => {
+      const surface = surfaceOf(data);
       const ordered =
-        prefer === "public"
-          ? ([
-              { token: context?.publicToken ?? null },
-              { token: context?.staffToken ?? null },
-            ] as const)
-          : ([
-              { token: context?.staffToken ?? null },
-              { token: context?.publicToken ?? null },
-            ] as const);
+        surface === "public"
+          ? ([{ token: context?.publicToken ?? null }] as const)
+          : surface === "staff"
+            ? ([{ token: context?.staffToken ?? null }] as const)
+            : prefer === "public"
+              ? ([
+                  { token: context?.publicToken ?? null },
+                  { token: context?.staffToken ?? null },
+                ] as const)
+              : ([
+                  { token: context?.staffToken ?? null },
+                  { token: context?.publicToken ?? null },
+                ] as const);
 
       const admin = getSupabaseAdmin();
       for (const { token } of ordered) {
@@ -145,6 +193,7 @@ const historyFiltersSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
   hasAttachments: z.boolean().optional(),
+  surface: surfaceField,
 });
 
 export const consultationGetStaffHistory = createServerFn({ method: "POST" })
@@ -159,7 +208,29 @@ export const consultationGetStaffHistory = createServerFn({ method: "POST" })
       to: data.to ?? null,
       hasAttachments: data.hasAttachments ?? null,
     };
-    return getStaffHistory(getSupabaseAdmin(), filters);
+    return getStaffHistory(getSupabaseAdmin(), filters, context.userId);
+  });
+
+// ---------------------------------------------------------------------------
+// Mark a conversation read (staff path — patients use the direct RLS update)
+// ---------------------------------------------------------------------------
+
+export const consultationMarkConversationRead = createServerFn({ method: "POST" })
+  .middleware([
+    consultationAuthMiddleware({ roles: ["patient", "doctor", "admin"], prefer: "staff" }),
+  ])
+  .validator(
+    z.object({
+      conversationId: uuidSchema,
+      surface: surfaceField,
+    }),
+  )
+  .handler(async ({ data, context }): Promise<void> => {
+    return markConversationReadServer(getSupabaseAdmin(), {
+      conversationId: data.conversationId,
+      userId: context.userId,
+      role: context.role,
+    });
   });
 
 // ---------------------------------------------------------------------------
@@ -173,6 +244,7 @@ export const consultationEnsureConversation = createServerFn({ method: "POST" })
   .validator(
     z.object({
       appointmentId: uuidSchema,
+      surface: surfaceField,
     }),
   )
   .handler(async ({ data, context }): Promise<ConversationEnsureView> => {
@@ -194,6 +266,7 @@ export const consultationGetDetail = createServerFn({ method: "POST" })
   .validator(
     z.object({
       conversationId: uuidSchema,
+      surface: surfaceField,
     }),
   )
   .handler(async ({ data, context }): Promise<ConsultationDetailView> => {
@@ -214,6 +287,7 @@ export const consultationSetStatus = createServerFn({ method: "POST" })
     z.object({
       conversationId: uuidSchema,
       status: z.enum(["active", "read_only"]),
+      surface: surfaceField,
     }),
   )
   .handler(async ({ data, context }): Promise<ConversationStatus> => {
@@ -245,6 +319,7 @@ export const consultationSaveSummary = createServerFn({ method: "POST" })
         additional_notes: z.string().max(8000).optional(),
         status: z.enum(["draft", "final"]),
       }),
+      surface: surfaceField,
     }),
   )
   .handler(async ({ data, context }): Promise<ConsultationDetailView["summary"]> => {
@@ -268,6 +343,7 @@ export const consultationEditMessage = createServerFn({ method: "POST" })
     z.object({
       messageId: uuidSchema,
       body: z.string().trim().min(1).max(4000),
+      surface: surfaceField,
     }),
   )
   .handler(async ({ data, context }) => {
@@ -286,6 +362,7 @@ export const consultationDeleteMessage = createServerFn({ method: "POST" })
   .validator(
     z.object({
       messageId: uuidSchema,
+      surface: surfaceField,
     }),
   )
   .handler(async ({ data, context }) => {
@@ -304,6 +381,7 @@ export const consultationTogglePin = createServerFn({ method: "POST" })
     z.object({
       messageId: uuidSchema,
       pinned: z.boolean(),
+      surface: surfaceField,
     }),
   )
   .handler(async ({ data, context }) => {
@@ -323,6 +401,7 @@ export const consultationGetAttachmentUrl = createServerFn({ method: "POST" })
     z.object({
       conversationId: uuidSchema,
       messageId: uuidSchema,
+      surface: surfaceField,
     }),
   )
   .handler(async ({ data, context }) => {
@@ -343,6 +422,7 @@ export const consultationSendMessage = createServerFn({ method: "POST" })
       conversationId: uuidSchema,
       body: z.string().trim().min(1).max(4000),
       replyToId: uuidSchema.nullable().optional(),
+      surface: surfaceField,
     }),
   )
   .handler(async ({ data, context }) => {
@@ -362,6 +442,7 @@ const consultationFileMessageSchema = z.object({
   mimeType: z.string().trim().max(200).default("application/octet-stream"),
   size: z.number().int().nonnegative().max(50_000_000),
   attachmentType: z.enum(ATTACHMENT_KINDS),
+  surface: surfaceField,
 });
 
 export const consultationCreateFileMessage = createServerFn({ method: "POST" })
@@ -405,6 +486,7 @@ export const consultationUploadAttachment = createServerFn({ method: "POST" })
       size: z.number().int().positive().max(ATTACHMENT_MAX_BYTES),
       fileBase64: z.string().min(1).max(30_000_000),
       attachmentType: z.enum(ATTACHMENT_KINDS),
+      surface: surfaceField,
     }),
   )
   .handler(async ({ data, context }) => {
@@ -427,6 +509,7 @@ export const consultationGetTimeline = createServerFn({ method: "POST" })
   .validator(
     z.object({
       conversationId: uuidSchema,
+      surface: surfaceField,
     }),
   )
   .handler(async ({ data, context }) => {

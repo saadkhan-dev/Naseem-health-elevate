@@ -109,6 +109,61 @@ async function ensureParticipant(
   );
 }
 
+/**
+ * Mark a conversation read for a specific user (server-side, service-role).
+ *
+ * Staff ("doctor"/"admin") often have NO participant row for a conversation
+ * (the admin may not be the participant auto-added at booking), so a plain
+ * RLS-scoped UPDATE from the client affects 0 rows. This upserts the viewer's
+ * own `consultation_participants` row — keeping the per-user `last_read_at`
+ * read marker intact. Patients are routed through the direct RLS path, but
+ * the server fn still guards patients so it can never mark another patient's
+ * conversation (defence-in-depth over the middleware check).
+ */
+export async function markConversationReadServer(
+  admin: SupabaseClient,
+  input: { conversationId: string; userId: string; role: ConsultationRole },
+): Promise<void> {
+  if (input.role === "patient") {
+    const { data: conversation } = await admin
+      .from("consultation_conversations")
+      .select("appointment_id")
+      .eq("id", input.conversationId)
+      .maybeSingle();
+    if (!conversation) throw new Error("Conversation not found");
+    const { data: appointment } = await admin
+      .from("appointments")
+      .select("patient_id")
+      .eq("id", conversation.appointment_id as string)
+      .maybeSingle();
+    if (!appointment || (appointment.patient_id as string | null) !== input.userId) {
+      throw new Error("Forbidden");
+    }
+  }
+
+  const lastReadAt = new Date().toISOString();
+  const { data: existing } = await admin
+    .from("consultation_participants")
+    .select("id")
+    .eq("conversation_id", input.conversationId)
+    .eq("user_id", input.userId)
+    .maybeSingle();
+  if (existing) {
+    await admin
+      .from("consultation_participants")
+      .update({ last_read_at: lastReadAt })
+      .eq("conversation_id", input.conversationId)
+      .eq("user_id", input.userId);
+  } else {
+    await admin.from("consultation_participants").insert({
+      conversation_id: input.conversationId,
+      user_id: input.userId,
+      role: input.role,
+      last_read_at: lastReadAt,
+    });
+  }
+}
+
 async function recordEvent(
   admin: SupabaseClient,
   input: {
@@ -132,6 +187,29 @@ async function recordEvent(
   } catch {
     // Audit enrichment is best-effort; never break the primary operation.
   }
+}
+
+/**
+ * Resolve the patient's stored booking name for a conversation (works for
+ * guest bookings too — the appointment always records `patient_name`).
+ */
+async function getConversationPatientName(
+  admin: SupabaseClient,
+  conversationId: string,
+): Promise<string | null> {
+  const { data: conv } = await admin
+    .from("consultation_conversations")
+    .select("appointment_id")
+    .eq("id", conversationId)
+    .maybeSingle();
+  if (!conv) return null;
+  const { data: appt } = await admin
+    .from("appointments")
+    .select("patient_name")
+    .eq("id", conv.appointment_id as string)
+    .maybeSingle();
+  const stored = (appt?.patient_name as string | null)?.trim();
+  return stored || null;
 }
 
 /**
@@ -276,6 +354,7 @@ async function loadConversationHistoryDirect(
   admin: SupabaseClient,
   opts: {
     userId?: string | null;
+    viewerId?: string | null;
     q?: string | null;
     status?: ConversationStatus | null;
     from?: string | null;
@@ -283,7 +362,7 @@ async function loadConversationHistoryDirect(
     hasAttachments?: boolean | null;
   },
 ): Promise<ConversationSummaryView[]> {
-  const { userId, q, status, from, to, hasAttachments } = opts;
+  const { userId, viewerId, q, status, from, to, hasAttachments } = opts;
 
   const { data: convs, error: convError } = await admin
     .from("consultation_conversations")
@@ -377,20 +456,17 @@ async function loadConversationHistoryDirect(
     list.push(m);
     msgsByConvo.set(cid, list);
   }
-  // Patient mode: unread is measured against the viewer's own read marker.
-  // Staff mode: unread is measured against the patient participant's marker
-  // (mirrors `consultation_history_for_staff`).
+  // Unread is ALWAYS measured against the VIEWER's own read marker:
+  //   * patient mode — the patient viewer (same security boundary as the RPC);
+  //   * staff mode — the staff member looking at the list, NOT the patient's
+  //     marker. This is what lets an admin's badge clear the moment they open
+  //     the conversation (markers are per-user; the patient's marker only
+  //     tracks what the PATIENT has read).
+  const unreadViewerId = viewerId ?? userId ?? null;
   const viewerReadAtByConvo = new Map<string, string | null>();
-  const patientReadAtByConvo = new Map<string, string | null>();
   for (const p of (participants.data as unknown as Record<string, unknown>[]) ?? []) {
-    const cid = p.conversation_id as string;
-    const lastReadAt = (p.last_read_at as string | null) ?? null;
-    if (userId != null && (p.user_id as string) === userId) {
-      viewerReadAtByConvo.set(cid, lastReadAt);
-    }
-    if ((p.role as string) === "patient") {
-      patientReadAtByConvo.set(cid, lastReadAt);
-    }
+    if (unreadViewerId == null || (p.user_id as string) !== unreadViewerId) continue;
+    viewerReadAtByConvo.set(p.conversation_id as string, (p.last_read_at as string | null) ?? null);
   }
   const attachmentsByConvo = new Set<string>();
   for (const a of (attachments.data as unknown as { conversation_id: string }[]) ?? []) {
@@ -438,13 +514,10 @@ async function loadConversationHistoryDirect(
     const msgs = msgsByConvo.get(r.id) ?? [];
     const liveMsgs = msgs.filter((m) => m.deleted_at == null);
     const lastMsg = liveMsgs.length > 0 ? liveMsgs[liveMsgs.length - 1] : null;
-    const readAt =
-      userId != null
-        ? (viewerReadAtByConvo.get(r.id) ?? null)
-        : (patientReadAtByConvo.get(r.id) ?? null);
+    const readAt = viewerReadAtByConvo.get(r.id) ?? null;
     let unread = 0;
     for (const m of liveMsgs) {
-      if (userId != null && m.sender_id === userId) continue;
+      if (unreadViewerId != null && m.sender_id === unreadViewerId) continue;
       const sentAt = m.created_at as string;
       if (readAt == null || sentAt > readAt) unread += 1;
     }
@@ -561,6 +634,7 @@ export async function getPatientHistory(
 export async function getStaffHistory(
   admin: SupabaseClient,
   filters: ConsultationHistoryFilters,
+  viewerId: string,
 ): Promise<ConversationSummaryView[]> {
   // The single search box matches a name/email/appointment, OR a date — when the
   // query starts with digits (e.g. "2026-09" or "2026-09-12") it is treated as
@@ -579,6 +653,7 @@ export async function getStaffHistory(
       p_from: filters.from || null,
       p_to: filters.to || null,
       p_has_attachments: filters.hasAttachments ?? null,
+      p_viewer_id: viewerId,
     });
     if (error) throw error;
     const rows = ((data as unknown as HistoryRpcRow[]) ?? []).map(mapHistoryRow);
@@ -589,6 +664,7 @@ export async function getStaffHistory(
       const rows = await attachPatientGender(
         admin,
         await loadConversationHistoryDirect(admin, {
+          viewerId,
           q: nameQuery,
           status: filters.status ?? null,
           from: filters.from ?? null,
@@ -984,10 +1060,11 @@ export async function sendMessage(
   // doctor → patient direction is already covered by the
   // `consultation_notify_patient` trigger, so nothing is added here for it.
   if (input.senderRole === "patient") {
+    const patientName = await getConversationPatientName(admin, input.conversationId);
     await createAdminNotification(admin, {
       type: "patient_message",
       title: "New patient message",
-      body: "A patient sent a new message in a consultation.",
+      body: `${patientName ?? "A patient"} sent a new message in a consultation.`,
       link: `/admin/consultations/${input.conversationId}`,
       dedupKey: buildAdminNotificationDedupKey("patient_message", (data as { id: string }).id),
     });
@@ -1106,10 +1183,11 @@ export async function createFileMessage(
   // Best-effort admin notification for patient-sent file/attachment messages
   // (mirrors the text-message notification in `sendMessage`).
   if (input.senderRole === "patient") {
+    const patientName = await getConversationPatientName(admin, input.conversationId);
     await createAdminNotification(admin, {
       type: "patient_message",
       title: "New patient message",
-      body: "A patient uploaded a file in a consultation.",
+      body: `${patientName ?? "A patient"} uploaded a file in a consultation.`,
       link: `/admin/consultations/${input.conversationId}`,
       dedupKey: buildAdminNotificationDedupKey("patient_message", message.id),
     });

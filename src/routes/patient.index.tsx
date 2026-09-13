@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
   Video,
@@ -13,6 +14,7 @@ import {
   Link2,
   Copy,
   MessageSquare,
+  Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,16 +34,33 @@ import {
   useMarkAllNotificationsRead,
   useCancelMyAppointment,
   useRescheduleMyAppointment,
+  useRespondRescheduleRequest,
   useMyTestRecommendations,
   useMarkTestRecommendationCompleted,
 } from "@/hooks/queries/usePatient";
 import { usePatientConsultationHistory } from "@/hooks/useConsultation";
 import { ensureConsultationConversation } from "@/lib/consultation-data";
-import { formatTimeDisplay } from "@/lib/bookings";
+import {
+  formatTimeDisplay,
+  getAvailability,
+  getBookedSlots,
+  generateTimeSlots,
+} from "@/lib/bookings";
 import { scrollToHash } from "@/lib/scroll";
+import { todayInClinic, nowTimeInClinic } from "@/lib/clinic";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { APPOINTMENT_STATUS_LABELS, type AppointmentStatusValue } from "@/lib/notifications";
 import { QueryError } from "@/components/admin/QueryError";
 import { NotificationList } from "@/components/notifications/NotificationList";
+import { VideoPaymentStep } from "@/components/site/VideoPaymentStep";
+import { useAuth } from "@/hooks/useAuth";
+import { PAYMENT_STATUS_LABELS, type PaymentStatus } from "@/lib/payment";
 
 export const Route = createFileRoute("/patient/")({
   component: PatientDashboard,
@@ -55,6 +74,15 @@ const statusStyles: Record<string, string> = {
   cancelled: "bg-red-100 text-red-700",
   arrived: "bg-teal-100 text-teal-700",
   no_show: "bg-gray-100 text-gray-700",
+};
+
+const paymentStatusStyles: Record<string, string> = {
+  payment_pending: "bg-amber-100 text-amber-700",
+  payment_submitted: "bg-sky-100 text-sky-700",
+  payment_verified: "bg-emerald-100 text-emerald-700",
+  payment_failed: "bg-red-100 text-red-700",
+  refunded: "bg-gray-100 text-gray-700",
+  waived: "bg-teal-100 text-teal-700",
 };
 
 function NotificationsPanel() {
@@ -184,17 +212,68 @@ function RescheduleDialog({
   const [date, setDate] = useState(appointment.date);
   const [time, setTime] = useState(appointment.time ?? "");
   const [msg, setMsg] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   const reschedule = useRescheduleMyAppointment();
+  const duration = appointment.durationMinutes;
+
+  // Same slot grid the admin (and the booking page) use, so the patient only
+  // ever picks times that are actually available and can't double-book.
+  useEffect(() => {
+    if (!date) {
+      setAvailableTimes([]);
+      setLoading(false);
+      return;
+    }
+    if (duration == null) {
+      // Flexible timing service (e.g. Home Visit) — no fixed slot grid.
+      setAvailableTimes([]);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    Promise.all([getAvailability(), getBookedSlots(date)])
+      .then(([availability, booked]) => {
+        if (cancelled) return;
+        const times = generateTimeSlots(
+          availability,
+          new Date(date + "T00:00:00"),
+          booked,
+          duration,
+          todayInClinic(),
+          nowTimeInClinic(),
+        );
+        setAvailableTimes(times);
+        setTime((cur) => (times.includes(cur) ? cur : (times[0] ?? "")));
+      })
+      .catch(() => {
+        if (!cancelled) setAvailableTimes([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [date, duration]);
 
   async function handleSave() {
     setMsg("");
+    if (duration != null && !time) {
+      setMsg("Please pick a time slot.");
+      return;
+    }
     const result = await reschedule.mutateAsync({
       id: appointment.id,
       date,
-      time: time || null,
+      time: duration == null ? null : time,
     });
-    setMsg(result.error ?? "Appointment rescheduled.");
-    if (!result.error) onClose();
+    if (result.error) {
+      setMsg(result.error);
+    } else {
+      onClose();
+    }
   }
 
   return (
@@ -207,13 +286,36 @@ function RescheduleDialog({
           min={format(new Date(), "yyyy-MM-dd")}
           onChange={(e) => setDate(e.target.value)}
         />
-        <Input
-          type="time"
-          value={time}
-          onChange={(e) => setTime(e.target.value)}
-          placeholder="Flexible"
-        />
+        {duration == null ? (
+          <div className="rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+            This service has no fixed slot — the doctor confirms the time.
+          </div>
+        ) : loading ? (
+          <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Checking slots...
+          </div>
+        ) : availableTimes.length === 0 ? (
+          <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            No open slots available for this date.
+          </div>
+        ) : (
+          <Select value={time} onValueChange={setTime}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select a time" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableTimes.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {formatTimeDisplay(t)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
+      <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+        The clinic will confirm your requested time before it is applied to your appointment.
+      </p>
       <div className="mt-2 flex gap-2">
         <Button
           size="sm"
@@ -222,7 +324,7 @@ function RescheduleDialog({
           className="h-8 text-xs"
         >
           {reschedule.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-          Save
+          Send Request
         </Button>
         <Button size="sm" variant="outline" onClick={onClose} className="h-8 text-xs">
           Cancel
@@ -304,10 +406,16 @@ function JoinVideoDialog({
 function PatientDashboard() {
   const router = useRouter();
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { user, profile } = useAuth();
   const { data: appointments, isLoading, isError, error } = useMyAppointments();
   const { data: consultationHistory } = usePatientConsultationHistory();
   const cancel = useCancelMyAppointment();
+  const respondReschedule = useRespondRescheduleRequest();
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
+  const [paymentAppointment, setPaymentAppointment] = useState<
+    import("@/lib/patient-data").PatientAppointment | null
+  >(null);
   const [joiningVideo, setJoiningVideo] = useState<
     import("@/lib/patient-data").PatientAppointment | null
   >(null);
@@ -320,6 +428,15 @@ function PatientDashboard() {
     [consultationHistory],
   );
 
+  /** Patient accepts or declines a reschedule request raised by the clinic. */
+  async function handleRespondReschedule(
+    a: import("@/lib/patient-data").PatientAppointment,
+    action: "accept" | "decline",
+  ) {
+    const result = await respondReschedule.mutateAsync({ id: a.id, action });
+    setReschedulingId(null);
+  }
+
   async function handleJoinVideo(a: import("@/lib/patient-data").PatientAppointment) {
     const vcNo = a.vcNo;
     if (!vcNo) {
@@ -329,14 +446,14 @@ function PatientDashboard() {
     setJoiningAppointmentId(a.id);
     try {
       const conversationId = convoByAppointment.get(a.id);
-      const id = conversationId ?? (await ensureConsultationConversation(a.id)).conversationId;
+      const id =
+        conversationId ?? (await ensureConsultationConversation(a.id, "public")).conversationId;
       // Open the video page in a new tab (it holds the Google Meet link)…
       window.open(`/video/${vcNo}`, "_blank", "noopener,noreferrer");
       // …and bring the SAME appointment's chat into the current tab.
       navigate({
         to: "/patient/consultations/$id",
         params: { id },
-        search: { openVideo: vcNo },
       });
     } catch {
       setJoiningVideo(a);
@@ -349,7 +466,8 @@ function PatientDashboard() {
     setOpeningChatId(a.id);
     try {
       const conversationId = convoByAppointment.get(a.id);
-      const id = conversationId ?? (await ensureConsultationConversation(a.id)).conversationId;
+      const id =
+        conversationId ?? (await ensureConsultationConversation(a.id, "public")).conversationId;
       navigate({ to: "/patient/consultations/$id", params: { id } });
     } catch {
       navigate({ to: "/patient/consultations" });
@@ -364,6 +482,15 @@ function PatientDashboard() {
       await router.navigate({ to: "/", hash: "booking" });
     }
     scrollToHash("booking");
+  }
+
+  /** Same destination as the "Video Consultation" button on the home section. */
+  async function goToVideoConsultationSection(e: React.MouseEvent) {
+    e.preventDefault();
+    if (window.location.pathname !== "/") {
+      await router.navigate({ to: "/", hash: "video-consultation" });
+    }
+    scrollToHash("video-consultation");
   }
 
   return (
@@ -421,12 +548,74 @@ function PatientDashboard() {
                     <Badge className={`${statusStyles[a.status] ?? statusStyles.pending}`}>
                       {APPOINTMENT_STATUS_LABELS[a.status as AppointmentStatusValue] ?? a.status}
                     </Badge>
+                    {a.rescheduleStatus === "pending" && a.rescheduleRequestedBy === "staff" && (
+                      <Badge className="bg-sky-100 text-sky-700">
+                        Reschedule Pending — Confirm
+                      </Badge>
+                    )}
+                    {a.rescheduleStatus === "pending" && a.rescheduleRequestedBy === "patient" && (
+                      <Badge className="bg-amber-100 text-amber-700">Reschedule Requested</Badge>
+                    )}
+                    {a.rescheduleStatus === "none" && a.lastRescheduledAt && (
+                      <Badge className="bg-emerald-100 text-emerald-700">Rescheduled</Badge>
+                    )}
                     {a.isVideo && (
                       <Badge className="bg-purple-100 text-purple-700">
                         <Video className="mr-1 h-3 w-3" /> Video
                       </Badge>
                     )}
                   </div>
+                  {a.rescheduleStatus === "pending" && a.rescheduleRequestedBy === "staff" && (
+                    <div className="mt-2 rounded-xl border border-sky-200 bg-sky-50 p-3">
+                      <div className="text-xs font-semibold text-sky-800">
+                        The clinic rescheduled your appointment
+                      </div>
+                      <div className="mt-1 text-sm text-foreground">
+                        {a.rescheduleDate &&
+                          format(new Date(`${a.rescheduleDate}T00:00:00`), "EEEE, MMMM d, yyyy")}
+                        {a.rescheduleTime && <> at {formatTimeDisplay(a.rescheduleTime)}</>}
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-muted-foreground">
+                        Confirm the new time to apply it, or decline to keep your current slot.
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          className="h-8 text-xs"
+                          disabled={respondReschedule.isPending}
+                          onClick={() => handleRespondReschedule(a, "accept")}
+                        >
+                          {respondReschedule.isPending ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <CheckCheck className="h-3.5 w-3.5" />
+                          )}
+                          Accept / OK
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs text-red-600"
+                          disabled={respondReschedule.isPending}
+                          onClick={() => handleRespondReschedule(a, "decline")}
+                        >
+                          Decline
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {a.rescheduleStatus === "pending" && a.rescheduleRequestedBy === "patient" && (
+                    <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                      <div className="text-xs font-semibold text-amber-800">
+                        Reschedule request sent — awaiting clinic approval
+                      </div>
+                      <div className="mt-1 text-sm text-foreground">
+                        {a.rescheduleDate &&
+                          format(new Date(`${a.rescheduleDate}T00:00:00`), "EEEE, MMMM d, yyyy")}
+                        {a.rescheduleTime && <> at {formatTimeDisplay(a.rescheduleTime)}</>}
+                      </div>
+                    </div>
+                  )}
                   <div className="mt-1 text-sm text-muted-foreground">
                     {format(new Date(`${a.date}T00:00:00`), "EEEE, MMMM d, yyyy")}
                     {a.time && <> at {formatTimeDisplay(a.time)}</>}
@@ -460,9 +649,82 @@ function PatientDashboard() {
                       </button>
                     </div>
                   )}
+                  {a.isVideo && a.paymentStatus && (
+                    <div className="mt-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                            paymentStatusStyles[a.paymentStatus] ?? "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {PAYMENT_STATUS_LABELS[a.paymentStatus as PaymentStatus] ??
+                            a.paymentStatus}
+                        </span>
+                        {a.paymentAmount != null && (
+                          <span className="text-xs text-foreground">
+                            Amount:{" "}
+                            <span className="font-semibold">
+                              Rs. {Number(a.paymentAmount).toLocaleString()}
+                            </span>
+                          </span>
+                        )}
+                        {a.paymentMethod && (
+                          <span className="text-xs text-muted-foreground">
+                            Method: <span className="font-medium">{a.paymentMethod}</span>
+                          </span>
+                        )}
+                        {a.paymentReference && (
+                          <span className="text-xs text-muted-foreground">
+                            Ref:{" "}
+                            <code className="rounded bg-background px-1 py-0.5 font-mono">
+                              {a.paymentReference}
+                            </code>
+                          </span>
+                        )}
+                        {a.paymentVerifiedAt && (
+                          <span className="text-xs text-muted-foreground">
+                            Verified:{" "}
+                            <span className="font-medium">
+                              {format(new Date(a.paymentVerifiedAt), "MMM d, h:mm a")}
+                            </span>
+                          </span>
+                        )}
+                      </div>
+                      {(a.paymentStatus === "payment_pending" ||
+                        a.paymentStatus === "payment_failed") && (
+                        <div className="mt-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setPaymentAppointment(a)}
+                          >
+                            <Wallet className="mr-1 h-3.5 w-3.5" />
+                            {a.paymentStatus === "payment_failed"
+                              ? "Resubmit Payment"
+                              : "Submit Payment"}
+                          </Button>
+                          <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                            {a.paymentStatus === "payment_failed"
+                              ? "Your previous payment was not accepted. Please resubmit your payment proof so the clinic can verify it."
+                              : "Complete the prepaid payment so the clinic can verify and unlock your video call."}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  {a.isVideo && a.status === "completed" && (
+                    <a
+                      href="/#video-consultation"
+                      onClick={goToVideoConsultationSection}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground"
+                    >
+                      <Video className="h-3.5 w-3.5" /> Book New Video Consultation
+                    </a>
+                  )}
                   {a.isVideo &&
+                    a.status !== "completed" &&
                     a.status !== "cancelled" &&
                     a.status !== "rejected" &&
                     a.status !== "no_show" && (
@@ -518,7 +780,7 @@ function PatientDashboard() {
                       <CalendarX className="h-3.5 w-3.5" /> Cancel
                     </Button>
                   )}
-                  {a.canReschedule && (
+                  {a.canReschedule && (!a.rescheduleStatus || a.rescheduleStatus === "none") && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -581,7 +843,62 @@ function PatientDashboard() {
       {joiningVideo && (
         <JoinVideoDialog appointment={joiningVideo} onClose={() => setJoiningVideo(null)} />
       )}
+
+      {paymentAppointment && (
+        <PaymentDialog
+          appointment={paymentAppointment}
+          patientName={profile?.full_name ?? "Patient"}
+          phone={profile?.phone ?? undefined}
+          email={user?.email ?? undefined}
+          onClose={() => {
+            setPaymentAppointment(null);
+            void qc.invalidateQueries({ queryKey: ["patient", "appointments"] });
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/** Patient-side payment submission/resubmission for a video consultation —
+ *  reuses the same Option 1 / Option 2 flow shown right after booking. */
+function PaymentDialog({
+  appointment,
+  patientName,
+  phone,
+  email,
+  onClose,
+}: {
+  appointment: import("@/lib/patient-data").PatientAppointment;
+  patientName: string;
+  phone?: string;
+  email?: string;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Complete Your Prepaid Payment</DialogTitle>
+          <DialogDescription>
+            Submit your payment proof so the clinic can verify and unlock your video consultation.
+          </DialogDescription>
+        </DialogHeader>
+        <VideoPaymentStep
+          appointmentId={appointment.id}
+          appointmentNo={appointment.appointmentNo}
+          amount={appointment.paymentAmount ?? 0}
+          offerTitle={appointment.offerTitle}
+          isWaived={appointment.paymentStatus === "waived"}
+          date={new Date(`${appointment.date}T00:00:00`)}
+          time={appointment.time ?? ""}
+          patientName={patientName}
+          phone={phone}
+          email={email}
+          onClose={onClose}
+        />
+      </DialogContent>
+    </Dialog>
   );
 }
 

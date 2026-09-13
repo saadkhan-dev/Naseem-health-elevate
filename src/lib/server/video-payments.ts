@@ -26,6 +26,7 @@ function isVideoConsultationName(name: string | null | undefined): boolean {
 interface VideoAppointmentRow {
   id: string;
   patient_id: string | null;
+  patient_name: string | null;
   status: string;
   payment_status: string;
   payment_amount: number | null;
@@ -38,7 +39,9 @@ async function loadVideoAppointment(
 ): Promise<{ error: string; row?: undefined } | { error: null; row: VideoAppointmentRow }> {
   const { data: row } = await admin
     .from("appointments")
-    .select("id, patient_id, status, payment_status, payment_amount, services:service_id (name)")
+    .select(
+      "id, patient_id, patient_name, status, payment_status, payment_amount, services:service_id (name)",
+    )
     .eq("id", appointmentId)
     .maybeSingle();
 
@@ -108,7 +111,7 @@ export async function submitVideoPaymentForAppointment(
   await createAdminNotification(admin, {
     type: "payment_update",
     title: "Payment proof submitted",
-    body: "A payment proof was submitted for a video consultation.",
+    body: `${loaded.row.patient_name?.trim() || "A patient"} submitted a payment proof for a video consultation.`,
     link: "/admin/payments",
     dedupKey: buildAdminNotificationDedupKey(
       "payment_update",
@@ -169,7 +172,7 @@ async function findVideoAppointmentByIdentifier(
   let query = admin
     .from("appointments")
     .select(
-      "id, patient_id, status, payment_status, payment_amount, payment_method, payment_reference, payment_submitted_at, payment_verified_at, payment_receipt_url, appointment_no, services:service_id (name)",
+      "id, patient_id, patient_name, status, payment_status, payment_amount, payment_method, payment_reference, payment_submitted_at, payment_verified_at, payment_receipt_url, appointment_no, services:service_id (name)",
     )
     .order("created_at", { ascending: false })
     .limit(1);
@@ -330,7 +333,9 @@ export async function submitVideoPaymentReceipt(
   await createAdminNotification(admin, {
     type: "payment_update",
     title: "Payment proof submitted",
-    body: `A payment receipt was uploaded for video consultation ${loaded.row.appointment_no ?? ""}.`,
+    body: `${loaded.row.patient_name?.trim() || "A patient"} uploaded a payment receipt for video consultation ${
+      loaded.row.appointment_no ?? ""
+    }.`,
     link: "/admin/payments",
     dedupKey: buildAdminNotificationDedupKey(
       "payment_update",
@@ -417,7 +422,9 @@ export async function submitVideoPaymentByIdentifier(
   await createAdminNotification(admin, {
     type: "payment_update",
     title: "Payment proof submitted",
-    body: `A payment proof was submitted for video consultation ${loaded.row.appointment_no ?? ""}.`,
+    body: `${loaded.row.patient_name?.trim() || "A patient"} submitted a payment proof for video consultation ${
+      loaded.row.appointment_no ?? ""
+    }.`,
     link: "/admin/payments",
     dedupKey: buildAdminNotificationDedupKey(
       "payment_update",
@@ -525,11 +532,21 @@ export async function setVideoPaymentStatus(
       refunded: "Payment refunded",
       waived: "Payment waived",
     };
+    const amount = row.payment_amount;
+    const amountText = amount != null ? `Rs. ${amount}` : "";
+    const bodies: Record<string, string> = {
+      payment_verified: `Your video consultation payment${amountText ? ` of ${amountText}` : ""} has been verified. You can now join your video call.`,
+      payment_failed: `Your video consultation payment${amountText ? ` of ${amountText}` : ""} was not accepted. Please contact the clinic or resubmit from your dashboard.`,
+      refunded: `Your video consultation payment${amountText ? ` of ${amountText}` : ""} has been refunded.`,
+      waived: "Your video consultation was marked as free — no payment is needed.",
+    };
     await createPatientNotification(admin, {
       userId: row.patient_id,
       type: "payment",
       title: labels[input.status] ?? "Payment updated",
-      body: `Your video consultation payment is now "${input.status.replace("payment_", "")}".`,
+      body:
+        bodies[input.status] ??
+        `Your video consultation payment is now "${input.status.replace("payment_", "")}".`,
       link: "/patient",
     });
   }

@@ -33,6 +33,7 @@ const RECEIPT_TYPES: Record<string, string> = {
 interface OrderRow {
   id: string;
   patient_id: string | null;
+  name: string | null;
   order_no: string | null;
   status: string;
   payment_status: string;
@@ -51,7 +52,7 @@ async function loadOrder(admin: SupabaseClient, orderId: string): Promise<OrderR
   const { data } = await admin
     .from("orders")
     .select(
-      "id, patient_id, order_no, status, payment_status, payment_amount, payment_method, payment_reference, payment_payer_name, payment_payer_phone, payment_payer_email, payment_submitted_at, payment_verified_at, payment_receipt_url",
+      "id, patient_id, name, order_no, status, payment_status, payment_amount, payment_method, payment_reference, payment_payer_name, payment_payer_phone, payment_payer_email, payment_submitted_at, payment_verified_at, payment_receipt_url",
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -124,7 +125,9 @@ export async function submitOrderPaymentForOrder(
   await createAdminNotification(admin, {
     type: "payment_update",
     title: "Payment proof submitted",
-    body: `A payment proof was submitted for order ${order.order_no ?? ""}.`,
+    body: `${order.name?.trim() || "A customer"} submitted a payment proof for order ${
+      order.order_no ?? ""
+    }.`,
     link: "/admin/payments",
     dedupKey: buildAdminNotificationDedupKey("payment_update", `order:${order.id}:${submittedAt}`),
   });
@@ -150,7 +153,7 @@ async function findOrderByIdentifier(
   let query = admin
     .from("orders")
     .select(
-      "id, patient_id, order_no, status, payment_status, payment_amount, payment_method, payment_reference, payment_payer_name, payment_payer_phone, payment_payer_email, payment_submitted_at, payment_verified_at, payment_receipt_url",
+      "id, patient_id, name, order_no, status, payment_status, payment_amount, payment_method, payment_reference, payment_payer_name, payment_payer_phone, payment_payer_email, payment_submitted_at, payment_verified_at, payment_receipt_url",
     )
     .order("created_at", { ascending: false })
     .limit(1);
@@ -229,7 +232,9 @@ export async function submitOrderPaymentByIdentifier(
   await createAdminNotification(admin, {
     type: "payment_update",
     title: "Payment proof submitted",
-    body: `A payment proof was submitted for order ${order.order_no ?? ""}.`,
+    body: `${order.name?.trim() || "A customer"} submitted a payment proof for order ${
+      order.order_no ?? ""
+    }.`,
     link: "/admin/payments",
     dedupKey: buildAdminNotificationDedupKey("payment_update", `order:${order.id}`),
   });
@@ -326,7 +331,9 @@ export async function submitOrderPaymentReceipt(
   await createAdminNotification(admin, {
     type: "payment_update",
     title: "Payment proof submitted",
-    body: `A payment receipt was uploaded for order ${order.order_no ?? ""}.`,
+    body: `${order.name?.trim() || "A customer"} uploaded a payment receipt for order ${
+      order.order_no ?? ""
+    }.`,
     link: "/admin/payments",
     dedupKey: buildAdminNotificationDedupKey("payment_update", `order:${order.id}:${submittedAt}`),
   });

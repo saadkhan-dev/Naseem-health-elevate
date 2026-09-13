@@ -38,9 +38,9 @@ function VideoChatPage() {
   const appointment = join?.appointment ?? null;
   const appointmentId = appointment?.appointmentId ?? null;
 
-  const ensure = useConsultationEnsure(appointmentId, !!user && !!appointmentId);
+  const ensure = useConsultationEnsure(appointmentId, !!user && !!appointmentId, "public");
   const conversationId = ensure.data?.conversationId ?? null;
-  const detail = useConsultationDetail(conversationId ?? "", !!conversationId);
+  const detail = useConsultationDetail(conversationId ?? "", !!conversationId, "public");
 
   const doctorName =
     detail.data?.participants.find((p) => p.role === "doctor" || p.role === "admin")?.fullName ??

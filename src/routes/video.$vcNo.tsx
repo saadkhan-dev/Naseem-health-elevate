@@ -72,7 +72,7 @@ function VideoCallPage() {
     if (!isDoctor) return;
     setOpeningChat(true);
     try {
-      const result = await ensureConsultationConversation(join.appointment.appointmentId);
+      const result = await ensureConsultationConversation(join.appointment.appointmentId, "staff");
       navigate({ to: "/admin/consultations/$id", params: { id: result.conversationId } });
     } catch {
       setOpeningChat(false);

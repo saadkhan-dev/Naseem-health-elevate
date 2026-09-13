@@ -392,10 +392,11 @@ create trigger consultation_touch_conversation
 
 -- ---------------------------------------------------------------------------
 -- 9) In-app notification for the patient when the clinic replies.
---    Debounced (max ~1 notification per conversation every 10 minutes) so a
---    realtime back-and-forth does not spam the notification center or start
---    an email for every message. SECURITY DEFINER — the patient_notifications
---    row is written like the rest of the app (service-role style).
+--    Debounced per conversation (max ~1 notification per conversation every
+--    10 minutes) so a realtime back-and-forth does not spam the notification
+--    center or start an email for every message. The title names the actual
+--    sending doctor. SECURITY DEFINER — the patient_notifications row is
+--    written like the rest of the app (service-role style).
 -- ---------------------------------------------------------------------------
 create or replace function public.consultation_notify_patient()
 returns trigger
@@ -407,6 +408,7 @@ declare
   v_patient_id uuid;
   v_status text;
   v_appointment_no text;
+  v_doctor_name text;
 begin
   if new.sender_role <> 'doctor' then
     return new;
@@ -431,18 +433,32 @@ begin
   inner join public.consultation_conversations c on c.appointment_id = a.id
   where c.id = new.conversation_id;
 
+  select coalesce(nullif(btrim(p.full_name), ''), 'the doctor') into v_doctor_name
+  from public.profiles p
+  where p.id = new.sender_id;
+
+  -- Per-conversation debounce: the link encodes the conversation id, so
+  -- matching on it scopes the 10-minute guard to THIS conversation.
   if not exists (
     select 1 from public.patient_notifications n
     where n.user_id = v_patient_id
       and n.type = 'consultation_message'
+      and n.link = '/patient/consultations/' || new.conversation_id::text
       and n.created_at > now() - interval '10 minutes'
   ) then
     insert into public.patient_notifications (user_id, type, title, body, link)
     values (
       v_patient_id,
       'consultation_message',
-      case when v_appointment_no is not null then 'New message · ' || v_appointment_no else 'New message' end,
-      left(coalesce(new.body, ''), 140),
+      case
+        when v_appointment_no is not null
+          then 'New message from ' || v_doctor_name || ' (' || v_appointment_no || ')'
+        else 'New message from ' || v_doctor_name
+      end,
+      case
+        when length(btrim(coalesce(new.body, ''))) > 0 then left(new.body, 140)
+        else 'sent a file'
+      end,
       '/patient/consultations/' || new.conversation_id::text
     );
   end if;
@@ -625,7 +641,8 @@ create or replace function public.consultation_history_for_staff(
   p_status text default null,
   p_from date default null,
   p_to date default null,
-  p_has_attachments boolean default null
+  p_has_attachments boolean default null,
+  p_viewer_id uuid default null
 )
 returns table (
   conversation_id uuid,
@@ -678,11 +695,14 @@ begin
       pr.full_name as patient_name,
       pr.phone as patient_phone,
       a.patient_email as patient_email,
+      me.last_read_at as viewer_last_read_at,
       c.id as cid
     from public.consultation_conversations c
     join public.appointments a on a.id = c.appointment_id
     left join public.services s on s.id = a.service_id
     left join public.profiles pr on pr.id = a.patient_id
+    left join public.consultation_participants me
+      on me.conversation_id = c.id and me.user_id = p_viewer_id
     left join lateral (
       select v.vc_no, v.status
       from public.video_sessions v
@@ -720,11 +740,11 @@ begin
     (
       select count(*)::bigint
       from public.consultation_messages m
-      join public.consultation_participants mp
-        on mp.conversation_id = b.cid and mp.role = 'patient'
       where m.conversation_id = b.cid
         and m.deleted_at is null
-        and (mp.last_read_at is null or m.created_at > mp.last_read_at)
+        and m.sender_id <> p_viewer_id
+        and p_viewer_id is not null
+        and (b.viewer_last_read_at is null or m.created_at > b.viewer_last_read_at)
     ) as unread_count,
     (
       select m.body

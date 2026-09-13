@@ -26,6 +26,27 @@ export type PatientNotificationType =
   | "order"
   | "general";
 
+/**
+ * Resolve a display name for a patient/customer used in notification bodies.
+ * Prefers the name stored with the booking/order (works for guest bookings),
+ * then the profile's `full_name` for a signed-in patient. Returns `null` when
+ * neither is available — callers fall back to a generic label.
+ */
+export async function resolvePatientName(
+  admin: SupabaseClient,
+  opts: { patientId?: string | null; storedName?: string | null },
+): Promise<string | null> {
+  const stored = opts.storedName?.trim();
+  if (stored) return stored;
+  if (!opts.patientId) return null;
+  const { data } = await admin
+    .from("profiles")
+    .select("full_name")
+    .eq("id", opts.patientId)
+    .maybeSingle();
+  return data?.full_name ?? null;
+}
+
 export async function createPatientNotification(
   admin: SupabaseClient,
   input: {

@@ -86,7 +86,9 @@ export async function createService(data: {
   duration_minutes: number | null;
   price: number;
 }) {
-  const { error } = await supabase.from("services").insert(data);
+  const { error } = await supabase
+    .from("services")
+    .insert({ ...data, duration_minutes: data.duration_minutes ?? null, price: data.price ?? 0 });
   return { error: error?.message ?? null };
 }
 

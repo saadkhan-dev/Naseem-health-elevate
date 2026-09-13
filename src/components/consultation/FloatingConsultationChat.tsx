@@ -50,9 +50,9 @@ export function FloatingConsultationChat({ client, appointmentId, vcNo, enabled 
   const initializedRef = useRef(false);
   const seenNotifRef = useRef<Set<string>>(new Set());
 
-  const ensure = useConsultationEnsure(enabled ? appointmentId : null, enabled);
+  const ensure = useConsultationEnsure(enabled ? appointmentId : null, enabled, "public");
   const conversationId = ensure.data?.conversationId ?? null;
-  const detail = useConsultationDetail(conversationId ?? "", enabled && !!conversationId);
+  const detail = useConsultationDetail(conversationId ?? "", enabled && !!conversationId, "public");
   const live = useConsultationMessages(
     client,
     conversationId ?? "",

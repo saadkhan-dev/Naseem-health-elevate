@@ -26,20 +26,28 @@ import {
   useSaveConsultationSummary,
 } from "@/hooks/useConsultation";
 import { getConsultationAttachmentUrl } from "@/lib/consultation-data";
-import type { ConsultationDetailView } from "@/lib/consultation-types";
+import type { AuthSurface, ConsultationDetailView } from "@/lib/consultation-types";
 import { openSignedDownload } from "@/components/consultation/shared";
 
 interface Props {
   client: SupabaseClient;
   conversationId: string;
   isStaff: boolean;
+  /** Same surface the chat is rendered under; threads to server-fn calls. */
+  authSurface: AuthSurface;
   detail?: ConsultationDetailView | null;
 }
 
-export function ConsultationSidePanel({ client, conversationId, isStaff, detail }: Props) {
+export function ConsultationSidePanel({
+  client,
+  conversationId,
+  isStaff,
+  authSurface,
+  detail,
+}: Props) {
   const summary = detail?.summary ?? null;
   const saveSummary = useSaveConsultationSummary(conversationId);
-  const timeline = useConsultationTimeline(conversationId, true);
+  const timeline = useConsultationTimeline(conversationId, true, authSurface);
   const attachments = useConsultationAttachments(client, conversationId, true);
   const [downloads, setDownloads] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +103,11 @@ export function ConsultationSidePanel({ client, conversationId, isStaff, detail 
       return;
     }
     try {
-      const { url, fileName } = await getConsultationAttachmentUrl(conversationId, att.message_id);
+      const { url, fileName } = await getConsultationAttachmentUrl(
+        conversationId,
+        att.message_id,
+        authSurface,
+      );
       setDownloads((prev) => ({ ...prev, [att.id]: url }));
       openSignedDownload(url, fileName || att.file_name || "download");
     } catch (e) {

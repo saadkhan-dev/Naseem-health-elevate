@@ -17,7 +17,7 @@ function PatientConsultations() {
   const { user } = useAuth();
   const { data, isLoading, isError, error, refetch } = usePatientConsultationHistory();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const detail = useConsultationDetail(selectedId ?? "", !!selectedId);
+  const detail = useConsultationDetail(selectedId ?? "", !!selectedId, "public");
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
@@ -72,6 +72,7 @@ function PatientConsultations() {
                 to="/patient/consultations"
                 active={item.conversationId === selectedId}
                 onSelect={() => setSelectedId(item.conversationId)}
+                listFor="patient"
               />
             ))
           )}

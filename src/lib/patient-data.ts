@@ -3,6 +3,7 @@ import {
   patientClaimAppointment,
   patientCancelAppointment,
   patientRescheduleAppointment,
+  patientApplyRescheduleAppointment,
   patientGetMyNotifications,
   patientMarkNotificationRead,
   patientMarkAllNotificationsRead,
@@ -128,6 +129,14 @@ export async function rescheduleMyAppointment(
   time: string | null,
 ): Promise<{ error: string | null }> {
   return patientRescheduleAppointment({ data: { id, date, time } });
+}
+
+/** Patient responds to a reschedule request raised by the clinic. */
+export async function respondRescheduleRequest(
+  id: string,
+  action: "accept" | "decline",
+): Promise<{ error: string | null }> {
+  return patientApplyRescheduleAppointment({ data: { id, action } });
 }
 
 export async function getMyNotifications(): Promise<PatientNotification[]> {

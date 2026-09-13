@@ -3,6 +3,7 @@ import {
   consultationGetPatientHistory,
   consultationGetUnreadTotal,
   consultationGetStaffHistory,
+  consultationMarkConversationRead,
   consultationEnsureConversation,
   consultationGetDetail,
   consultationSetStatus,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/consultation.functions";
 import type {
   AttachmentKind,
+  AuthSurface,
   ConsultationAttachmentRow,
   ConsultationDetailView,
   ConsultationEventRow,
@@ -61,26 +63,28 @@ export interface StaffHistoryFilters {
 export async function getStaffConsultationHistory(
   filters: StaffHistoryFilters = {},
 ): Promise<ConversationSummaryView[]> {
-  return consultationGetStaffHistory({ data: filters });
+  return consultationGetStaffHistory({ data: { ...filters, surface: "staff" } });
 }
 
 export async function ensureConsultationConversation(
   appointmentId: string,
+  surface: AuthSurface,
 ): Promise<ConversationEnsureView> {
-  return consultationEnsureConversation({ data: { appointmentId } });
+  return consultationEnsureConversation({ data: { appointmentId, surface } });
 }
 
 export async function getConsultationDetail(
   conversationId: string,
+  surface: AuthSurface,
 ): Promise<ConsultationDetailView> {
-  return consultationGetDetail({ data: { conversationId } });
+  return consultationGetDetail({ data: { conversationId, surface } });
 }
 
 export async function setConsultationStatus(
   conversationId: string,
   status: ConversationStatus,
 ): Promise<ConversationStatus> {
-  return consultationSetStatus({ data: { conversationId, status } });
+  return consultationSetStatus({ data: { conversationId, status, surface: "staff" } });
 }
 
 export interface SaveSummaryInput {
@@ -99,25 +103,34 @@ export async function saveConsultationSummary(
   conversationId: string,
   data: SaveSummaryInput,
 ): Promise<ConsultationDetailView["summary"]> {
-  return consultationSaveSummary({ data: { conversationId, data } });
+  return consultationSaveSummary({ data: { conversationId, data, surface: "staff" } });
 }
 
-export async function editConsultationMessage(messageId: string, body: string) {
-  return consultationEditMessage({ data: { messageId, body } });
+export async function editConsultationMessage(
+  messageId: string,
+  body: string,
+  surface: AuthSurface,
+) {
+  return consultationEditMessage({ data: { messageId, body, surface } });
 }
 
-export async function deleteConsultationMessage(messageId: string) {
-  return consultationDeleteMessage({ data: { messageId } });
+export async function deleteConsultationMessage(messageId: string, surface: AuthSurface) {
+  return consultationDeleteMessage({ data: { messageId, surface } });
 }
 
-export async function togglePinConsultationMessage(messageId: string, pinned: boolean) {
-  return consultationTogglePin({ data: { messageId, pinned } });
+export async function togglePinConsultationMessage(
+  messageId: string,
+  pinned: boolean,
+  surface: AuthSurface,
+) {
+  return consultationTogglePin({ data: { messageId, pinned, surface } });
 }
 
 export async function getConsultationTimeline(
   conversationId: string,
+  surface: AuthSurface,
 ): Promise<ConsultationEventRow[]> {
-  return consultationGetTimeline({ data: { conversationId } });
+  return consultationGetTimeline({ data: { conversationId, surface } });
 }
 
 /**
@@ -131,9 +144,10 @@ export async function getConsultationTimeline(
 export async function getConsultationAttachmentUrl(
   conversationId: string,
   messageId: string,
+  surface: AuthSurface,
 ): Promise<{ url: string; fileName: string }> {
   return consultationGetAttachmentUrl({
-    data: { conversationId, messageId },
+    data: { conversationId, messageId, surface },
   });
 }
 
@@ -179,16 +193,20 @@ export async function fetchConversationMessages(
  * still verifies the caller is a participant and the conversation is active.
  * `sender_id` is always the JWT user id from the middleware context.
  */
-export async function sendConsultationMessage(input: {
-  conversationId: string;
-  body: string;
-  replyToId?: string | null;
-}): Promise<ConsultationMessageRow> {
+export async function sendConsultationMessage(
+  input: {
+    conversationId: string;
+    body: string;
+    replyToId?: string | null;
+  },
+  surface: AuthSurface,
+): Promise<ConsultationMessageRow> {
   return consultationSendMessage({
     data: {
       conversationId: input.conversationId,
       body: input.body,
       replyToId: input.replyToId ?? null,
+      surface,
     },
   });
 }
@@ -230,6 +248,7 @@ export async function uploadConsultationAttachment(
     file: File;
     attachmentType: AttachmentKind;
   },
+  surface: AuthSurface,
 ): Promise<ConsultationMessageRow> {
   const { conversationId, file, attachmentType } = input;
   if (file.size > ATTACHMENT_MAX_BYTES) {
@@ -250,6 +269,7 @@ export async function uploadConsultationAttachment(
         size: file.size,
         fileBase64,
         attachmentType,
+        surface,
       },
     });
   } catch (e) {
@@ -273,6 +293,15 @@ export async function markConversationRead(
     .update({ last_read_at: new Date().toISOString() })
     .eq("conversation_id", conversationId)
     .eq("user_id", userId);
+}
+
+/**
+ * Staff-side mark-read. Staff (especially admins) often have no participant
+ * row for a conversation, so the direct RLS update would affect 0 rows; the
+ * server function upserts the viewer's own row with the service-role client.
+ */
+export async function markStaffConversationRead(conversationId: string): Promise<void> {
+  await consultationMarkConversationRead({ data: { conversationId, surface: "staff" } });
 }
 
 /** Generate a short-lived signed URL for a private attachment. */

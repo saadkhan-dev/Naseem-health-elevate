@@ -18,6 +18,12 @@ interface Props {
   /** Overrides the main title (e.g. the patient's name for the staff list). */
   contactName?: string | null;
   patientGender?: string | null;
+  /**
+   * Which surface renders this list. "You" in the last-sender prefix means
+   * different people on each list: the patient on the patient list, the
+   * doctor/admin on the staff list. Optional — defaults to the patient list.
+   */
+  listFor?: "patient" | "staff";
 }
 
 export function ConversationListItem({
@@ -27,6 +33,7 @@ export function ConversationListItem({
   onSelect,
   contactName,
   patientGender,
+  listFor = "patient",
 }: Props) {
   const title = contactName || item.serviceName || item.appointmentNo || "Consultation";
   const meta = [
@@ -37,6 +44,20 @@ export function ConversationListItem({
   ]
     .filter(Boolean)
     .join(" · ");
+
+  // "You" depends on the surface: patient list users ASK the patient, staff
+  // list users ARE the doctor (or admin) so a patient-sent last message must
+  // read "Patient:" not "You:".
+  const lastSenderLabel =
+    item.lastSenderRole == null
+      ? ""
+      : listFor === "staff"
+        ? item.lastSenderRole === "patient"
+          ? "Patient"
+          : "You"
+        : item.lastSenderRole === "doctor"
+          ? "Doctor"
+          : "You";
 
   return (
     <Link
@@ -80,7 +101,7 @@ export function ConversationListItem({
 
       <div className="mt-2 flex items-center justify-between gap-2">
         <p className="truncate text-sm text-muted-foreground">
-          {item.lastSenderRole ? `${item.lastSenderRole === "doctor" ? "Doctor" : "You"}: ` : ""}
+          {lastSenderLabel ? `${lastSenderLabel}: ` : ""}
           {snippetOf(item.lastBody, item.hasAttachments)}
         </p>
         {item.hasAttachments && (

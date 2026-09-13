@@ -18,6 +18,7 @@ import {
   getVideoPaymentStatus,
   setVideoPricing,
   rescheduleAppointment,
+  applyReschedule,
   getVideoOffers,
   createVideoOffer,
   updateVideoOffer,
@@ -216,6 +217,19 @@ export function useRescheduleAppointment() {
   return useMutation({
     mutationFn: ({ id, date, time }: { id: string; date: string; time: string | null }) =>
       rescheduleAppointment(id, date, time),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "appointments"] });
+      qc.invalidateQueries({ queryKey: ["bookedSlots"] });
+    },
+  });
+}
+
+/** Admin approves or rejects a pending reschedule request raised by the patient. */
+export function useApplyReschedule() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, action }: { id: string; action: "approve" | "reject" }) =>
+      applyReschedule(id, action),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "appointments"] });
       qc.invalidateQueries({ queryKey: ["bookedSlots"] });

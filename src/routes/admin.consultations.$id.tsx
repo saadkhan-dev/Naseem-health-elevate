@@ -14,7 +14,7 @@ function AdminConversationView() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const { user } = useStaffAuth();
-  const { data: detail, isLoading, isError, error } = useConsultationDetail(id);
+  const { data: detail, isLoading, isError, error } = useConsultationDetail(id, true, "staff");
 
   if (isLoading || !user) {
     return (
