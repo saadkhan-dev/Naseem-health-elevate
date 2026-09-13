@@ -218,8 +218,8 @@ function BookingPage() {
             </Link>
           </div>
 
-          <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,420px)_1fr]">
-            <div className="rounded-3xl border border-border bg-card p-5 shadow-soft md:p-6">
+          <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,420px)_1fr]">
+            <div className="min-w-0 rounded-3xl border border-border bg-card p-5 shadow-soft md:p-6">
               <h2 className="font-display text-lg font-semibold text-primary">1. Choose Service</h2>
               <Select
                 value={serviceId}
@@ -268,7 +268,7 @@ function BookingPage() {
               </p>
             </div>
 
-            <div className="rounded-3xl border border-border bg-card p-5 shadow-soft md:p-6">
+            <div className="min-w-0 rounded-3xl border border-border bg-card p-5 shadow-soft md:p-6">
               {isVideoMode && (
                 <VideoOfferCards
                   offers={videoOffers ?? []}
