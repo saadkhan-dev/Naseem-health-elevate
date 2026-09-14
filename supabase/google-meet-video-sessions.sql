@@ -1,4 +1,11 @@
 -- ============================================================
+-- ARCHIVED / HISTORICAL — the app no longer creates Google Meet
+-- meetings (the Meet layer was replaced by embedded LiveKit rooms,
+-- see supabase/livekit-video-sessions.sql). The meet_url and
+-- meet_space_id columns are intentionally KEPT in the database
+-- (existing rows must never be lost), but nothing writes to them
+-- anymore. There is no need to re-run this file.
+-- ============================================================
 -- Health Elevate — Google Meet integration columns
 -- Run ONCE in the Supabase SQL Editor. Safe to re-run.
 --

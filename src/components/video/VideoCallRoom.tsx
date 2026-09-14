@@ -1,509 +1,86 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
+import "@livekit/components-styles";
 import {
-  Loader2,
-  PhoneOff,
-  Clock,
-  AlertTriangle,
-  Captions,
-  CaptionsOff,
-  Video,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-
-interface JitsiApi {
-  addListener: (event: string, handler: (...args: unknown[]) => void) => void;
-  dispose: () => void;
-  executeCommand: (command: string, ...args: unknown[]) => void;
-}
-
-type JitsiMeetExternalAPIClass = new (domain: string, options: Record<string, unknown>) => JitsiApi;
-
-declare global {
-  interface Window {
-    JitsiMeetExternalAPI?: JitsiMeetExternalAPIClass;
-  }
-}
-
-/** If no conference event arrives within this window, show a distinct timeout message. */
-const CONNECT_TIMEOUT_MS = 30000;
-
-interface VideoCallRoomProps {
-  roomName: string;
-  /**
-   * Jitsi Meet instance (host) to connect to, e.g. "meet.jit.si". Provided
-   * by the server join lookup so the instance is never a client-side secret.
-   */
-  domain?: string;
-  userName: string;
-  durationMinutes: number;
-  onLeave: () => void;
-  /**
-   * Reliable end signal — fired on the Jitsi `videoConferenceLeft` /
-   * `readyToClose` event when THIS participant leaves the conference. Only
-   * passed for the doctor's client (patients can never trigger completion).
-   */
-  onConferenceLeft?: () => void;
-  /** Reliable join signal — fired on the Jitsi `videoConferenceJoined` event. Doctor only. */
-  onConferenceJoined?: () => void;
-  /**
-   * Live captions / subtitles (Jitsi built-in transcription — no external key).
-   * Defaults to on; patients and doctor can toggle it from the toolbar.
-   */
-  captionsEnabled?: boolean;
-}
-
-/** Load the Jitsi Meet External API library from the configured instance (idempotent). */
-function loadJitsiScript(domain: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const scriptId = `jitsi-external-api-${domain}`;
-    const existing = document.getElementById(scriptId);
-    if (existing) {
-      resolve();
-      return;
-    }
-    const script = document.createElement("script");
-    script.id = scriptId;
-    script.src = `https://${domain}/external_api.js`;
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => {
-      script.remove();
-      reject(new Error("Could not load the video call provider."));
-    };
-    document.body.appendChild(script);
-  });
-}
-
-type MediaPermissionState = "granted" | "denied" | "unknown";
+  ControlBar,
+  LiveKitRoom,
+  useRoomContext,
+  VideoConference,
+} from "@livekit/components-react";
+import { RoomEvent } from "livekit-client";
+import { reportVideoSessionEventClient } from "@/lib/video-call";
 
 /**
- * Best-effort pre-flight camera/microphone permission check before starting
- * the conference. Uses the Permissions API where supported; browsers without
- * it (or with unsupported permission names) fall through to "unknown" so we
- * never block the call on a check the browser cannot perform.
+ * Embedded LiveKit room for a video consultation. This replaced the old Jitsi
+ * `VideoCallRoom` (dead code) — the call now runs inside the app on the
+ * `/video/$vcNo` page instead of opening Google Meet in a new tab.
+ *
+ * The room's join/leave activity is reported back for the admin "LiveKit
+ * Usage" estimate (`video_session_events`); reporting is best-effort and never
+ * affects the consultation itself.
  */
-async function checkMediaPermissions(): Promise<MediaPermissionState> {
-  if (typeof navigator === "undefined" || !navigator.permissions?.query) {
-    return "unknown";
-  }
-  try {
-    const camera = await navigator.permissions.query({ name: "camera" as PermissionName });
-    const mic = await navigator.permissions.query({ name: "microphone" as PermissionName });
-    if (camera.state === "denied" || mic.state === "denied") {
-      return "denied";
-    }
-    return "granted";
-  } catch {
-    return "unknown";
-  }
+
+export interface LiveKitRoomParticipantInfo {
+  vcNo: string;
+  isStaff: boolean;
 }
 
-export function VideoCallRoom({
-  roomName,
-  domain = "meet.jit.si",
-  userName,
-  durationMinutes,
-  onLeave,
-  onConferenceLeft,
-  onConferenceJoined,
-  captionsEnabled = true,
-}: VideoCallRoomProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const apiRef = useRef<JitsiApi | null>(null);
-  const joinedReportedRef = useRef(false);
-  const leftReportedRef = useRef(false);
-  // The conference callbacks are held in refs so re-renders of the parent
-  // (which recreates the inline handlers, e.g. when a status mutation fires)
-  // can never dispose and rebuild the live Jitsi conference.
-  const onConferenceJoinedRef = useRef(onConferenceJoined);
-  const onConferenceLeftRef = useRef(onConferenceLeft);
+interface LiveKitVideoRoomProps extends LiveKitRoomParticipantInfo {
+  token: string;
+  serverUrl: string;
+  roomName: string;
+  onDisconnected: () => void;
+}
+
+/** Records a "joined"/"left" event for the app-tracked usage estimate. */
+function LiveKitRoomActivity({ vcNo, isStaff }: LiveKitRoomParticipantInfo) {
+  const room = useRoomContext();
+  const role = isStaff ? "doctor" : "patient";
 
   useEffect(() => {
-    onConferenceJoinedRef.current = onConferenceJoined;
-    onConferenceLeftRef.current = onConferenceLeft;
-  });
-
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
-  const [connectError, setConnectError] = useState(false);
-  const [connectTimedOut, setConnectTimedOut] = useState(false);
-  const [permissionError, setPermissionError] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(durationMinutes * 60);
-  const [ended, setEnded] = useState(false);
-  const [captions, setCaptions] = useState(captionsEnabled);
-  const startTimeRef = useRef(Date.now());
-  const [retryKey, setRetryKey] = useState(0);
-
-  useEffect(() => {
-    let disposed = false;
-    let fallback: number | undefined;
-    let connectTimeout: number | undefined;
-
-    setLoading(true);
-    setLoadError(false);
-    setConnectError(false);
-    setConnectTimedOut(false);
-    setPermissionError(false);
-    joinedReportedRef.current = false;
-    leftReportedRef.current = false;
-    startTimeRef.current = Date.now();
-
-    loadJitsiScript(domain)
-      .then(async () => {
-        if (disposed || !window.JitsiMeetExternalAPI || !containerRef.current) return;
-
-        // Check camera/mic permission BEFORE opening the conference so a
-        // blocked browser can be told exactly what to fix instead of staring
-        // at a black room. Falls through safely when unsupported.
-        const media = await checkMediaPermissions();
-        if (disposed) return;
-        if (media === "denied") {
-          setLoading(false);
-          setPermissionError(true);
-          return;
-        }
-
-        const api = new window.JitsiMeetExternalAPI(domain, {
-          roomName,
-          parentNode: containerRef.current,
-          width: "100%",
-          height: "100%",
-          subject: "Dr. Naseem Ahmed Khan - Video Consultation",
-          configOverwrite: {
-            startWithAudioMuted: false,
-            startWithVideoMuted: false,
-            // Transcription is left to the instance — forcing it can error on
-            // instances without a transcriber. Captions remain available via
-            // the toolbar button when the instance supports them.
-          },
-          interfaceConfigOverwrite: {
-            SHOW_JITSI_WATERMARK: false,
-            SHOW_WATERMARK_FOR_GUESTS: false,
-            DEFAULT_REMOTE_DISPLAY_NAME: "Guest",
-            TOOLBAR_BUTTONS: [
-              "microphone",
-              "camera",
-              "desktop",
-              "fullscreen",
-              "fodeviceselection",
-              "hangup",
-              "profile",
-              "chat",
-              "recording",
-              "livestreaming",
-              "etherpad",
-              "sharedvideo",
-              "shareddocument",
-              "settings",
-              "raisehand",
-              "videoquality",
-              "filmstrip",
-              "invite",
-              "feedback",
-              "stats",
-              "shortcuts",
-              "tileview",
-              "videobackgroundblur",
-              "download",
-              "help",
-              "mute-everyone",
-              "security",
-              "captions",
-            ],
-          },
-          userInfo: { displayName: userName },
-        });
-        apiRef.current = api;
-
-        api.addListener("videoConferenceJoined", () => {
-          setLoading(false);
-          setConnectError(false);
-          setConnectTimedOut(false);
-          setPermissionError(false);
-          if (connectTimeout) window.clearTimeout(connectTimeout);
-          if (!joinedReportedRef.current && onConferenceJoinedRef.current) {
-            joinedReportedRef.current = true;
-            onConferenceJoinedRef.current();
-          }
-        });
-
-        // Jitsi surfaces connection failures through these events — surface them
-        // instead of leaving the user staring at a black room forever.
-        const handleError = () => {
-          setLoading(false);
-          setConnectError(true);
-        };
-        api.addListener("errorOccurred", handleError);
-        api.addListener("conferenceFailed", handleError);
-        api.addListener("connectionFailed", handleError);
-
-        // Camera/mic failure (e.g. the browser blocked permission) is a
-        // different problem from a broken connection — tell the user what to fix.
-        const handleMediaError = () => {
-          setLoading(false);
-          setPermissionError(true);
-        };
-        api.addListener("micError", handleMediaError);
-        api.addListener("cameraError", handleMediaError);
-
-        const handleLeft = () => {
-          setLoading(false);
-          if (connectTimeout) window.clearTimeout(connectTimeout);
-          if (!leftReportedRef.current && onConferenceLeftRef.current) {
-            leftReportedRef.current = true;
-            onConferenceLeftRef.current();
-          }
-        };
-        api.addListener("videoConferenceLeft", handleLeft);
-        api.addListener("readyToClose", handleLeft);
-
-        // Fallback so the spinner never hangs if no conference event fires.
-        fallback = window.setTimeout(() => setLoading(false), 8000);
-
-        // Give the meeting time to establish; if nothing joins within the
-        // timeout show a visible timeout message + Try Again instead of a
-        // silent black room. Kept separate from a hard connection error so the
-        // user knows the provider simply may be slow/unreachable right now.
-        connectTimeout = window.setTimeout(() => {
-          if (!joinedReportedRef.current) {
-            setLoading(false);
-            setConnectTimedOut(true);
-          }
-        }, CONNECT_TIMEOUT_MS);
-      })
-      .catch(() => {
-        if (!disposed) setLoadError(true);
-      });
-
-    return () => {
-      disposed = true;
-      if (fallback) window.clearTimeout(fallback);
-      if (connectTimeout) window.clearTimeout(connectTimeout);
-      apiRef.current?.dispose();
-      apiRef.current = null;
+    const onConnected = () => {
+      void reportVideoSessionEventClient({ vcNo, role, event: "joined" });
     };
-    // Deliberately excludes onConferenceJoined/onConferenceLeft (and userName):
-    // those change whenever the parent re-renders, and rebuilding the Jitsi
-    // conference on every re-render is exactly what prevented the doctor from
-    // ever staying connected. The latest callback is read from a ref instead.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [domain, roomName, retryKey]);
+    const onDisconnected = () => {
+      void reportVideoSessionEventClient({ vcNo, role, event: "left" });
+    };
+    room.on(RoomEvent.Connected, onConnected);
+    room.on(RoomEvent.Disconnected, onDisconnected);
+    return () => {
+      room.off(RoomEvent.Connected, onConnected);
+      room.off(RoomEvent.Disconnected, onDisconnected);
+    };
+  }, [room, vcNo, role]);
 
-  useEffect(() => {
-    if (ended) return;
-    const timer = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
-      const remaining = durationMinutes * 60 - elapsed;
-      if (remaining <= 0) {
-        setTimeLeft(0);
-        setEnded(true);
-        clearInterval(timer);
-      } else {
-        setTimeLeft(remaining);
-      }
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [durationMinutes, ended]);
+  return null;
+}
 
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  };
-
-  const timerColor =
-    timeLeft < 60 ? "text-red-500" : timeLeft < 300 ? "text-amber-500" : "text-green-500";
-
-  const handleLeave = () => {
-    apiRef.current?.dispose();
-    apiRef.current = null;
-    onLeave();
-  };
-
-  /**
-   * "Allow Camera & Microphone" — request real media permission from the
-   * browser (which shows the permission prompt) and then retry the call.
-   * Never throws: if permission is still refused, the retry re-runs the
-   * pre-flight check and the user stays on the clear permission message.
-   */
-  const handleAllowMedia = async () => {
-    setPermissionError(false);
-    setLoading(true);
-    try {
-      if (navigator.mediaDevices?.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        stream.getTracks().forEach((track) => track.stop());
-      }
-    } catch {
-      // Permission still denied or device unavailable — the retry below will
-      // surface the right state again.
-    }
-    setRetryKey((k) => k + 1);
-  };
-
-  if (ended) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center bg-background p-8 text-center">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
-          <AlertTriangle className="h-8 w-8 text-red-600" />
-        </div>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Session Ended</h2>
-        <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-          Your video consultation time has ended. Thank you for using Dr. Naseem Ahmed Khan's
-          services.
-        </p>
-        <Button className="mt-6" onClick={onLeave}>
-          Leave
-        </Button>
-      </div>
-    );
-  }
-
+export function LiveKitVideoRoom({
+  vcNo,
+  isStaff,
+  token,
+  serverUrl,
+  roomName,
+  onDisconnected,
+}: LiveKitVideoRoomProps) {
   return (
-    <div className="relative flex h-full flex-col">
-      {loading && !loadError && !connectError && !connectTimedOut && !permissionError && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background">
-          <div className="text-center">
-            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-            <p className="mt-2 text-sm text-muted-foreground">Connecting to video call...</p>
-          </div>
-        </div>
-      )}
-
-      {loadError && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background p-8 text-center">
-          <div className="max-w-sm">
-            <AlertTriangle className="mx-auto h-8 w-8 text-red-600" />
-            <h2 className="mt-4 text-xl font-semibold text-foreground">Service unavailable</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Unable to load the video consultation service. Please try again.
-            </p>
-            <div className="mt-6 flex justify-center gap-3">
-              <Button onClick={() => setRetryKey((k) => k + 1)} className="gap-1.5">
-                <Loader2 className="h-4 w-4" /> Try Again
-              </Button>
-              <Button variant="outline" onClick={handleLeave}>
-                Go Back
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {connectTimedOut && !loadError && !permissionError && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background p-8 text-center">
-          <div className="max-w-sm">
-            <AlertTriangle className="mx-auto h-8 w-8 text-amber-500" />
-            <h2 className="mt-4 text-xl font-semibold text-foreground">Still connecting</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              The video call is taking longer than expected to connect. Check your internet
-              connection and try again.
-            </p>
-            <div className="mt-6 flex justify-center gap-3">
-              <Button onClick={() => setRetryKey((k) => k + 1)} className="gap-1.5">
-                <Loader2 className="h-4 w-4" /> Try Again
-              </Button>
-              <Button variant="outline" onClick={handleLeave}>
-                Go Back
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {permissionError && !loadError && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background p-8 text-center">
-          <div className="max-w-sm">
-            <AlertTriangle className="mx-auto h-8 w-8 text-amber-500" />
-            <h2 className="mt-4 text-xl font-semibold text-foreground">
-              Camera and microphone access is required
-            </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Camera and microphone access is required for your video consultation.
-            </p>
-            <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
-              <Button onClick={handleAllowMedia} className="gap-1.5">
-                <Video className="h-4 w-4" /> Allow Camera &amp; Microphone
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setRetryKey((k) => k + 1)}
-                className="gap-1.5"
-              >
-                <Loader2 className="h-4 w-4" /> Try Again
-              </Button>
-              <Button variant="ghost" onClick={handleLeave}>
-                Go Back
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {connectError && !loadError && !permissionError && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background p-8 text-center">
-          <div className="max-w-sm">
-            <AlertTriangle className="mx-auto h-8 w-8 text-red-600" />
-            <h2 className="mt-4 text-xl font-semibold text-foreground">Connection issue</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              We could not connect you to the video call. Your internet connection or the video
-              provider may be having problems.
-            </p>
-            <div className="mt-6 flex justify-center gap-3">
-              <Button onClick={() => setRetryKey((k) => k + 1)} className="gap-1.5">
-                <Loader2 className="h-4 w-4" /> Reconnect
-              </Button>
-              <Button variant="outline" onClick={handleLeave}>
-                Go Back
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b bg-card px-4 py-2">
-        <div className="flex items-center gap-2">
-          <Clock className={`h-4 w-4 ${timerColor}`} />
-          <span className={`text-sm font-medium ${timerColor}`}>{formatTime(timeLeft)}</span>
-          {timeLeft < 60 && <span className="text-xs text-red-500 font-medium">(ending soon)</span>}
-        </div>
-        <div className="min-w-0 truncate text-xs text-muted-foreground">
-          Dr. Naseem Ahmed Khan — Video Consultation
-        </div>
-        <div className="text-xs text-muted-foreground">{durationMinutes} min session</div>
+    <LiveKitRoom
+      serverUrl={serverUrl}
+      token={token}
+      connect
+      video
+      audio
+      options={{ adaptiveStream: true, dynacast: true }}
+      onDisconnected={onDisconnected}
+      className="livekit-room-root flex min-h-dvh w-full flex-col bg-background"
+    >
+      <LiveKitRoomActivity vcNo={vcNo} isStaff={isStaff} />
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <VideoConference />
+        <ControlBar
+          variation="minimal"
+          controls={{ camera: true, microphone: true, screenShare: true, chat: false, leave: true }}
+        />
       </div>
-
-      <div ref={containerRef} className="min-h-0 flex-1 overflow-hidden" />
-
-      <div className="flex items-center justify-between border-t bg-card px-4 py-3">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {captions ? (
-            <Captions className="h-4 w-4 text-primary" />
-          ) : (
-            <CaptionsOff className="h-4 w-4" />
-          )}
-          {captions ? "Live captions on" : "Live captions off"}
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              apiRef.current?.executeCommand("toggleSubtitles");
-              setCaptions((c) => !c);
-            }}
-            className="gap-1.5"
-          >
-            {captions ? <CaptionsOff className="h-4 w-4" /> : <Captions className="h-4 w-4" />}
-            Captions
-          </Button>
-          <Button variant="destructive" onClick={handleLeave} className="rounded-full">
-            <PhoneOff className="h-4 w-4" />
-            Leave Call
-          </Button>
-        </div>
-        <div />
-      </div>
-    </div>
+    </LiveKitRoom>
   );
 }

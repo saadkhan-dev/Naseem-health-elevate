@@ -1,8 +1,16 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { Banknote, Loader2, Video, ExternalLink, FileImage, X } from "lucide-react";
-import { ensureConsultationConversation } from "@/lib/consultation-data";
+import {
+  Banknote,
+  Loader2,
+  Video,
+  ExternalLink,
+  FileImage,
+  X,
+  Search,
+  CornerDownLeft,
+} from "lucide-react";
 import {
   useAppointments,
   useUpdateAppointmentStatus,
@@ -37,6 +45,8 @@ import {
 } from "@/components/ui/select";
 import { QueryError } from "@/components/admin/QueryError";
 import { staffSupabase } from "@/lib/supabase";
+import { appointmentMatchesQuery, normalizeSearchTerm } from "@/lib/appointments-search";
+import { usePageFocus, useFocusHighlight } from "@/hooks/usePageFocus";
 
 export const Route = createFileRoute("/admin/appointments")({
   component: AdminAppointments,
@@ -96,6 +106,41 @@ function PaymentBadge({ status }: { status: string }) {
   const label = PAYMENT_STATUS_LABELS[status as PaymentStatus] ?? status;
   const badge = PAYMENT_STATUS_BADGES[status as PaymentStatus] ?? "bg-gray-100 text-gray-700";
   return <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${badge}`}>{label}</span>;
+}
+
+/**
+ * Renders `text` with the search tokens wrapped in a subtle highlight so the
+ * admin can see exactly why a row/suggestion matched (Google-style).
+ */
+function Highlighted({ text, query }: { text: string; query: string }) {
+  const tokens = normalizeSearchTerm(query).split(" ").filter(Boolean);
+  if (!text || tokens.length === 0) return <>{text}</>;
+
+  let nodes: ReactNode[] = [text];
+  let key = 0;
+  for (const token of tokens) {
+    const next: ReactNode[] = [];
+    for (const node of nodes) {
+      if (typeof node !== "string") {
+        next.push(node);
+        continue;
+      }
+      const idx = node.toLowerCase().indexOf(token);
+      if (idx === -1) {
+        next.push(node);
+        continue;
+      }
+      next.push(
+        node.slice(0, idx),
+        <span key={key++} className="rounded bg-primary/15 font-semibold text-primary" aria-hidden>
+          {node.slice(idx, idx + token.length)}
+        </span>,
+        node.slice(idx + token.length),
+      );
+    }
+    nodes = next;
+  }
+  return <>{nodes}</>;
 }
 
 /** Admin view of a video consultation's payment proof (Option 1 details +
@@ -240,7 +285,6 @@ function PaymentProofDialog({
 }
 
 function AdminAppointments() {
-  const navigate = useNavigate();
   const { data: appointments, isLoading, isError, error } = useAppointments();
   const { data: availability } = useAdminAvailability();
   const updateStatus = useUpdateAppointmentStatus();
@@ -248,23 +292,27 @@ function AdminAppointments() {
   const applyReschedule = useApplyReschedule();
   const setPayment = useSetVideoPaymentStatus();
   const createVideo = useCreateVideoSession();
+  const navigate = useNavigate();
 
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("normal");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [specificDate, setSpecificDate] = useState("");
 
+  // Google-style unified search: across clinic AND video consultations.
+  const [searchQuery, setSearchQuery] = useState("");
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestActive, setSuggestActive] = useState(-1);
+
   const [videoDialog, setVideoDialog] = useState<{
     appointmentId: string;
     roomName: string;
     vcNo: string;
-    meetUrl: string;
   } | null>(null);
   const [paymentDialog, setPaymentDialog] = useState<AppointmentWithDetails | null>(null);
   const [callDuration, setCallDuration] = useState(20);
   const [joinLinkInput, setJoinLinkInput] = useState("");
   const [videoError, setVideoError] = useState("");
-  const [joiningCall, setJoiningCall] = useState(false);
   const [rowFeedback, setRowFeedback] = useState<
     Record<string, { kind: "success" | "error"; message: string }>
   >({});
@@ -294,8 +342,61 @@ function AdminAppointments() {
     else if (dateFilter === "past") rows = rows.filter((a) => a.date < today);
     else if (dateFilter === "specific" && specificDate)
       rows = rows.filter((a) => a.date === specificDate);
+    if (searchQuery.trim()) rows = rows.filter((a) => appointmentMatchesQuery(a, searchQuery));
     return rows;
-  }, [appointments, typeFilter, statusFilter, dateFilter, specificDate, today]);
+  }, [appointments, typeFilter, statusFilter, dateFilter, specificDate, today, searchQuery]);
+
+  // Live suggestion dropdown (first rows of the current result set).
+  const suggestions = useMemo(() => filtered.slice(0, 10), [filtered]);
+
+  // Deep-link focus: a notification / suggestion navigates here with
+  // ?focus=appointment&id=<uuid> — scroll to and highlight that exact row.
+  const pageFocus = usePageFocus();
+  useFocusHighlight({
+    focus: pageFocus?.focus === "appointment" ? pageFocus : null,
+    ready: !isLoading,
+    ensureVisible: (f) => {
+      const row = (appointments ?? []).find((a) => a.id === f.id);
+      if (!row) return;
+      if (typeFilter !== "all") setTypeFilter("all");
+      if (statusFilter !== "all") setStatusFilter("all");
+      if (dateFilter !== "all") setDateFilter("all");
+      if (searchQuery.trim() && !appointmentMatchesQuery(row, searchQuery)) setSearchQuery("");
+      setSuggestOpen(false);
+    },
+  });
+
+  function pickSuggestion(a: AppointmentWithDetails) {
+    setSuggestOpen(false);
+    setSuggestActive(-1);
+    void navigate({
+      to: "/admin/appointments",
+      search: { focus: "appointment", id: a.id },
+    } as never);
+  }
+
+  function handleSearchKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Escape") {
+      setSuggestOpen(false);
+      setSuggestActive(-1);
+      e.currentTarget.blur();
+      return;
+    }
+    if (!suggestOpen || suggestions.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSuggestActive((cur) => (cur + 1) % suggestions.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSuggestActive((cur) => (cur <= 0 ? suggestions.length - 1 : cur - 1));
+    } else if (e.key === "Enter" && suggestActive >= 0) {
+      const target = suggestions[suggestActive];
+      if (target) {
+        e.preventDefault();
+        pickSuggestion(target);
+      }
+    }
+  }
 
   // Refresh the available time slots whenever the reschedule dialog's target
   // or chosen date changes. Reuses the same slot grid the patient sees, so the
@@ -453,7 +554,7 @@ function AdminAppointments() {
   function openVideoDialog(appointmentId: string) {
     setCallDuration(20);
     setVideoError("");
-    setVideoDialog({ appointmentId, roomName: "", vcNo: "", meetUrl: "" });
+    setVideoDialog({ appointmentId, roomName: "", vcNo: "" });
   }
 
   async function startVideoSession() {
@@ -470,10 +571,11 @@ function AdminAppointments() {
         appointmentId: videoDialog.appointmentId,
         roomName: result.session.room_name,
         vcNo: result.session.vc_no ?? "",
-        meetUrl: result.session.meet_url ?? "",
       });
-      if (result.meetError) {
-        setVideoError(result.meetError);
+      if (!result.livekitConfigured) {
+        setVideoError(
+          "The session was created but LiveKit is not configured on the server yet — patients will not be able to join. Set LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET, then try joining.",
+        );
       }
     }
   }
@@ -482,27 +584,6 @@ function AdminAppointments() {
     setRescheduleTarget(a);
     setRescheduleDate(a.date);
     setRescheduleTime(a.time ?? "");
-  }
-
-  /** Join the call as the doctor: open Meet in a new tab, then bring the same
-   *  appointment's consultation chat into this tab (mirrors the patient flow). */
-  async function joinDoctorCall() {
-    if (!videoDialog) return;
-    const show = videoDialog;
-    if (show.meetUrl) {
-      window.open(show.meetUrl, "_blank", "noopener,noreferrer");
-    }
-    setJoiningCall(true);
-    try {
-      const result = await ensureConsultationConversation(show.appointmentId, "staff");
-      setVideoDialog(null);
-      navigate({ to: "/admin/consultations/$id", params: { id: result.conversationId } });
-    } catch {
-      setVideoDialog(null);
-      window.open(`/video/${show.vcNo}?as=doctor`, "_blank", "noopener,noreferrer");
-    } finally {
-      setJoiningCall(false);
-    }
   }
 
   async function submitReschedule() {
@@ -849,10 +930,126 @@ function AdminAppointments() {
         ))}
       </div>
 
+      {/* Google-style unified search across clinic + video appointments */}
+      <div className="relative mt-4">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setSuggestOpen(true);
+              setSuggestActive(-1);
+            }}
+            onFocus={() => setSuggestOpen(true)}
+            onBlur={() => {
+              window.setTimeout(() => setSuggestOpen(false), 120);
+            }}
+            onKeyDown={handleSearchKeyDown}
+            placeholder="Search by patient name, phone, email, appointment ID…"
+            role="combobox"
+            aria-label="Search appointments"
+            aria-expanded={suggestOpen}
+            aria-controls="appointment-search-suggestions"
+            className="h-12 pl-11 pr-9 text-base"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery("");
+                setSuggestOpen(false);
+                setSuggestActive(-1);
+              }}
+              aria-label="Clear search"
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        {suggestOpen && searchQuery.trim() && (
+          <div
+            id="appointment-search-suggestions"
+            role="listbox"
+            aria-label="Appointment suggestions"
+            className="absolute left-0 right-0 top-full z-30 mt-2 max-h-80 overflow-auto rounded-xl border border-border bg-popover p-1 shadow-xl"
+          >
+            {suggestions.length === 0 ? (
+              <div className="px-4 py-3 text-sm text-muted-foreground">
+                No appointments or patients found
+              </div>
+            ) : (
+              <>
+                {suggestions.map((a, i) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    role="option"
+                    aria-selected={i === suggestActive}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      pickSuggestion(a);
+                    }}
+                    onMouseEnter={() => setSuggestActive(i)}
+                    className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
+                      i === suggestActive ? "bg-accent" : ""
+                    }`}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-foreground">
+                        <Highlighted
+                          text={a.patient_name ?? "Unknown patient"}
+                          query={searchQuery}
+                        />
+                        {a.appointment_no ? (
+                          <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                            <Highlighted text={a.appointment_no} query={searchQuery} />
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        <Highlighted text={a.service_name ?? "Service"} query={searchQuery} /> ·{" "}
+                        {a.date ? format(new Date(a.date + "T00:00:00"), "MMM d, yyyy") : "—"} ·{" "}
+                        {formatTimeDisplay(a.time ?? null)} · {a.is_video ? "Video" : "In Clinic"}
+                        {a.patient_phone ? (
+                          <span>
+                            {" "}
+                            · <Highlighted text={a.patient_phone} query={searchQuery} />
+                          </span>
+                        ) : (
+                          ""
+                        )}
+                      </span>
+                    </span>
+                    {i === suggestActive && (
+                      <CornerDownLeft className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    )}
+                  </button>
+                ))}
+                {filtered.length > suggestions.length && (
+                  <div className="px-4 pb-2 pt-1 text-xs text-muted-foreground">
+                    {filtered.length} results — scroll to see them all
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Appointments</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Manage all patient bookings</p>
+          {searchQuery.trim() ? (
+            <p className="mt-1 text-sm" data-testid="appointments-result-count">
+              {filtered.length} result{filtered.length === 1 ? "" : "s"}
+              <span className="text-muted-foreground"> · Manage all patient bookings</span>
+            </p>
+          ) : (
+            <p className="mt-1 text-sm text-muted-foreground">Manage all patient bookings</p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
@@ -906,7 +1103,9 @@ function AdminAppointments() {
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : filtered.length === 0 ? (
-          <p className="p-8 text-center text-sm text-muted-foreground">No appointments found</p>
+          <p className="p-8 text-center text-sm text-muted-foreground">
+            {searchQuery.trim() ? "No appointments or patients found" : "No appointments found"}
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -923,9 +1122,11 @@ function AdminAppointments() {
               </thead>
               <tbody className="divide-y">
                 {filtered.map((a) => (
-                  <tr key={a.id} className="text-foreground">
+                  <tr key={a.id} className="text-foreground" data-focus-id={a.id}>
                     <td className="px-4 py-3">
-                      <div className="font-medium">{a.patient_name ?? "—"}</div>
+                      <div className="font-medium">
+                        <Highlighted text={a.patient_name ?? "—"} query={searchQuery} />
+                      </div>
                       {a.appointment_no && (
                         <div className="text-xs text-muted-foreground">{a.appointment_no}</div>
                       )}
@@ -1180,38 +1381,17 @@ function AdminAppointments() {
                 </div>
               </div>
             )}
-            {videoDialog?.vcNo && videoDialog.meetUrl ? (
-              <Button
-                className="w-full"
-                onClick={() => void joinDoctorCall()}
-                disabled={joiningCall}
-              >
-                {joiningCall ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Video className="mr-2 h-4 w-4" />
-                )}
-                {joiningCall ? "Opening Meet & chat…" : `Join as Doctor (${callDuration} min)`}
-              </Button>
-            ) : videoDialog?.vcNo && !videoDialog.meetUrl ? (
-              <>
-                <p className="text-xs text-muted-foreground">
-                  The session was created but the Google Meet meeting could not be made. Fix the
-                  configuration and try again.
-                </p>
-                <Button
-                  className="w-full"
-                  onClick={startVideoSession}
-                  disabled={createVideo.isPending}
+            {videoDialog?.vcNo ? (
+              <Button asChild className="w-full">
+                <a
+                  href={`${window.location.origin}/video/${encodeURIComponent(videoDialog.vcNo)}?as=doctor`}
+                  target="_blank"
+                  rel="noopener noreferrer"
                 >
-                  {createVideo.isPending ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Video className="mr-2 h-4 w-4" />
-                  )}
-                  Retry Meeting Creation
-                </Button>
-              </>
+                  <Video className="mr-2 h-4 w-4" />
+                  Join as Doctor
+                </a>
+              </Button>
             ) : (
               <Button
                 className="w-full"

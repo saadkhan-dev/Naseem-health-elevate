@@ -5,10 +5,12 @@ import { createPatientNotification } from "./patient-notifications";
 import { normalizeSiteUrl, videoJoinUrl } from "@/lib/video-join";
 import type { NotificationEnv, NotificationResult } from "@/lib/notifications";
 import {
-  createGoogleMeetSpace,
-  getGoogleMeetConfig,
-  GoogleMeetNotConfiguredError,
-} from "./google-meet";
+  getLiveKitConfig,
+  liveKitConfigured,
+  mintVideoJoinAccessToken,
+  VIDEO_EVENT_RECONNECT_GRACE_MS,
+} from "./livekit";
+import { isAdminOrDoctor } from "./supabase-admin";
 
 export { videoJoinUrl };
 
@@ -22,11 +24,10 @@ export { videoJoinUrl };
  *
  * Rules enforced by this module:
  *  - ONE session per appointment — "Start Video Call" and any retry reuse the
- *    same VC code, patient join link and Google Meet meeting (a session + its
- *    Meet space are created only when the appointment has none yet).
- *  - Each video appointment maps to exactly ONE Google Meet meeting — the
- *    `meet_url` is created once and reused forever afterwards, so refreshing
- *    the page or clicking the button again never makes a second meeting.
+ *    same VC code, room name and patient join link (a session is created only
+ *    when the appointment has none yet). Every session is LIVEKIT-native: the
+ *    room is addressed by its deterministic `room_name` and created lazily by
+ *    LiveKit on the first join, so no external meeting provider is involved.
  *  - A video call can only start for a CONFIRMED video-consultation
  *    appointment whose prepaid payment was verified (or waived) — the payment
  *    and eligibility flow is never bypassed.
@@ -34,9 +35,10 @@ export { videoJoinUrl };
  *    appointment/session UUIDs are never returned to guests.
  *  - Notification re-sends reuse the same room/link and report honest per
  *    channel results (`sent` / `not_configured` / `error`), never fakes.
- *  - Google Meet creation failures never block the session row: the admin sees
- *    a clear `meetError` and can retry (the retry reuses the session and
- *    backfills the meeting). The safe join still works once a URL exists.
+ *  - LiveKit never blocks the session row: starting a session only records the
+ *    row; join tokens are minted server-side at join time. If LiveKit is not
+ *    configured yet the admin sees a clear `livekitConfigured: false` warning
+ *    and the join page explains the clinic has not finished setup.
  */
 
 export type VideoSessionStatus = "scheduled" | "active" | "completed";
@@ -51,51 +53,18 @@ export interface VideoSession {
   ended_at: string | null;
   duration_minutes: number;
   created_at: string;
-  /** Google Meet join URL (e.g. https://meet.google.com/abc-mnop-xyz). Null until created. */
-  meet_url: string | null;
-  /** Google Meet space resource name (e.g. spaces/abc123). Null until created. */
-  meet_space_id: string | null;
 }
 
 /** Max insert attempts when a freshly generated VC code collides. */
 const ID_RETRY_ATTEMPTS = 5;
 
 /**
- * Create the appointment's single Google Meet meeting and persist it. Never
- * called when a `meet_url` already exists — that is what guarantees one
- * appointment == one meeting even across page refreshes / retries.
- */
-async function attachGoogleMeetToSession(
-  admin: SupabaseClient,
-  session: VideoSession,
-): Promise<{ error: string | null; session: VideoSession | null; meetConfigured: boolean }> {
-  try {
-    const space = await createGoogleMeetSpace();
-    const { data, error } = await admin
-      .from("video_sessions")
-      .update({ meet_url: space.meetingUri, meet_space_id: space.name })
-      .eq("id", session.id)
-      .select("*")
-      .single();
-    if (error) return { error: error.message, session: null, meetConfigured: true };
-    return { error: null, session: data as VideoSession, meetConfigured: true };
-  } catch (e) {
-    const notConfigured = e instanceof GoogleMeetNotConfiguredError;
-    return {
-      error: e instanceof Error ? e.message : "Could not create the Google Meet meeting.",
-      session,
-      meetConfigured: !notConfigured,
-    };
-  }
-}
-
-/**
- * Reuse the existing session for an appointment (same room/VC link and Google
- * Meet meeting) or create one with a fresh VC code. When a NEW session is
- * created — or an existing session still has no Meet URL (a previous creation
- * attempt failed) — a single Google Meet meeting is created and stored. The
- * code is kept unique by the database; on the (astronomically rare) collision
- * the insert is retried.
+ * Reuse the existing session for an appointment (same VC code and room name)
+ * or create one with a fresh VC code. LiveKit does not need a server-side room
+ * creation call — rooms are addressed by their deterministic `room_name` and
+ * are created by LiveKit on the first join, so this function only ever touches
+ * the `video_sessions` row. The code is kept unique by the database; on the
+ * (astronomically rare) collision the insert is retried.
  */
 export async function createOrReuseVideoSession(
   admin: SupabaseClient,
@@ -106,10 +75,8 @@ export async function createOrReuseVideoSession(
   session: VideoSession | null;
   /** True when a NEW session was created; false when the existing one was reused. */
   created: boolean;
-  /** Google Meet creation failure (session still exists — retry backfills). */
-  meetError: string | null;
-  /** Whether the Google Meet server credentials are configured at all. */
-  meetConfigured: boolean;
+  /** Whether LiveKit is configured on the server (helps surface a precise warning). */
+  livekitConfigured: boolean;
 }> {
   const { data: existing } = await admin
     .from("video_sessions")
@@ -127,26 +94,9 @@ export async function createOrReuseVideoSession(
         .update({ duration_minutes: durationMinutes })
         .eq("id", session.id);
     }
-    // The appointment already has a session — reuse it. Its Meet meeting (if
-    // any) is reused too so refreshes/clicks never create duplicates. Only when
-    // a previous Meet creation FAILED (no URL) do we try to backfill it.
-    if (!session.meet_url) {
-      const meeting = await attachGoogleMeetToSession(admin, session);
-      return {
-        error: null,
-        session: meeting.session ?? session,
-        created: false,
-        meetError: meeting.error,
-        meetConfigured: meeting.meetConfigured,
-      };
-    }
-    return {
-      error: null,
-      session,
-      created: false,
-      meetError: null,
-      meetConfigured: true,
-    };
+    // The appointment already has a session — reuse it (same room name / VC
+    // code / join link), so refreshes and retries never create duplicates.
+    return { error: null, session, created: false, livekitConfigured: liveKitConfigured() };
   }
 
   for (let attempt = 0; attempt < ID_RETRY_ATTEMPTS; attempt++) {
@@ -166,14 +116,11 @@ export async function createOrReuseVideoSession(
       .single();
 
     if (!error) {
-      const session = data as VideoSession;
-      const meeting = await attachGoogleMeetToSession(admin, session);
       return {
         error: null,
-        session: meeting.session ?? session,
+        session: data as VideoSession,
         created: true,
-        meetError: meeting.error,
-        meetConfigured: meeting.meetConfigured,
+        livekitConfigured: liveKitConfigured(),
       };
     }
 
@@ -183,8 +130,7 @@ export async function createOrReuseVideoSession(
         error: error.message,
         session: null,
         created: false,
-        meetError: null,
-        meetConfigured: true,
+        livekitConfigured: liveKitConfigured(),
       };
     }
   }
@@ -193,8 +139,7 @@ export async function createOrReuseVideoSession(
     error: "Could not generate a unique Video Consultation ID. Please try again.",
     session: null,
     created: false,
-    meetError: null,
-    meetConfigured: true,
+    livekitConfigured: liveKitConfigured(),
   };
 }
 
@@ -225,12 +170,12 @@ export async function getVideoJoinByVcNo(
     roomName: string;
     durationMinutes: number;
     status: VideoSessionStatus;
-    /** Google Meet join URL — the ONLY thing the join button opens. Null when not created yet. */
-    meetUrl: string | null;
+    /** LiveKit websocket URL — empty until LiveKit is configured on the server. */
+    serverUrl: string;
   } | null;
   appointment: VideoJoinAppointment | null;
-  /** Whether the Google Meet server credentials are configured (helps show a precise error). */
-  meetConfigured: boolean;
+  /** Whether LiveKit is configured on the server (helps show a precise message). */
+  livekitConfigured: boolean;
 }> {
   const { data: session } = await admin
     .from("video_sessions")
@@ -243,7 +188,7 @@ export async function getVideoJoinByVcNo(
       error: "No video session found for that code.",
       session: null,
       appointment: null,
-      meetConfigured: false,
+      livekitConfigured: false,
     };
   }
 
@@ -258,7 +203,7 @@ export async function getVideoJoinByVcNo(
       error: "No appointment found for that code.",
       session: null,
       appointment: null,
-      meetConfigured: false,
+      livekitConfigured: false,
     };
   }
 
@@ -271,7 +216,7 @@ export async function getVideoJoinByVcNo(
       error: "This video consultation is no longer available.",
       session: null,
       appointment: null,
-      meetConfigured: false,
+      livekitConfigured: false,
     };
   }
 
@@ -283,7 +228,7 @@ export async function getVideoJoinByVcNo(
       roomName: session.room_name as string,
       durationMinutes: (session.duration_minutes as number | null) ?? 30,
       status: session.status as VideoSessionStatus,
-      meetUrl: (session.meet_url as string | null) ?? null,
+      serverUrl: getLiveKitConfig().url,
     },
     appointment: {
       appointmentId: appointment.id as string,
@@ -293,7 +238,7 @@ export async function getVideoJoinByVcNo(
       time: (appointment.time as string | null)?.slice(0, 5) ?? null,
       appointmentNo: (appointment.appointment_no as string | null) ?? null,
     },
-    meetConfigured: getGoogleMeetConfig().configured,
+    livekitConfigured: liveKitConfigured(),
   };
 }
 
@@ -314,10 +259,8 @@ export async function createVideoSessionForAppointment(
   error: string | null;
   session: VideoSession | null;
   created: boolean;
-  /** Set when the session exists but its Google Meet meeting could not be created. */
-  meetError: string | null;
-  /** Whether the Google Meet server credentials are configured. */
-  meetConfigured: boolean;
+  /** Whether LiveKit is configured on the server (a warning, never a blocker). */
+  livekitConfigured: boolean;
   notifications: NotificationResult[];
 }> {
   const { data: appointment } = await admin
@@ -331,8 +274,7 @@ export async function createVideoSessionForAppointment(
       error: "Appointment not found.",
       session: null,
       created: false,
-      meetError: null,
-      meetConfigured: true,
+      livekitConfigured: liveKitConfigured(),
       notifications: [],
     };
   }
@@ -344,8 +286,7 @@ export async function createVideoSessionForAppointment(
       error: "Video calls can only be started for video consultation appointments.",
       session: null,
       created: false,
-      meetError: null,
-      meetConfigured: true,
+      livekitConfigured: liveKitConfigured(),
       notifications: [],
     };
   }
@@ -354,8 +295,7 @@ export async function createVideoSessionForAppointment(
       error: "Confirm the appointment before starting the video call.",
       session: null,
       created: false,
-      meetError: null,
-      meetConfigured: true,
+      livekitConfigured: liveKitConfigured(),
       notifications: [],
     };
   }
@@ -367,8 +307,7 @@ export async function createVideoSessionForAppointment(
       error: "The patient's payment must be verified before the video call can start.",
       session: null,
       created: false,
-      meetError: null,
-      meetConfigured: true,
+      livekitConfigured: liveKitConfigured(),
       notifications: [],
     };
   }
@@ -379,8 +318,7 @@ export async function createVideoSessionForAppointment(
       error: result.error,
       session: null,
       created: false,
-      meetError: null,
-      meetConfigured: result.meetConfigured,
+      livekitConfigured: result.livekitConfigured,
       notifications: [],
     };
   }
@@ -395,15 +333,14 @@ export async function createVideoSessionForAppointment(
     error: null,
     session: result.session,
     created: result.created,
-    meetError: result.meetError,
-    meetConfigured: result.meetConfigured,
+    livekitConfigured: result.livekitConfigured,
     notifications,
   };
 }
 
 /**
  * Re-send the "video ready to join" notification for an appointment, reusing
- * the existing session's VC code, Google Meet meeting and join link.
+ * the existing session's VC code, LiveKit room name and join link.
  */
 export async function resendVideoNotification(
   admin: SupabaseClient,
@@ -466,4 +403,152 @@ export async function resendVideoNotification(
   );
 
   return { error: null, notifications };
+}
+
+/**
+ * Mint the server-side LiveKit join token for a session, the final step of
+ * joining a call. Enforces the same eligibility rules as getVideoJoinByVcNo
+ * (cancelled/rejected/no-show appointments cannot join) and mints a token only
+ * for a room that belongs to the given VC code. Doctors/admins (verified via
+ * their JWT) receive the roomAdmin grant; patients receive a plain participant.
+ * LIVEKIT_API_SECRET never leaves this module — callers only get the signed JWT.
+ */
+export async function mintVideoJoinToken(
+  admin: SupabaseClient,
+  vcNo: string,
+  staffToken: string | null | undefined,
+): Promise<{
+  error: string | null;
+  token: string | null;
+  serverUrl: string;
+  roomName: string;
+  expiresAt: number | null;
+}> {
+  const join = await getVideoJoinByVcNo(admin, vcNo);
+  if (join.error || !join.session) {
+    return {
+      error: join.error ?? "No video session found for that code.",
+      token: null,
+      serverUrl: "",
+      roomName: "",
+      expiresAt: null,
+    };
+  }
+  if (!join.livekitConfigured) {
+    return {
+      error: "LiveKit is not configured on this website yet — video calls cannot start.",
+      token: null,
+      serverUrl: "",
+      roomName: join.session.roomName,
+      expiresAt: null,
+    };
+  }
+
+  const isStaff = await isAdminOrDoctor(admin, staffToken);
+  const identity = `${isStaff ? "doctor" : "patient"}-${join.session.roomName}`;
+
+  try {
+    const minted = await mintVideoJoinAccessToken({
+      roomName: join.session.roomName,
+      identity,
+      name: isStaff ? "Doctor" : "Patient",
+      roomAdmin: isStaff,
+    });
+    return {
+      error: null,
+      token: minted.token,
+      serverUrl: minted.serverUrl,
+      roomName: minted.roomName,
+      expiresAt: minted.expiresAt,
+    };
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Could not start the video call.",
+      token: null,
+      serverUrl: getLiveKitConfig().url,
+      roomName: join.session.roomName,
+      expiresAt: null,
+    };
+  }
+}
+
+/** Most-recently-started OPEN leg (left_at IS NULL) for a participant in a session, if any. */
+async function findOpenLeg(
+  admin: SupabaseClient,
+  sessionId: string,
+  participantRole: "patient" | "doctor",
+): Promise<{ id: string; joined_at: string } | null> {
+  const { data } = await admin
+    .from("video_session_events")
+    .select("id, joined_at")
+    .eq("session_id", sessionId)
+    .eq("participant_role", participantRole)
+    .is("left_at", null)
+    .order("joined_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data as { id: string; joined_at: string } | null) ?? null;
+}
+
+/**
+ * Record a join/leave event for the app-tracked usage estimate on the admin
+ * "LiveKit Usage" panel (Build plan has no official Analytics API). Best-effort
+ * and non-fatal: failures are swallowed so a lost event can never break a call.
+ * The `video_session_events` table is created by supabase/livekit-video-sessions.sql.
+ *
+ * Keeps at most ONE open leg per participant/session:
+ * - "joined" reconciles any existing open leg for the same participant BEFORE
+ *   opening a new one (bounded by VIDEO_EVENT_RECONNECT_GRACE_MS so a stale leg
+ *   from long ago cannot balloon). A genuine reconnect after a real "left"
+ *   finds nothing open and records a fresh, non-overlapping leg.
+ * - "left" closes the most recent open interval, as before.
+ */
+export async function recordVideoSessionEvent(
+  admin: SupabaseClient,
+  vcNo: string,
+  participantRole: "patient" | "doctor",
+  event: "joined" | "left",
+): Promise<void> {
+  try {
+    const { data: session } = await admin
+      .from("video_sessions")
+      .select("id")
+      .eq("vc_no", vcNo)
+      .maybeSingle();
+    if (!session) return;
+
+    if (event === "joined") {
+      // Reconnect protection: if this participant still has an OPEN leg, a
+      // second "joined" would create overlapping, double-counted time. Close
+      // the previous leg first (at most GRACE past its start) then open fresh.
+      const open = await findOpenLeg(admin, session.id as string, participantRole);
+      if (open) {
+        const openStart = new Date(open.joined_at as string).getTime();
+        const now = Date.now();
+        const reconciled = new Date(
+          Number.isNaN(openStart) ? now : Math.min(now, openStart + VIDEO_EVENT_RECONNECT_GRACE_MS),
+        ).toISOString();
+        await admin
+          .from("video_session_events")
+          .update({ left_at: reconciled })
+          .eq("id", open.id as string);
+      }
+      await admin.from("video_session_events").insert({
+        session_id: session.id as string,
+        participant_role: participantRole,
+      });
+      return;
+    }
+
+    // "left": close the most recent open interval for this participant.
+    const open = await findOpenLeg(admin, session.id as string, participantRole);
+    if (open) {
+      await admin
+        .from("video_session_events")
+        .update({ left_at: new Date().toISOString() })
+        .eq("id", open.id as string);
+    }
+  } catch {
+    // Usage accounting must never affect the consultation itself.
+  }
 }

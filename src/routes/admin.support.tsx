@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { format } from "date-fns";
 import { Loader2, MessageSquare, Check } from "lucide-react";
@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { QueryError } from "@/components/admin/QueryError";
+import { usePageFocus, useFocusHighlight } from "@/hooks/usePageFocus";
 
 export const Route = createFileRoute("/admin/support")({
   component: AdminSupport,
@@ -34,6 +35,23 @@ function AdminSupport() {
   const [message, setMessage] = useState("");
 
   const selectedMsg = messages?.find((m) => m.id === selected) ?? null;
+
+  // Deep-link focus: new support-message notifications navigate to
+  // /admin/support?focus=support&id=<uuid> — open + highlight the message.
+  const pageFocus = usePageFocus();
+  const supportFocus = pageFocus?.focus === "support" ? pageFocus : null;
+  const supportFocusId = supportFocus?.id ?? null;
+
+  useFocusHighlight({ focus: supportFocus, ready: !isLoading });
+
+  useEffect(() => {
+    if (!supportFocusId) return;
+    const msg = (messages ?? []).find((m) => m.id === supportFocusId);
+    if (msg) {
+      setSelected(msg.id);
+      setNotes(msg.admin_notes ?? "");
+    }
+  }, [supportFocusId, messages]);
 
   return (
     <div>
@@ -64,6 +82,7 @@ function AdminSupport() {
                   setSelected(m.id);
                   setNotes(m.admin_notes ?? "");
                 }}
+                data-focus-id={m.id}
                 className={`w-full rounded-xl border bg-card px-5 py-4 text-left transition ${
                   selected === m.id ? "border-primary" : ""
                 }`}

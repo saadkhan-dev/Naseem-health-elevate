@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Bell } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -36,6 +37,7 @@ export function NotificationBell({
   emptyText,
 }: NotificationBellProps) {
   const isMobile = useIsMobile();
+  const [open, setOpen] = useState(false);
   const unread = data.filter((n) => !n.read_at).length;
   const badge = unreadBadge(unread);
 
@@ -59,6 +61,7 @@ export function NotificationBell({
       error={error}
       onMarkRead={onMarkRead}
       onMarkAll={onMarkAll}
+      onNavigate={() => setOpen(false)}
       emptyText={emptyText}
       contentClassName="max-h-[60vh] overflow-auto"
     />
@@ -66,7 +69,7 @@ export function NotificationBell({
 
   if (isMobile) {
     return (
-      <Sheet>
+      <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>{trigger}</SheetTrigger>
         <SheetContent side="right" className="w-full p-0 sm:max-w-sm">
           <SheetTitle className="sr-only">{label}</SheetTitle>
@@ -77,7 +80,7 @@ export function NotificationBell({
   }
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent
         align="end"

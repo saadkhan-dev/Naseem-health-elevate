@@ -20,6 +20,9 @@
 --     `ON CONFLICT` targets the broadcast partial unique index as a safety
 --     net in case the trigger ever fires twice for the same user.
 --   - No phone / email / gender ends up in the notification text.
+--   - `link` deep-links to the dashboard's Recent patients list and carries the
+--     new user's id (`?focus=patient&id=<uuid>`), so clicking the notification
+--     scrolls to and highlights that exact patient row.
 --
 -- Safe to re-run (CREATE OR REPLACE + ON CONFLICT DO NOTHING).
 -- ---------------------------------------------------------------------------
@@ -59,7 +62,7 @@ begin
           else
             'A new patient account was created.'
         end,
-        '/admin',
+        '/admin?focus=patient&id=' || new.id::text,
         'registration:' || new.id::text
       )
       on conflict (dedup_key) where recipient_id is null do nothing;

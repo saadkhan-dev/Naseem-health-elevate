@@ -97,94 +97,56 @@ Features include:
 - Dedicated Video Consultation flow
 - Patient video consultation link
 - Doctor/admin session management
-- **Google Meet** integration (automatic meeting creation)
+- **LiveKit** integration (embedded video rooms)
 - Video session creation
 - Patient join link
 - Admin **Copy Link** functionality
 - Notification support for video consultation links
 
-### Google Meet meetings
+### LiveKit video calls
 
-Each video consultation appointment gets **one** Google Meet meeting. When an
-admin starts a session, the server creates the meeting through the Google Meet
-REST API and stores the join URL (`meet_url`) against the appointment's
-`video_sessions` row. The same URL is reused for the patient's and the
-doctor's **Join Video Call** buttons, so both users land in the same call and a
-page refresh never creates a second meeting.
+Each video consultation appointment gets **one** LiveKit room. When an admin
+starts a session, the server records the appointment's `video_sessions` row
+with a deterministic room name (`naseem-<vcNo>`). LiveKit creates the room
+lazily on the first join, so no external meeting provider call is needed at
+start time. The same room is used for the patient's and the doctor's **Join
+Video Call** buttons, so both users land in the same call and a page refresh
+never creates a second session.
 
-Google Meet handles the camera, microphone, video, captions and recording UI —
-no iframe is embedded. Clicking **Join Video Call** opens `meet.google.com` in
-a new browser tab.
+The call runs as an **embedded LiveKit room on the `/video/<vcNo>` page**
+(camera, microphone, screen share, leave controls) instead of opening Google
+Meet in a new tab. The clinic's own Consultation Chat remains separate and
+unchanged.
 
-#### Google Meet API — manual setup (required once)
+#### LiveKit Cloud — setup (required once)
 
-The Google Meet REST API requires **OAuth 2.0** and a **Google Workspace
-account** (personal `@gmail.com` accounts cannot be used to create meeting
-spaces). Follow these steps:
-
-1. **Google Cloud project** — go to the [Google Cloud Console](https://console.cloud.google.com)
-   and create a project (or reuse an existing one).
-2. **Enable the Google Meet API** — Console → APIs & Services → Library →
-   search **"Google Meet API"** → Enable.
-3. **OAuth consent screen** — Console → APIs & Services → OAuth consent screen.
-   Set the app as **External** and add the Workspace account (`doctor@clinic…`)
-   as a test user.
-4. **OAuth Client ID** — Console → APIs & Services → Credentials → Create
-   credentials → **OAuth client ID** → **Web application**.
-   - Authorized JavaScript origins: `https://your-domain.com` (and
-     `http://localhost:5173` for local dev).
-   - Authorized redirect URIs: `http://localhost:5173/oauth-code` (loopback
-     trick used only for the one-time consent).
-   - Copy the **Client ID** and **Client secret**.
-5. **One-time consent (offline)** — the refresh token must be obtained from a
-   browser once. Open the consent URL (scope
-   `https://www.googleapis.com/auth/meetings.space.created`):
-
-   ```
-   https://accounts.google.com/o/oauth2/v2/auth
-     ?client_id=<CLIENT_ID>
-     &redirect_uri=http://localhost:5173/oauth-code
-     &response_type=code
-     &scope=https://www.googleapis.com/auth/meetings.space.created
-     &access_type=offline
-     &prompt=consent
-   ```
-
-   Approve the prompt as the Workspace account. The redirect lands on
-   `http://localhost:5173/oauth-code?code=<AUTH_CODE>&scope=…`. Copy
-   `<AUTH_CODE>`.
-
-6. **Exchange the code for a refresh token**:
-
-   ```bash
-   curl -X POST https://oauth2.googleapis.com/token \
-     -H "Content-Type: application/x-www-form-urlencoded" \
-     -d "code=<AUTH_CODE>" \
-     -d "client_id=<CLIENT_ID>" \
-     -d "client_secret=<CLIENT_SECRET>" \
-     -d "redirect_uri=http://localhost:5173/oauth-code" \
-     -d "grant_type=authorization_code"
-   ```
-
-   The JSON response contains `refresh_token` (only returned when
-   `access_type=offline`). Store it in `GOOGLE_MEET_REFRESH_TOKEN`.
-
-7. **Add the three server secrets** to your production environment
+1. **Create a LiveKit Cloud project** at [livekit.io/cloud](https://livekit.io/cloud)
+   and copy the project's **URL** (e.g. `wss://your-project.livekit.cloud`),
+   **API key** and **API secret** (Project Settings → Keys & tokens).
+2. **Add three server secrets** to your production environment
    (Cloudflare: secret bindings; Node: `.env`):
 
    ```env
-   GOOGLE_MEET_CLIENT_ID=...
-   GOOGLE_MEET_CLIENT_SECRET=...
-   GOOGLE_MEET_REFRESH_TOKEN=...
+   LIVEKIT_URL=wss://your-project.livekit.cloud
+   LIVEKIT_API_KEY=...
+   LIVEKIT_API_SECRET=...
+   # optional: display label on the /admin "LiveKit Usage" panel (default "Build")
+   LIVEKIT_PLAN=Build
    ```
 
-These three values are read on the server only and are used to mint short-lived
-access tokens for `POST https://meet.googleapis.com/v2/spaces`. They are never
-exposed as `VITE_*` variables.
+These values are read on the server only. Join tokens are short-lived JWTs
+minted server-side (scoped to exactly one room); the API secret is never
+exposed as a `VITE_*` variable.
 
 > If the variables are missing, starting a video session still creates the
-> session row, but the admin dialog shows a clear **Google Meet is not
-> configured** error and lets you retry after fixing the configuration.
+> session row, but the admin dialog and the join page show a clear
+> **LiveKit is not configured** warning until the secrets are set.
+
+**Optional usage tracking:** run `supabase/livekit-video-sessions.sql` in the
+Supabase SQL Editor once to enable the app-tracked WebRTC minute estimate on
+the /admin "LiveKit Usage" panel. Without it the panel shows those columns as
+Unavailable (LiveKit's official Analytics API is a Scale+ feature, so Build
+plan numbers are always labelled "Estimated").
 
 Video Consultation is intentionally **not shown as a normal service inside the regular Book Appointment dropdown**.
 
@@ -377,8 +339,8 @@ RESEND_API_KEY
 TWILIO_ACCOUNT_SID
 TWILIO_AUTH_TOKEN
 GEMINI_API_KEY
-GOOGLE_MEET_CLIENT_SECRET
-GOOGLE_MEET_REFRESH_TOKEN
+LIVEKIT_API_KEY
+LIVEKIT_API_SECRET
 ```
 
 The Supabase service-role key provides elevated database access and must be treated like a password.
@@ -441,7 +403,7 @@ Important migrations include functionality for:
 
 ### Integrations
 
-- Google Meet — Video Consultation
+- LiveKit — Video Consultation (embedded rooms, server-minted JWTs)
 - Google Gemini — AI Assistant
 - Resend — Email notifications
 - Twilio — SMS/WhatsApp notifications
@@ -588,19 +550,20 @@ For production notification links and video consultation links:
 SITE_URL=https://your-domain.com
 ```
 
-### Google Meet Video Consultation
+### LiveKit Video Consultation
 
-Required for automatic Google Meet meeting creation (see
-[Google Meet meetings](#google-meet-meetings)); all three values are server-only:
+Required for LiveKit video calls (see [LiveKit video
+calls](#livekit-video-calls)); all values are server-only:
 
 ```env
-GOOGLE_MEET_CLIENT_ID=your_oauth_client_id
-GOOGLE_MEET_CLIENT_SECRET=your_oauth_client_secret
-GOOGLE_MEET_REFRESH_TOKEN=your_offline_refresh_token
+LIVEKIT_URL=wss://your-project.livekit.cloud
+LIVEKIT_API_KEY=your_api_key
+LIVEKIT_API_SECRET=your_api_secret
+LIVEKIT_PLAN=Build
 ```
 
-If these are not configured, video sessions can still be created but no meeting
-is generated and the admin panel shows a configuration error.
+If these are not configured, video sessions can still be created but no one can
+join a call and the admin panel + join page show a configuration warning.
 
 **Do not commit your real `.env` file or secret values to GitHub.**
 
@@ -712,7 +675,7 @@ Before making the website publicly available:
 - [ ] Configure Home Visit service
 - [ ] Add products
 - [ ] Add educational videos
-- [ ] Configure Video Consultation (Google Meet)
+- [ ] Configure Video Consultation (LiveKit)
 - [ ] Configure Gemini API
 - [ ] Configure appointment notifications if required
 - [ ] Configure `SITE_URL`

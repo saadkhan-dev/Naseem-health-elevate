@@ -433,9 +433,31 @@ begin
   inner join public.consultation_conversations c on c.appointment_id = a.id
   where c.id = new.conversation_id;
 
-  select coalesce(nullif(btrim(p.full_name), ''), 'the doctor') into v_doctor_name
-  from public.profiles p
-  where p.id = new.sender_id;
+  -- The title names the conversation's DOCTOR participant (the person the
+  -- patient knows), NOT `new.sender_id`. Staff messages are always stamped
+  -- `sender_role = 'doctor'`, so an admin/manager replying on behalf of a
+  -- doctor would otherwise leak their own display name ("Hassan") to the
+  -- patient. Fall back to the sender's name only when a conversation has no
+  -- doctor participant.
+  select coalesce(
+           nullif(btrim(doctor.full_name), ''),
+           nullif(btrim(sender.full_name), ''),
+           'the doctor'
+         )
+    into v_doctor_name
+  from public.consultation_conversations cc
+  left join lateral (
+    select p.full_name
+    from public.consultation_participants part
+    join public.profiles p on p.id = part.user_id
+    where part.conversation_id = cc.id
+      and part.role = 'doctor'
+    order by part.created_at
+    limit 1
+  ) doctor on true
+  left join public.profiles sender on sender.id = new.sender_id
+  where cc.id = new.conversation_id
+  limit 1;
 
   -- Per-conversation debounce: the link encodes the conversation id, so
   -- matching on it scopes the 10-minute guard to THIS conversation.

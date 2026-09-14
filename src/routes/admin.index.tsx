@@ -1,9 +1,18 @@
+import { useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CalendarCheck, Clock, Users, Activity } from "lucide-react";
-import { useAppointments, useDashboardStats } from "@/hooks/queries/useAdmin";
+import { format } from "date-fns";
+import { CalendarCheck, Clock, Users, Activity, Loader2 } from "lucide-react";
+import {
+  useAppointments,
+  useDashboardStats,
+  useRecentPatients,
+  usePatientById,
+} from "@/hooks/queries/useAdmin";
 import { formatTimeDisplay } from "@/lib/bookings";
 import { QueryError } from "@/components/admin/QueryError";
 import { ChatUsagePanel } from "@/components/admin/ChatUsagePanel";
+import { LiveKitUsagePanel } from "@/components/admin/LiveKitUsagePanel";
+import { usePageFocus, useFocusHighlight } from "@/hooks/usePageFocus";
 
 export const Route = createFileRoute("/admin/")({
   component: AdminDashboard,
@@ -21,9 +30,27 @@ function AdminDashboard() {
     isError: appointmentsError,
     error: appointmentsErr,
   } = useAppointments();
+  const { data: recentPatients, isLoading: recentLoading } = useRecentPatients();
+
+  // Deep-link focus: "New patient registration" notifications navigate to
+  // /admin?focus=patient&id=<uuid> — the exact patient is pinned on top of the
+  // Recent patients list and highlighted.
+  const pageFocus = usePageFocus();
+  const patientFocus = pageFocus?.focus === "patient" ? pageFocus : null;
+  const { data: focusPatient } = usePatientById(patientFocus?.id ?? null);
+
+  useFocusHighlight({ focus: patientFocus, ready: !recentLoading });
 
   const today = new Date().toISOString().split("T")[0];
   const todayAppts = (appointments ?? []).filter((a) => a.date === today).slice(0, 5);
+
+  const recentPatientsList = useMemo(() => {
+    const base = recentPatients ?? [];
+    if (focusPatient && !base.some((p) => p.id === focusPatient.id)) {
+      return [focusPatient, ...base];
+    }
+    return base;
+  }, [recentPatients, focusPatient]);
 
   const cards = [
     {
@@ -130,6 +157,40 @@ function AdminDashboard() {
         </div>
       </div>
 
+      <div className="mt-8">
+        <h2 className="text-lg font-semibold text-foreground">Recent patients</h2>
+        <div className="mt-3 rounded-xl border bg-card">
+          {recentLoading ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : recentPatientsList.length === 0 ? (
+            <p className="p-6 text-center text-sm text-muted-foreground">No patients yet</p>
+          ) : (
+            <div className="divide-y">
+              {recentPatientsList.map((p) => (
+                <div
+                  key={p.id}
+                  data-focus-id={p.id}
+                  className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-5 py-3"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-foreground">
+                      {p.full_name || "Unnamed patient"}
+                    </div>
+                    {p.phone && <div className="text-xs text-muted-foreground">{p.phone}</div>}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Joined {format(new Date(p.created_at), "MMM d, yyyy")}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <LiveKitUsagePanel />
       <ChatUsagePanel />
     </div>
   );

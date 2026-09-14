@@ -27,11 +27,14 @@ import {
   createPaymentMethod,
   updatePaymentMethod,
   deletePaymentMethod,
+  getRecentPatients,
+  getPatientById,
   type AppointmentWithDetails,
   type Product,
   type DashboardStats,
   type VideoOffer,
   type VideoPaymentStatusView,
+  type RecentPatient,
 } from "@/lib/admin-data";
 import { adminGetChatUsage } from "@/lib/actions.functions";
 import type { ChatUsageRange, ChatUsageStats } from "@/lib/server/chat-usage";
@@ -312,6 +315,25 @@ export function useDashboardStats() {
     queryKey: ["admin", "stats"],
     queryFn: getDashboardStats,
     refetchInterval: 30000,
+  });
+}
+
+/** Most recently registered patients (dashboard deep-link target). */
+export function useRecentPatients() {
+  return useQuery<RecentPatient[]>({
+    queryKey: ["admin", "recent-patients"],
+    queryFn: () => getRecentPatients(12),
+  });
+}
+
+/** Single patient profile — loads the deep-linked patient even when they are
+ *  not inside the recent-patients list, so the notification always lands on
+ *  the exact record. */
+export function usePatientById(id: string | null) {
+  return useQuery<RecentPatient | null>({
+    queryKey: ["admin", "patient", id ?? "none"],
+    queryFn: () => getPatientById(id as string),
+    enabled: !!id,
   });
 }
 

@@ -4,6 +4,7 @@ import {
   createPatientNotification,
   buildAdminNotificationDedupKey,
 } from "./patient-notifications";
+import { buildAdminFocusLink } from "@/lib/admin-focus";
 
 /**
  * Server-side order payment operations.
@@ -128,7 +129,7 @@ export async function submitOrderPaymentForOrder(
     body: `${order.name?.trim() || "A customer"} submitted a payment proof for order ${
       order.order_no ?? ""
     }.`,
-    link: "/admin/payments",
+    link: buildAdminFocusLink("/admin/orders", "order", order.id),
     dedupKey: buildAdminNotificationDedupKey("payment_update", `order:${order.id}:${submittedAt}`),
   });
 
@@ -235,7 +236,7 @@ export async function submitOrderPaymentByIdentifier(
     body: `${order.name?.trim() || "A customer"} submitted a payment proof for order ${
       order.order_no ?? ""
     }.`,
-    link: "/admin/payments",
+    link: buildAdminFocusLink("/admin/orders", "order", order.id),
     dedupKey: buildAdminNotificationDedupKey("payment_update", `order:${order.id}`),
   });
 
@@ -334,7 +335,7 @@ export async function submitOrderPaymentReceipt(
     body: `${order.name?.trim() || "A customer"} uploaded a payment receipt for order ${
       order.order_no ?? ""
     }.`,
-    link: "/admin/payments",
+    link: buildAdminFocusLink("/admin/orders", "order", order.id),
     dedupKey: buildAdminNotificationDedupKey("payment_update", `order:${order.id}:${submittedAt}`),
   });
 

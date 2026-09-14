@@ -4,6 +4,7 @@ import {
   createPatientNotification,
   buildAdminNotificationDedupKey,
 } from "./patient-notifications";
+import { buildAdminFocusLink } from "@/lib/admin-focus";
 
 /**
  * Server-side prepaid Video Consultation payment operations.
@@ -112,7 +113,7 @@ export async function submitVideoPaymentForAppointment(
     type: "payment_update",
     title: "Payment proof submitted",
     body: `${loaded.row.patient_name?.trim() || "A patient"} submitted a payment proof for a video consultation.`,
-    link: "/admin/payments",
+    link: buildAdminFocusLink("/admin/appointments", "appointment", loaded.row.id),
     dedupKey: buildAdminNotificationDedupKey(
       "payment_update",
       `video:${loaded.row.id}:${submittedAt}`,
@@ -336,7 +337,7 @@ export async function submitVideoPaymentReceipt(
     body: `${loaded.row.patient_name?.trim() || "A patient"} uploaded a payment receipt for video consultation ${
       loaded.row.appointment_no ?? ""
     }.`,
-    link: "/admin/payments",
+    link: buildAdminFocusLink("/admin/appointments", "appointment", loaded.row.id),
     dedupKey: buildAdminNotificationDedupKey(
       "payment_update",
       `video:${loaded.row.id}:${submittedAt}`,
@@ -425,7 +426,7 @@ export async function submitVideoPaymentByIdentifier(
     body: `${loaded.row.patient_name?.trim() || "A patient"} submitted a payment proof for video consultation ${
       loaded.row.appointment_no ?? ""
     }.`,
-    link: "/admin/payments",
+    link: buildAdminFocusLink("/admin/appointments", "appointment", loaded.row.id),
     dedupKey: buildAdminNotificationDedupKey(
       "payment_update",
       `video:${loaded.row.id}:${submittedAt}`,

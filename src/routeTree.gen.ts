@@ -18,7 +18,6 @@ import { Route as CartRouteImport } from './routes/cart'
 import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as ConditionsRouteImport } from './routes/conditions'
 import { Route as FaqRouteImport } from './routes/faq'
-import { Route as OauthCodeRouteImport } from './routes/oauth-code'
 import { Route as PatientRouteImport } from './routes/patient'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SearchRouteImport } from './routes/search'
@@ -98,11 +97,6 @@ const ConditionsRoute = ConditionsRouteImport.update({
 const FaqRoute = FaqRouteImport.update({
   id: '/faq',
   path: '/faq',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OauthCodeRoute = OauthCodeRouteImport.update({
-  id: '/oauth-code',
-  path: '/oauth-code',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PatientRoute = PatientRouteImport.update({
@@ -291,7 +285,6 @@ export interface FileRoutesByFullPath {
   '/checkout': typeof CheckoutRoute
   '/conditions': typeof ConditionsRoute
   '/faq': typeof FaqRoute
-  '/oauth-code': typeof OauthCodeRoute
   '/patient': typeof PatientRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
@@ -337,7 +330,6 @@ export interface FileRoutesByTo {
   '/checkout': typeof CheckoutRoute
   '/conditions': typeof ConditionsRoute
   '/faq': typeof FaqRoute
-  '/oauth-code': typeof OauthCodeRoute
   '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
   '/shop': typeof ShopRoute
@@ -384,7 +376,6 @@ export interface FileRoutesById {
   '/checkout': typeof CheckoutRoute
   '/conditions': typeof ConditionsRoute
   '/faq': typeof FaqRoute
-  '/oauth-code': typeof OauthCodeRoute
   '/patient': typeof PatientRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
@@ -433,7 +424,6 @@ export interface FileRouteTypes {
     | '/checkout'
     | '/conditions'
     | '/faq'
-    | '/oauth-code'
     | '/patient'
     | '/reset-password'
     | '/search'
@@ -479,7 +469,6 @@ export interface FileRouteTypes {
     | '/checkout'
     | '/conditions'
     | '/faq'
-    | '/oauth-code'
     | '/reset-password'
     | '/search'
     | '/shop'
@@ -525,7 +514,6 @@ export interface FileRouteTypes {
     | '/checkout'
     | '/conditions'
     | '/faq'
-    | '/oauth-code'
     | '/patient'
     | '/reset-password'
     | '/search'
@@ -573,7 +561,6 @@ export interface RootRouteChildren {
   CheckoutRoute: typeof CheckoutRoute
   ConditionsRoute: typeof ConditionsRoute
   FaqRoute: typeof FaqRoute
-  OauthCodeRoute: typeof OauthCodeRoute
   PatientRoute: typeof PatientRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
   SearchRoute: typeof SearchRoute
@@ -647,13 +634,6 @@ declare module '@tanstack/react-router' {
       path: '/faq'
       fullPath: '/faq'
       preLoaderRoute: typeof FaqRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/oauth-code': {
-      id: '/oauth-code'
-      path: '/oauth-code'
-      fullPath: '/oauth-code'
-      preLoaderRoute: typeof OauthCodeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/patient': {
@@ -1003,7 +983,6 @@ const rootRouteChildren: RootRouteChildren = {
   CheckoutRoute: CheckoutRoute,
   ConditionsRoute: ConditionsRoute,
   FaqRoute: FaqRoute,
-  OauthCodeRoute: OauthCodeRoute,
   PatientRoute: PatientRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
   SearchRoute: SearchRoute,

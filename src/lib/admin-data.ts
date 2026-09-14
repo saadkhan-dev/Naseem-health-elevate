@@ -266,6 +266,42 @@ export async function updateAppointmentStatus(
   return adminUpdateAppointmentStatus({ data: { id, status } });
 }
 
+// --- Recent patients (dashboard) ---
+
+export interface RecentPatient {
+  id: string;
+  full_name: string | null;
+  phone: string | null;
+  gender: string | null;
+  created_at: string;
+}
+
+/** Most recently registered patient accounts (patients only, not staff). */
+export async function getRecentPatients(limit = 12): Promise<RecentPatient[]> {
+  const { data, error } = await staffSupabase
+    .from("profiles")
+    .select("id, full_name, phone, gender, created_at")
+    .or("role.eq.patient,role.is.null")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.error("[admin] getRecentPatients failed:", error.message);
+    return [];
+  }
+  return (data ?? []) as RecentPatient[];
+}
+
+/** Single patient profile — used to pin the deep-linked patient on top. */
+export async function getPatientById(id: string): Promise<RecentPatient | null> {
+  const { data, error } = await staffSupabase
+    .from("profiles")
+    .select("id, full_name, phone, gender, created_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) return null;
+  return (data as RecentPatient | null) ?? null;
+}
+
 // --- Availability ---
 
 export async function updateAvailability(

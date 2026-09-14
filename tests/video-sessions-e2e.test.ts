@@ -4,6 +4,7 @@ import {
   createOrReuseVideoSession,
   createVideoSessionForAppointment,
   getVideoJoinByVcNo,
+  mintVideoJoinToken,
   resendVideoNotification,
 } from "../src/lib/server/video-sessions";
 import { videoJoinUrl } from "../src/lib/video-join";
@@ -14,20 +15,23 @@ import { buildVideoReadyMessages } from "../src/lib/notifications";
  * against the LIVE Supabase project.
  *
  * This exercises the SAME server logic the TanStack server functions use:
- *  - createOrReuseVideoSession      → ONE session per appointment (same VC code,
- *                                     Google Meet meeting and join link)
- *  - createVideoSessionForAppointment → confirmed + paid gate before a call starts;
- *                                     creates the appointment's single Meet space
- *  - getVideoJoinByVcNo             → secure join lookup by VC code (no UUIDs);
- *                                     returns the Meet URL both users open
- *  - resendVideoNotification        → notification retry reuses the same link and
- *                                     reports honest per-channel results
- *  - buildVideoReadyMessages        → pure message builder carrying the join URL
+ *  - createOrReuseVideoSession        → ONE session per appointment (same VC
+ *                                       code / LiveKit room name and join link)
+ *  - createVideoSessionForAppointment → confirmed + paid gate before a call
+ *                                       starts; never touches an external
+ *                                       meeting provider (LiveKit is lazy)
+ *  - getVideoJoinByVcNo               → secure join lookup by VC code (no UUIDs);
+ *                                       returns the LiveKit websocket URL
+ *  - mintVideoJoinToken               → server-side signed LiveKit JWT scoped to
+ *                                       exactly the session's room
+ *  - resendVideoNotification          → notification retry reuses the same link
+ *                                       and reports honest per-channel results
+ *  - buildVideoReadyMessages          → pure message builder carrying the join URL
  *
- * The Google Meet API needs real Workspace credentials, which a bare test
- * environment does not have. Those tests therefore assert BOTH behaviours:
- * with credentials the meeting is created once; without them the flow degrades
- * to a clear `meetError` and never duplicates sessions.
+ * Room creation in LiveKit is lazy (rooms come into existence on first join),
+ * so the session row itself never depends on provider credentials. When
+ * LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET are absent the flow still
+ * works and reports `livekitConfigured: false` honestly.
  *
  * Everything created is cleaned up in afterEach / afterAll so a run never
  * leaves state behind.
@@ -165,15 +169,15 @@ describe("Video session — one room/link per appointment (reuse)", () => {
   });
 });
 
-describe("Video session — two users can join the SAME Google Meet meeting", () => {
-  it("the doctor and the patient resolve to the IDENTICAL room and meeting URL", async () => {
+describe("Video session — both users join the SAME LiveKit room", () => {
+  it("the doctor and the patient resolve to the IDENTICAL room and server URL", async () => {
     const { id } = await createVideoAppointment();
     const started = await startSessionFor(id);
     const vcNo = started.session!.vc_no!;
 
     // Two independent join lookups — one for the patient's browser, one for
-    // the doctor's — must both land on the same room AND the same Meet URL,
-    // otherwise they would never see each other.
+    // the doctor's — must both land on the same room and the same LiveKit
+    // server, otherwise they would never see each other.
     const patientJoin = await getVideoJoinByVcNo(admin, vcNo);
     const doctorJoin = await getVideoJoinByVcNo(admin, vcNo);
 
@@ -181,10 +185,11 @@ describe("Video session — two users can join the SAME Google Meet meeting", ()
     expect(doctorJoin.error).toBeNull();
     expect(patientJoin.session!.roomName).toBe(doctorJoin.session!.roomName);
     expect(patientJoin.session!.roomName).toBe(started.session!.room_name);
-    expect(patientJoin.session!.meetUrl).toBe(doctorJoin.session!.meetUrl);
+    expect(patientJoin.session!.serverUrl).toBe(doctorJoin.session!.serverUrl);
+    expect(typeof patientJoin.livekitConfigured).toBe("boolean");
   });
 
-  it("never creates a second meeting when the session is started again", async () => {
+  it("never advertises a different room when the session is started again", async () => {
     const { id } = await createVideoAppointment();
     const first = await startSessionFor(id);
     const second = await createVideoSessionForAppointment(
@@ -198,25 +203,50 @@ describe("Video session — two users can join the SAME Google Meet meeting", ()
     expect(second.error).toBeNull();
     expect(second.session!.id).toBe(first.session!.id);
     expect(second.session!.vc_no).toBe(first.session!.vc_no);
-    // The stored meeting reference must be the SAME one (same URL + space id) —
-    // refreshes / repeat clicks never generate a new space.
-    expect(second.session!.meet_url).toBe(first.session!.meet_url);
-    expect(second.session!.meet_space_id).toBe(first.session!.meet_space_id);
+    expect(second.session!.room_name).toBe(first.session!.room_name);
   });
 
-  it("when Google Meet is not configured, the session still exists with a clear meetError", async () => {
+  it("starts fine without LiveKit credentials and reports livekitConfigured=false", async () => {
     const { id } = await createVideoAppointment();
     const result = await startSessionFor(id);
 
-    // A run with real GOOGLE_MEET_* credentials produces a URL here. Without
-    // them the flow must degrade loudly (never hang, never crash) and leave a
-    // retryable session behind.
-    if (!result.meetConfigured) {
-      expect(result.meetError).toMatch(/Google Meet/i);
-      expect(result.session!.meet_url).toBeNull();
-      expect(result.session!.vc_no).toBeTruthy();
+    // A run with real LIVEKIT_* credentials reports configured=true. Without
+    // them the session row must still exist (LiveKit rooms are lazy, so a
+    // start never depends on provider credentials) and configuration must be
+    // reported honestly — never faked.
+    if (result.livekitConfigured) {
+      const join = await getVideoJoinByVcNo(admin, result.session!.vc_no!);
+      expect(join.session!.serverUrl).toMatch(/^(wss?|https?):\/\//);
     } else {
-      expect(result.session!.meet_url).toMatch(/^https:\/\/meet\.google\.com\//);
+      expect(result.session!.vc_no).toBeTruthy();
+      const join = await getVideoJoinByVcNo(admin, result.session!.vc_no!);
+      expect(join.livekitConfigured).toBe(false);
+    }
+  });
+
+  it("mintVideoJoinToken mints exactly one room-scoped token (or fails honestly when unconfigured)", async () => {
+    const { id } = await createVideoAppointment();
+    const started = await startSessionFor(id);
+    const vcNo = started.session!.vc_no!;
+
+    const result = await mintVideoJoinToken(admin, vcNo, undefined);
+
+    if (result.error) {
+      // Only legitimate failure path on an unconfigured server.
+      expect(result.error).toMatch(/LiveKit is not configured/i);
+      expect(result.token).toBeNull();
+    } else {
+      expect(result.token).toBeTruthy();
+      expect(result.serverUrl).toBeTruthy();
+      expect(result.roomName).toBe(started.session!.room_name);
+      expect(result.expiresAt).toBeGreaterThan(Date.now());
+      // A JWT has three dot-separated segments.
+      expect(result.token!.split(".")).toHaveLength(3);
+      // The payload must be scoped to THIS room, not any other session's.
+      const payload = JSON.parse(
+        Buffer.from(result.token!.split(".")[1], "base64url").toString("utf8"),
+      );
+      expect(payload.video?.room).toBe(started.session!.room_name);
     }
   });
 });
@@ -300,7 +330,7 @@ describe("Video session — secure join lookup by VC code", () => {
       roomName: started.session!.room_name,
       durationMinutes: 20,
       status: "scheduled",
-      meetUrl: started.session!.meet_url,
+      serverUrl: expect.any(String),
     });
     expect("id" in join.session!).toBe(false);
     expect("appointment_id" in join.session!).toBe(false);

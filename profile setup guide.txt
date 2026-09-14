@@ -14,28 +14,27 @@ Doctor starts the call:
 2. Find a Confirmed appointment
 3. Click "Video Call" button
 4. A dialog pops up with:
-- Patient join link — copy this link (e.g., http://localhost:8081/video/abc-123)
-- "Join as Doctor" — click this to enter the video room
-5. Doctor enters the Jitsi Meet room and waits
+- Patient join link — copy this link (e.g., https://your-domain.com/video/VC-AB12CD)
+- "Join as Doctor" — click this to open the video page and join the room
+5. Doctor opens the LiveKit room (embedded in the website) and waits
 Patient joins:
 - Doctor sends them the link (via WhatsApp: +92 315 2968384)
 - Patient opens the link in Chrome/Firefox browser
-- Enters their name → clicks "Join Video Call"
+- Clicks "Join Video Call"
 - Grants camera/microphone permissions
-- Both are now in the same video room
-Video room features (Jitsi Meet):
+- Both are now in the same LiveKit room
+Video room features (LiveKit):
 - Two-way video + audio
 - Mute/unmute, camera on/off
 - Screen sharing
-- Chat
 No app install needed — works entirely in the browser on phone, tablet, or computer.
 Want me to enhance the admin panel to also show a "Send WhatsApp link" button that auto-sends the video l
 
 RLS Policy:
 Patient Data Safety: Currently not fully secure — we disabled RLS during development. All tables are open to anyone with the anon key. Before deployment, I need to re-enable RLS with proper policies so patients can only see their own data.
-Call Duration: Unlimited. Jitsi Meet (free) has no time limit per call. But we don't track call duration yet — I can add that if needed.
+Call Duration: Unlimited. LiveKit (free Build plan) has no hard per-call time limit.
 Reliability:
-Jitsi: Runs on public servers (meet.jit.si) — no SLA, but works reliably for most use
+LiveKit: Runs on LiveKit Cloud (free Build plan, 5,000 WebRTC participant-min/month) — no SLA on free tier, works reliably for most use
 Supabase free tier: 500 MB database, 5 GB bandwidth — fine for small clinic
 Overall: Good for a clinic with moderate traffic. For enterprise grade, you'd use Daily.co (paid) and Supabase pro ($25/mo)
 Deployment checklist before going live:

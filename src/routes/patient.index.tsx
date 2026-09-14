@@ -448,7 +448,7 @@ function PatientDashboard() {
       const conversationId = convoByAppointment.get(a.id);
       const id =
         conversationId ?? (await ensureConsultationConversation(a.id, "public")).conversationId;
-      // Open the video page in a new tab (it holds the Google Meet link)…
+      // Open the video page in a new tab (it contains the LiveKit room)…
       window.open(`/video/${vcNo}`, "_blank", "noopener,noreferrer");
       // …and bring the SAME appointment's chat into the current tab.
       navigate({

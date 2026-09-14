@@ -190,17 +190,13 @@ function VideoChatPage() {
             </div>
           </div>
 
-          {session.meetUrl ? (
-            <Button
-              variant="outline"
-              className="w-full gap-2"
-              onClick={() => window.open(session.meetUrl!, "_blank", "noopener,noreferrer")}
-            >
-              <Video className="h-4 w-4" /> Join Video Call
-            </Button>
-          ) : (
-            <p className="text-center text-xs text-muted-foreground">Meeting not started yet</p>
-          )}
+          <Button
+            variant="outline"
+            className="w-full gap-2"
+            onClick={() => navigate({ to: "/video/$vcNo", params: { vcNo } })}
+          >
+            <Video className="h-4 w-4" /> Join Video Call
+          </Button>
         </aside>
 
         {/* ── Chat pane — all screens ── */}

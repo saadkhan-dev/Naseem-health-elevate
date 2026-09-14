@@ -43,6 +43,7 @@ import {
 import { staffSupabase } from "@/lib/supabase";
 import { QueryError } from "@/components/admin/QueryError";
 import type { AdminOrder } from "@/lib/admin-extra";
+import { usePageFocus, useFocusHighlight } from "@/hooks/usePageFocus";
 
 export const Route = createFileRoute("/admin/orders")({
   component: AdminOrders,
@@ -131,6 +132,19 @@ function AdminOrders() {
       );
     });
   }, [orders, search, statusFilter, paymentFilter, dateFilter]);
+
+  // Deep-link focus: order notifications navigate to /admin/orders?focus=order&id=<uuid>.
+  const pageFocus = usePageFocus();
+  useFocusHighlight({
+    focus: pageFocus?.focus === "order" ? pageFocus : null,
+    ready: !isLoading,
+    ensureVisible: () => {
+      if (search) setSearch("");
+      if (statusFilter !== "all") setStatusFilter("all");
+      if (paymentFilter !== "all") setPaymentFilter("all");
+      if (dateFilter !== "all") setDateFilter("all");
+    },
+  });
 
   async function handleOpenReceipt(o: AdminOrder) {
     setReceiptOrder(o);
@@ -359,7 +373,7 @@ function AdminOrders() {
             </p>
           ) : (
             filteredOrders.map((o) => (
-              <div key={o.id} className="rounded-xl border bg-card p-5">
+              <div key={o.id} className="rounded-xl border bg-card p-5" data-focus-id={o.id}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="font-medium text-foreground">
                     {o.order_no ?? "Order"}

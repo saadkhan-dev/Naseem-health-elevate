@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { QueryError } from "@/components/admin/QueryError";
 import { unreadBadge } from "@/lib/notification-unread";
+import { splitNavigationLink } from "@/lib/admin-focus";
 
 export interface NotificationItem {
   id: string;
@@ -22,6 +23,8 @@ interface NotificationListProps {
   error?: Error | null;
   onMarkRead: (id: string) => void;
   onMarkAll: () => void;
+  /** Called after a notification navigates so the bell popover/sheet closes. */
+  onNavigate?: () => void;
   emptyText?: string;
   className?: string;
   contentClassName?: string;
@@ -35,6 +38,7 @@ export function NotificationList({
   error = null,
   onMarkRead,
   onMarkAll,
+  onNavigate,
   emptyText = "No notifications yet",
   className,
   contentClassName = "max-h-48 overflow-auto lg:max-h-72",
@@ -44,7 +48,9 @@ export function NotificationList({
   function handleItemClick(n: NotificationItem) {
     if (!n.read_at) onMarkRead(n.id);
     if (n.link && n.link.startsWith("/") && !n.link.startsWith("//")) {
-      void navigate({ to: n.link });
+      const { path, search } = splitNavigationLink(n.link);
+      void navigate({ to: path, search } as never);
+      onNavigate?.();
     }
   }
 

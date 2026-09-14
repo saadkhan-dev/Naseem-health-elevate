@@ -20,8 +20,11 @@ import { resolveVideoOffer, recordOfferUsage, releaseOfferUsage } from "./server
 import {
   createVideoSessionForAppointment,
   getVideoJoinByVcNo as getVideoJoinByVcNoServer,
+  mintVideoJoinToken,
+  recordVideoSessionEvent,
   resendVideoNotification,
 } from "./server/video-sessions";
+import { getLiveKitUsageSnapshot } from "./server/livekit-usage";
 import {
   createPatientNotification,
   createAdminNotification,
@@ -29,6 +32,7 @@ import {
   resolvePatientName,
 } from "./server/patient-notifications";
 import { validateAppointmentSlot } from "./server/slot-validation";
+import { buildAdminFocusLink } from "@/lib/admin-focus";
 import {
   createAppointmentReminder,
   sendDueAppointmentReminders as sendDueReminders,
@@ -36,11 +40,6 @@ import {
 import { searchSite } from "./server/search";
 import { getAnalytics } from "./server/analytics";
 import { getGoogleReviewsServer } from "./server/google-reviews";
-import {
-  exchangeGoogleMeetCode,
-  getGoogleMeetConfig,
-  storeGoogleMeetRefreshToken,
-} from "./server/google-meet";
 import {
   sendAppointmentNotifications,
   sendStatusChangeNotifications,
@@ -486,7 +485,7 @@ export const createBooking = createServerFn({ method: "POST" })
           body: `${data.name || "A patient"} booked ${service.name} appointment ${appointmentNo} for ${data.date}${
             data.time ? ` at ${data.time.slice(0, 5)}` : ""
           }.`,
-          link: "/admin/appointments",
+          link: buildAdminFocusLink("/admin/appointments", "appointment", inserted.id as string),
           dedupKey: buildAdminNotificationDedupKey("new_appointment", inserted.id as string),
         });
 
@@ -1140,7 +1139,7 @@ export const adminDeleteReview = createServerFn({ method: "POST" })
   });
 
 // ---------------------------------------------------------------------------
-// Admin — video consultations (Google Meet sessions)
+// Admin — video consultations (LiveKit sessions)
 // ---------------------------------------------------------------------------
 
 interface VideoSessionRecord {
@@ -1153,8 +1152,6 @@ interface VideoSessionRecord {
   ended_at: string | null;
   duration_minutes: number;
   created_at: string;
-  meet_url: string | null;
-  meet_space_id: string | null;
 }
 
 export const adminCreateVideoSession = createServerFn({ method: "POST" })
@@ -1167,8 +1164,8 @@ export const adminCreateVideoSession = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     // Reuses the existing session when the appointment already has one, so
-    // the same VC code, Google Meet meeting and patient join link are used
-    // everywhere (never two meetings for one appointment).
+    // the same VC code, LiveKit room name and patient join link are used
+    // everywhere (never two sessions for one appointment).
     const result = await createVideoSessionForAppointment(
       getSupabaseAdmin(),
       data.appointmentId,
@@ -1179,8 +1176,7 @@ export const adminCreateVideoSession = createServerFn({ method: "POST" })
       error: result.error,
       session: result.session as VideoSessionRecord | null,
       created: result.created,
-      meetError: result.meetError,
-      meetConfigured: result.meetConfigured,
+      livekitConfigured: result.livekitConfigured,
       notifications: result.notifications,
     };
   });
@@ -1223,61 +1219,64 @@ export const getVideoJoinByVcNo = createServerFn({ method: "POST" })
   });
 
 // ---------------------------------------------------------------------------
-// Google Meet — one-time OAuth callback completion (/oauth-code)
+// Public — mint the LiveKit join token for a video consultation room
 //
-// After the clinic's Workspace user approves the Google consent screen, Google
-// redirects the browser to /oauth-code?code=…&state=…. This function swaps the
-// single-use code for OAuth tokens SERVER-SIDE and stores the refresh token
-// off the browser (see server/google-meet.ts). It is intentionally
-// unauthenticated: the person completing the flow is usually not signed into
-// the app, and Google's own code + client-secret + redirect_uri matching is
-// the security boundary. Tokens are NEVER returned — only a status message.
+// The very last step of joining: after the join lookup succeeds, the client
+// requests a short-lived server-signed LiveKit JWT. The LIVEKIT_API_SECRET
+// never leaves the server. Doctors/admins (verified by their JWT) get the
+// roomAdmin grant; patients get a plain participant scoped to this room only.
 // ---------------------------------------------------------------------------
 
-export const completeGoogleMeetOAuth = createServerFn({ method: "POST" })
+export const getVideoJoinToken = createServerFn({ method: "POST" })
+  .middleware([anyAuthMiddleware])
   .validator(
     z.object({
-      code: z.string().trim().min(1, "Missing authorization code"),
-      redirectUri: z.string().trim().url("Invalid redirect URI"),
+      vcNo: z
+        .string()
+        .trim()
+        .toUpperCase()
+        .regex(/^VC-[A-Z0-9]{6}$/, "Invalid video consultation code"),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const result = await mintVideoJoinToken(getSupabaseAdmin(), data.vcNo, context?.staffToken);
+    return result;
+  });
+
+// ---------------------------------------------------------------------------
+// Public — report a join/leave event for the app-tracked usage estimate
+//
+// Best-effort recording for the admin "LiveKit Usage" panel. Failure is
+// swallowed server-side, so a lost event can never break a consultation.
+// ---------------------------------------------------------------------------
+
+export const reportVideoSessionEvent = createServerFn({ method: "POST" })
+  .middleware([anyAuthMiddleware])
+  .validator(
+    z.object({
+      vcNo: z
+        .string()
+        .trim()
+        .toUpperCase()
+        .regex(/^VC-[A-Z0-9]{6}$/, "Invalid video consultation code"),
+      role: z.enum(["patient", "doctor"]),
+      event: z.enum(["joined", "left"]),
     }),
   )
   .handler(async ({ data }) => {
-    const config = getGoogleMeetConfig();
-    if (!config.clientId || !config.clientSecret) {
-      return {
-        ok: false,
-        message: `Google Meet is not configured yet (missing ${(!config.clientId ? "GOOGLE_MEET_CLIENT_ID" : "") + (!config.clientId && !config.clientSecret ? ", " : "") + (!config.clientSecret ? "GOOGLE_MEET_CLIENT_SECRET" : "")}).`,
-      };
-    }
+    await recordVideoSessionEvent(getSupabaseAdmin(), data.vcNo, data.role, data.event);
+    return { error: null };
+  });
 
-    try {
-      const tokens = await exchangeGoogleMeetCode(
-        config.clientId,
-        config.clientSecret,
-        data.code,
-        data.redirectUri,
-      );
-      if (!tokens.refreshToken) {
-        return {
-          ok: false,
-          message:
-            "Google returned no refresh token. Re-run the consent with access_type=offline (see README → Google Meet setup).",
-        };
-      }
+// ---------------------------------------------------------------------------
+// Admin — LiveKit usage snapshot for the admin dashboard panel
+// ---------------------------------------------------------------------------
 
-      const stored = await storeGoogleMeetRefreshToken(tokens.refreshToken);
-      return {
-        ok: true,
-        message: stored.persisted
-          ? "Google Meet access has been linked and saved to .env."
-          : `Google Meet access is linked for this server session. ${stored.detail ?? ""}`.trim(),
-      };
-    } catch (error) {
-      return {
-        ok: false,
-        message: error instanceof Error ? error.message : "The Google OAuth code exchange failed.",
-      };
-    }
+export const adminGetLiveKitUsage = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async () => {
+    return getLiveKitUsageSnapshot(getSupabaseAdmin());
   });
 
 // ---------------------------------------------------------------------------
@@ -2119,7 +2118,7 @@ export const patientCancelAppointment = createServerFn({ method: "POST" })
       body: `Appointment ${(row.appointment_no as string | null) ?? data.id} was cancelled by ${
         cancellingName ?? "the patient"
       }.`,
-      link: "/admin/appointments",
+      link: buildAdminFocusLink("/admin/appointments", "appointment", data.id),
       dedupKey: buildAdminNotificationDedupKey("appointment_cancelled", data.id),
     });
 
@@ -2199,7 +2198,7 @@ export const patientRescheduleAppointment = createServerFn({ method: "POST" })
       type: "appointment_rescheduled",
       title: "Patient requested reschedule",
       body: `${reschedulingName ?? "A patient"} would like to move appointment ${(row.appointment_no as string | null) ?? data.id} to ${data.date}${data.time ? ` at ${data.time.slice(0, 5)}` : ""}.`,
-      link: "/admin/appointments",
+      link: buildAdminFocusLink("/admin/appointments", "appointment", data.id),
       dedupKey: buildAdminNotificationDedupKey(
         "reschedule_requested",
         `${data.id}:${data.date}${data.time ?? ""}`,
@@ -2390,7 +2389,7 @@ export const patientApplyRescheduleAppointment = createServerFn({ method: "POST"
         }. The appointment stays on ${row.date}${
           (row.time as string | null) ? ` at ${(row.time as string).slice(0, 5)}` : ""
         }.`,
-        link: "/admin/appointments",
+        link: buildAdminFocusLink("/admin/appointments", "appointment", row.id as string),
         dedupKey: buildAdminNotificationDedupKey("reschedule_declined", row.id as string),
       });
       return { error: null };
@@ -2449,7 +2448,7 @@ export const patientApplyRescheduleAppointment = createServerFn({ method: "POST"
       body: `The patient accepted the new slot — the appointment is now on ${targetDate}${
         targetTime ? ` at ${targetTime}` : ""
       }.`,
-      link: "/admin/appointments",
+      link: buildAdminFocusLink("/admin/appointments", "appointment", row.id as string),
       dedupKey: buildAdminNotificationDedupKey("reschedule_accepted", row.id as string),
     });
 
@@ -2871,7 +2870,7 @@ export const placeOrder = createServerFn({ method: "POST" })
           type: "new_order",
           title: "New order received",
           body: `${data.name || "A customer"} placed order ${orderNo} and awaits payment.`,
-          link: "/admin/orders",
+          link: buildAdminFocusLink("/admin/orders", "order", orderId),
           dedupKey: buildAdminNotificationDedupKey("new_order", orderId),
         });
 
@@ -3274,7 +3273,7 @@ export const submitSupportMessage = createServerFn({ method: "POST" })
       body: data.subject?.trim()
         ? `New support message from ${data.name}: ${data.subject.trim()}`
         : `New support message from ${data.name}.`,
-      link: "/admin/support",
+      link: buildAdminFocusLink("/admin/support", "support", inserted.id as string),
       dedupKey: buildAdminNotificationDedupKey("support_message", inserted.id as string),
     });
 

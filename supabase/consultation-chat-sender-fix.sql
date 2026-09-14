@@ -5,9 +5,10 @@
 -- Run manually in the Supabase SQL Editor (re-runnable).
 --
 -- 1) Patient notification improvements:
---    - Title now names the actual sending doctor ("New message from
---      Dr. Naseem Ahmed Khan [Appointment No]") instead of a generic
---      "New message", so the notification is meaningful.
+--    - Title names the consultation's DOCTOR participant ("New message from
+--      Dr. Naseem Ahmed Khan [Appointment No]") instead of the operator who
+--      actually sent the message (an admin/manager's display name like
+--      "Hassan"), so the notification reads as coming from the doctor.
 --    - The 10-minute dedup is now PER CONVERSATION (matched through
 --      the notification's link), not global — a message in another
 --      conversation no longer suppresses a notification for this one.
@@ -54,9 +55,25 @@ begin
   inner join public.consultation_conversations c on c.appointment_id = a.id
   where c.id = new.conversation_id;
 
-  select coalesce(nullif(btrim(p.full_name), ''), 'the doctor') into v_doctor_name
-  from public.profiles p
-  where p.id = new.sender_id;
+  select coalesce(
+           nullif(btrim(doctor.full_name), ''),
+           nullif(btrim(sender.full_name), ''),
+           'the doctor'
+         )
+    into v_doctor_name
+  from public.consultation_conversations cc
+  left join lateral (
+    select p.full_name
+    from public.consultation_participants part
+    join public.profiles p on p.id = part.user_id
+    where part.conversation_id = cc.id
+      and part.role = 'doctor'
+    order by part.created_at
+    limit 1
+  ) doctor on true
+  left join public.profiles sender on sender.id = new.sender_id
+  where cc.id = new.conversation_id
+  limit 1;
 
   -- Per-conversation debounce: only ONE doctor-message notification per
   -- conversation inside any 10-minute window. The link encodes the

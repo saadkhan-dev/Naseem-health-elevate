@@ -86,7 +86,7 @@ INSERT INTO videos (title, description, duration, is_published) VALUES
 - The doctor will share a link with you (or you will see your appointment's **Join Video Call** button)
 - Open the link in a browser
 - Click **"Join Video Call"**
-- Your browser opens the **Google Meet** meeting in a new tab
+- The video room opens embedded in the page (no new tab, no app install)
 - Grant camera/microphone permissions if asked
 
 ---
@@ -119,13 +119,12 @@ Shows:
 
 1. Find a **Confirmed** appointment
 2. Click **"Video Call"** button
-3. The server automatically creates a **Google Meet** meeting (one per appointment)
+3. The server creates/video session for the appointment (one per appointment) with a LiveKit room
 4. A dialog appears with:
    - **Patient join link** — Copy and share this with the patient
-   - **"Join as Doctor"** — Opens the same Google Meet meeting in a new tab
-5. Both doctor and patient join the same Google Meet meeting from their own browser
-6. If the meeting could not be created (for example Google Meet is not configured yet),
-   the dialog shows an error and a **"Retry Meeting Creation"** button
+   - **"Join as Doctor"** — Opens the video page; then click **"Open Consultation Chat"** and **"Join Video Call"**
+5. Both doctor and patient join the same LiveKit room embedded in the website
+6. If LiveKit is not configured yet, a warning is shown and joining reports an honest error
 
 ### 3.4 Customizing Availability
 
