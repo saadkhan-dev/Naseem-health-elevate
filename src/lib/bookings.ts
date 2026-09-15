@@ -1,6 +1,12 @@
 import { supabase } from "@/lib/supabase";
 import { FALLBACK_SERVICES } from "@/lib/fallback-content";
-import { createBooking, checkAppointmentStatus, recoverAppointment } from "@/lib/actions.functions";
+import {
+  createBooking,
+  checkAppointmentStatus,
+  checkOrderStatus,
+  recoverAppointment,
+  recoverOrder,
+} from "@/lib/actions.functions";
 import { toClinicDate, todayInClinic } from "@/lib/clinic";
 import { slotOverlapsAny, type TimeInterval } from "@/lib/slot-logic";
 import type { NotificationResult } from "@/lib/notifications";
@@ -305,6 +311,58 @@ export async function recoverAppointments(
   email: string,
 ): Promise<{ error: string | null; appointments: RecoveredAppointment[] }> {
   return recoverAppointment({
+    data: { name, phone: phone.trim() || undefined, email: email.trim() || undefined },
+  });
+}
+
+export interface OrderStatusItem {
+  productName: string;
+  price: number;
+  quantity: number;
+}
+
+export interface OrderStatusHistoryEntry {
+  id: string;
+  status: string;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface OrderStatus {
+  id: string;
+  orderNo: string;
+  status: "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
+  createdAt: string;
+  total: number;
+  paymentStatus: string;
+  items: OrderStatusItem[];
+  history: OrderStatusHistoryEntry[];
+}
+
+export async function checkOrder(
+  orderNo: string,
+  phone: string,
+  email: string,
+): Promise<{ error: string | null; found: boolean; order: OrderStatus | null }> {
+  return checkOrderStatus({
+    data: { orderNo, phone: phone.trim() || undefined, email: email.trim() || undefined },
+  });
+}
+
+export interface RecoveredOrder {
+  orderNo: string;
+  name: string;
+  total: number;
+  status: string;
+  createdAt: string;
+}
+
+export async function recoverOrders(
+  name: string,
+  phone: string,
+  email: string,
+): Promise<{ error: string | null; orders: RecoveredOrder[] }> {
+  return recoverOrder({
     data: { name, phone: phone.trim() || undefined, email: email.trim() || undefined },
   });
 }

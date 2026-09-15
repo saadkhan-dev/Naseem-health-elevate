@@ -3,6 +3,7 @@ import { z } from "zod";
 import { supabase, staffSupabase } from "@/lib/supabase";
 import { getSupabaseAdmin, isAdminOrDoctor } from "./server/supabase-admin";
 import { recoverAppointmentsByContact } from "./server/recover-appointments";
+import { recoverOrdersByContact } from "./server/recover-orders";
 import {
   submitVideoPaymentForAppointment,
   setVideoPaymentStatus,
@@ -654,6 +655,106 @@ export const recoverAppointment = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const appointments = await recoverAppointmentsByContact(data);
     return { error: null, appointments };
+  });
+
+// ---------------------------------------------------------------------------
+// Public — guest order status lookup (Order ID + phone/email)
+//
+// Mirrors the appointment lookup security model: the caller MUST know the
+// short public order number (e.g. "ORD-2T7H4J") AND verify with their phone or
+// email from the order. The query never matches on a bare order number, so
+// other patients' orders cannot be enumerated. Only safe, patient-facing
+// fields are returned — never internal UUIDs beyond the order id used for
+// display keys, and never the patient's full name/address/contact details.
+// ---------------------------------------------------------------------------
+
+export const checkOrderStatus = createServerFn({ method: "POST" })
+  .validator(
+    z
+      .object({
+        orderNo: z.string().trim().min(1, "Enter your Order ID").max(64),
+        phone: z.string().trim().min(7).max(30).optional(),
+        email: z.string().trim().email().max(200).toLowerCase().optional(),
+      })
+      .refine((v) => v.phone || v.email, { message: "Enter your phone number or email." }),
+  )
+  .handler(async ({ data }) => {
+    const admin = getSupabaseAdmin();
+    const orderNo = data.orderNo.trim();
+
+    let query = admin
+      .from("orders")
+      .select(
+        "id, order_no, status, created_at, total, payment_status, order_items:order_items (product_id, product_name, price, quantity), status_history:order_status_history (id, status, note, created_at)",
+      );
+
+    // Mirror the appointment lookup: only compare `id` when the input is a
+    // well-formed UUID (PostgREST raises 22P02 otherwise); leave `order_no`
+    // unguarded for the short public code. Either path is ANDed with the
+    // phone/email verification below.
+    if (uuidSchema.safeParse(orderNo).success) {
+      query = query.or(`id.eq.${orderNo},order_no.eq.${orderNo}`);
+    } else {
+      query = query.eq("order_no", orderNo);
+    }
+
+    if (data.email) query = query.eq("email", data.email);
+    if (data.phone) query = query.eq("phone", data.phone);
+
+    const { data: row, error } = await query.maybeSingle();
+
+    if (error || !row) {
+      return { error: null, found: false, order: null };
+    }
+
+    const items = (row.order_items ?? []).map(
+      (item: { product_name: string; price: number; quantity: number }) => ({
+        productName: item.product_name,
+        price: Number(item.price),
+        quantity: Number(item.quantity),
+      }),
+    );
+    const history = (row.status_history ?? [])
+      .slice()
+      .sort((a: { created_at: string }, b: { created_at: string }) =>
+        (a.created_at ?? "").localeCompare(b.created_at ?? ""),
+      )
+      .map((h: { id: string; status: string; note: string | null; created_at: string }) => ({
+        id: h.id,
+        status: h.status,
+        note: h.note,
+        createdAt: h.created_at,
+      }));
+
+    return {
+      error: null,
+      found: true,
+      order: {
+        id: row.id as string,
+        orderNo: (row.order_no as string | null) ?? (row.id as string),
+        status: row.status as "pending" | "confirmed" | "shipped" | "delivered" | "cancelled",
+        createdAt: row.created_at as string,
+        total: Number(row.total),
+        paymentStatus: (row.payment_status as string | null) ?? "payment_pending",
+        items,
+        history,
+      },
+    };
+  });
+
+// ---------------------------------------------------------------------------
+// Public — guest order recovery ("Find My Order Id")
+//
+// Security mirrors recoverAppointment: the patient MUST verify with their name
+// AND (phone OR email) — the query never matches on a bare name, so other
+// patients' orders cannot be enumerated by guessing names.
+// ---------------------------------------------------------------------------
+
+export const recoverOrder = createServerFn({ method: "POST" })
+  .validator(recoverSchema)
+  .handler(async ({ data }) => {
+    const orders = await recoverOrdersByContact(data);
+    return { error: null, orders };
   });
 
 // ---------------------------------------------------------------------------

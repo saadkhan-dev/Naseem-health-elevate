@@ -1,6 +1,7 @@
 import { describe, expect, it, afterAll } from "bun:test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { recoverAppointmentsByContact } from "../src/lib/server/recover-appointments";
+import { recoverOrdersByContact } from "../src/lib/server/recover-orders";
 
 /**
  * End-to-end integration tests against the LIVE Supabase project.
@@ -36,6 +37,7 @@ const admin: SupabaseClient = createClient(url, serviceKey, {
 
 const createdAppointmentIds: string[] = [];
 const createdUserIds: string[] = [];
+const createdOrderIds: string[] = [];
 
 function uid(): string {
   return crypto.randomUUID();
@@ -135,6 +137,50 @@ async function signInAs(email: string, password: string) {
   const { data, error } = await anon.auth.signInWithPassword({ email, password });
   if (error) throw error;
   return data.session;
+}
+
+async function createGuestOrder(
+  overrides: { phone?: string; email?: string | null; name?: string } = {},
+): Promise<{ created: { id: string; order_no: string | null } }> {
+  const m = marker();
+  const { data: product } = await admin
+    .from("products")
+    .select("id, name, price")
+    .limit(1)
+    .maybeSingle();
+  const id = uid();
+  const orderNo = `ORD-T${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+  const phone = overrides.phone ?? `+9200000000${(createdOrderIds.length % 10) + 1}`;
+  const email = overrides.email === undefined ? `${m}@test.com` : overrides.email;
+  const name = overrides.name ?? `E2E Order ${m}`;
+  await admin.from("orders").insert({
+    id,
+    order_no: orderNo,
+    patient_id: null,
+    name,
+    phone,
+    email,
+    address: "E2E Test Address",
+    total: 1000,
+    payment_amount: 1000,
+    payment_status: "payment_pending",
+    status: "pending",
+    notes: "",
+  });
+  await admin.from("order_items").insert({
+    order_id: id,
+    product_id: product?.id ?? null,
+    product_name: product?.name ?? "E2E Product",
+    price: 1000,
+    quantity: 1,
+  });
+  await admin.from("order_status_history").insert({
+    order_id: id,
+    status: "pending",
+    note: "Order placed",
+  });
+  createdOrderIds.push(id);
+  return { created: { id, order_no: orderNo } };
 }
 
 describe("Guest booking (public)", () => {
@@ -763,9 +809,138 @@ describe("Find My Appointment (recovery)", () => {
   });
 });
 
+describe("Order status lookup (Order ID + phone/email)", () => {
+  it("finds an order by Order ID + phone and joins items + status timeline", async () => {
+    const phone = `+9200000000${(createdOrderIds.length % 10) + 1}`;
+    const { created } = await createGuestOrder({ phone });
+    const { data, error } = await admin
+      .from("orders")
+      .select(
+        "id, order_no, status, created_at, total, payment_status, order_items:order_items (product_name, price, quantity), status_history:order_status_history (id, status, note, created_at)",
+      )
+      .eq("order_no", created.order_no)
+      .eq("phone", phone)
+      .maybeSingle();
+    expect(error).toBeNull();
+    expect(data).not.toBeNull();
+    expect(data!.id).toBe(created.id);
+    expect(data!.order_no).toBe(created.order_no);
+    expect(data!.status).toBe("pending");
+    const items = data!.order_items as Array<{ product_name: string }>;
+    expect(items.length).toBeGreaterThan(0);
+    const history = data!.status_history as Array<{ status: string }>;
+    expect(history.some((h) => h.status === "pending")).toBe(true);
+  });
+
+  it("finds an order by Order ID + email when phone is missing", async () => {
+    const email = `${marker()}@test.com`;
+    const { created } = await createGuestOrder({ phone: `+920000000011`, email });
+    const { data } = await admin
+      .from("orders")
+      .select("id")
+      .eq("order_no", created.order_no)
+      .eq("email", email)
+      .maybeSingle();
+    expect(data?.id).toBe(created.id);
+  });
+
+  it("returns nothing when phone does not match the Order ID", async () => {
+    const { created } = await createGuestOrder();
+    const { data } = await admin
+      .from("orders")
+      .select("id")
+      .eq("order_no", created.order_no)
+      .eq("phone", "+920000000099")
+      .maybeSingle();
+    expect(data).toBeNull();
+  });
+
+  it("returns nothing when the Order ID does not exist", async () => {
+    const { data } = await admin
+      .from("orders")
+      .select("id")
+      .eq("order_no", `ORD-DOESNOTEXIST`)
+      .eq("phone", "+920000000011")
+      .maybeSingle();
+    expect(data).toBeNull();
+  });
+});
+
+describe("Find My Order Id (recovery)", () => {
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+  it("recovers by name + phone (name matched case-insensitively), returns order_no not a UUID", async () => {
+    const m = marker();
+    const name = `Recovery Order ${m}`;
+    const phone = `+9200000000${(createdOrderIds.length % 10) + 1}`;
+    const { created } = await createGuestOrder({ name, phone });
+    const results = await recoverOrdersByContact({
+      name: name.toLowerCase(),
+      phone,
+    });
+    expect(results).toHaveLength(1);
+    expect(results[0].orderNo).toBe(created.order_no);
+    expect(results[0].orderNo).toMatch(/^ORD-T[A-Z0-9]+$/);
+    expect(results[0].orderNo).not.toMatch(UUID_RE);
+    expect(results[0].name).toBe(name);
+    expect(results[0].total).toBe(1000);
+    expect(results[0].status).toBe("pending");
+  });
+
+  it("recovers by name + email", async () => {
+    const m = marker();
+    const name = `Recovery Order ${m}`;
+    const email = `${m}@test.com`;
+    const phone = `+9200000000${(createdOrderIds.length % 10) + 1}`;
+    await createGuestOrder({ name, email, phone });
+    const results = await recoverOrdersByContact({ name, email });
+    expect(results).toHaveLength(1);
+    expect(results[0].orderNo).toMatch(/^ORD-T[A-Z0-9]+$/);
+    expect(results[0].orderNo).not.toMatch(UUID_RE);
+  });
+
+  it("returns multiple matching orders as separate results", async () => {
+    const m = marker();
+    const name = `Recovery Multi ${m}`;
+    const phone = `+9200000000${(createdOrderIds.length % 10) + 1}`;
+    const email = `${m}@test.com`;
+    await createGuestOrder({ name, phone, email });
+    await createGuestOrder({ name, phone, email });
+    const results = await recoverOrdersByContact({ name, phone });
+    expect(results.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(results.map((r) => r.orderNo)).size).toBeGreaterThanOrEqual(2);
+  });
+
+  it("returns nothing with the right phone but a different name (name alone never matches)", async () => {
+    const m = marker();
+    const phone = `+9200000000${(createdOrderIds.length % 10) + 1}`;
+    await createGuestOrder({ name: `Recovery Nope ${m}`, phone });
+    const results = await recoverOrdersByContact({
+      name: "Some Other Patient",
+      phone,
+    });
+    expect(results).toHaveLength(0);
+  });
+
+  it("returns nothing with the right name but a different phone", async () => {
+    const name = `Recovery Mismatch ${marker()}`;
+    await createGuestOrder({ name, phone: `+9200000000${(createdOrderIds.length % 10) + 1}` });
+    const results = await recoverOrdersByContact({
+      name,
+      phone: "+920000000099",
+    });
+    expect(results).toHaveLength(0);
+  });
+});
+
 afterAll(async () => {
   if (createdAppointmentIds.length > 0) {
     await admin.from("appointments").delete().in("id", createdAppointmentIds);
+  }
+  if (createdOrderIds.length > 0) {
+    await admin.from("order_items").delete().in("order_id", createdOrderIds);
+    await admin.from("order_status_history").delete().in("order_id", createdOrderIds);
+    await admin.from("orders").delete().in("id", createdOrderIds);
   }
   for (const id of createdUserIds) {
     await admin.from("profiles").delete().eq("id", id).maybeSingle();

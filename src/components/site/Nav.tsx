@@ -143,7 +143,7 @@ export function Nav() {
           </div>
           <div className="hidden min-w-0 leading-tight sm:block">
             <div className="truncate font-display text-[15px] font-semibold text-white">
-              Dr. Naseem Ahmed 
+              Dr. Naseem Ahmed
             </div>
             <div className="hidden truncate text-[10px] text-white/55 xl:block">
               Homeopath & Physiotherapist
@@ -192,11 +192,11 @@ export function Nav() {
 
           <Link
             to="/appointment-status"
-            aria-label="Appointment status"
+            aria-label="Appointment or order status"
             className={`inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-emerald-400 px-3 text-[13px] font-semibold text-black shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:bg-emerald-300 hover:shadow-soft active:scale-95 ${focusRing}`}
           >
             <CalendarCheck className="h-4 w-4 shrink-0" />
-            <span className="hidden xl:inline">Appointment Status</span>
+            <span className="hidden xl:inline">Appointment / Order Status</span>
             <span className="xl:hidden">Status</span>
           </Link>
 
@@ -322,7 +322,8 @@ export function Nav() {
               onClick={closeMenu}
               className="flex items-center justify-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white transition-colors hover:border-emerald-400/40"
             >
-              <CalendarCheck className="h-4 w-4 shrink-0 text-emerald-400" /> Appointment Status
+              <CalendarCheck className="h-4 w-4 shrink-0 text-emerald-400" /> Appointment / Order
+              Status
             </Link>
             {user ? (
               <>

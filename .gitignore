@@ -34,3 +34,5 @@ dist-ssr
 .vite
 *.tsbuildinfo
 src_backup/
+e2e-artifacts/
+

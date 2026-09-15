@@ -7,12 +7,16 @@ import {
   generateTimeSlots,
   createAppointment,
   checkAppointment,
+  checkOrder,
   recoverAppointments,
+  recoverOrders,
   type Service,
   type AvailabilitySlot,
   type CustomAvailabilitySlot,
   type AppointmentStatus,
   type RecoveredAppointment,
+  type OrderStatus,
+  type RecoveredOrder,
 } from "@/lib/bookings";
 import type { NotificationResult } from "@/lib/notifications";
 import { toClinicDate, todayInClinic, nowTimeInClinic } from "@/lib/clinic";
@@ -75,7 +79,10 @@ export function useTimeSlots(
     );
   })();
 
-  return { slots, isLoading: bookedQuery.isLoading || availQuery.isLoading || customQuery.isLoading };
+  return {
+    slots,
+    isLoading: bookedQuery.isLoading || availQuery.isLoading || customQuery.isLoading,
+  };
 }
 
 export function useCreateAppointment() {
@@ -147,5 +154,40 @@ export function useRecoverAppointment() {
       error: string | null;
       appointments: RecoveredAppointment[];
     }> => recoverAppointments(name, phone, email),
+  });
+}
+
+export function useCheckOrderStatus() {
+  return useMutation({
+    mutationFn: ({
+      orderNo,
+      phone,
+      email,
+    }: {
+      orderNo: string;
+      phone: string;
+      email: string;
+    }): Promise<{
+      error: string | null;
+      found: boolean;
+      order: OrderStatus | null;
+    }> => checkOrder(orderNo, phone, email),
+  });
+}
+
+export function useRecoverOrder() {
+  return useMutation({
+    mutationFn: ({
+      name,
+      phone,
+      email,
+    }: {
+      name: string;
+      phone: string;
+      email: string;
+    }): Promise<{
+      error: string | null;
+      orders: RecoveredOrder[];
+    }> => recoverOrders(name, phone, email),
   });
 }
