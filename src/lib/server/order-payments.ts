@@ -116,7 +116,7 @@ export async function submitOrderPaymentForOrder(
       type: "payment",
       title: "Payment proof received",
       body: `Your payment for order ${order.order_no ?? ""} was submitted. The clinic will verify it.`,
-      link: "/patient/orders",
+      link: buildAdminFocusLink("/patient/orders", "order", order.id),
     });
   }
 
@@ -225,7 +225,7 @@ export async function submitOrderPaymentByIdentifier(
       type: "payment",
       title: "Payment proof received",
       body: `Your payment for order ${order.order_no ?? ""} was submitted. The clinic will verify it.`,
-      link: "/patient/orders",
+      link: buildAdminFocusLink("/patient/orders", "order", order.id),
     });
   }
 
@@ -322,7 +322,7 @@ export async function submitOrderPaymentReceipt(
       type: "payment",
       title: "Payment proof received",
       body: `Your payment receipt for order ${order.order_no ?? ""} was uploaded. The clinic will verify it.`,
-      link: "/patient/orders",
+      link: buildAdminFocusLink("/patient/orders", "order", order.id),
     });
   }
 
@@ -444,7 +444,7 @@ export async function setOrderPaymentStatus(
       type: "payment",
       title: labels[input.status] ?? "Payment updated",
       body: `The payment for order ${order.order_no ?? ""} is now "${input.status.replace("payment_", "")}".`,
-      link: "/patient/orders",
+      link: buildAdminFocusLink("/patient/orders", "order", order.id),
     });
   }
 

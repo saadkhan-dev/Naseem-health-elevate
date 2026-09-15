@@ -183,11 +183,20 @@ export function useFocusHighlight(opts: {
     };
 
     const findRow = () => document.querySelector<HTMLElement>(`[${FOCUS_ATTRIBUTE}="${id}"]`);
-    /** True when any part of the row is currently within the viewport. */
+    /** True when any part of the row is within the visible viewport. */
     const intersectsViewport = (el: HTMLElement) => {
       const r = el.getBoundingClientRect();
       const vh = window.innerHeight || document.documentElement.clientHeight || 720;
       return r.top < vh && r.bottom > 0;
+    };
+
+    /** True when the row is well-placed within the safe zone (middle 70%). */
+    const isInSafeZone = (el: HTMLElement) => {
+      const r = el.getBoundingClientRect();
+      const vh = window.innerHeight || document.documentElement.clientHeight || 720;
+      const safeTop = vh * 0.15;
+      const safeBottom = vh * 0.85;
+      return r.top >= safeTop && r.bottom <= safeBottom;
     };
 
     // Strip the ?focus=&id= params only AFTER the highlight completes.
@@ -249,7 +258,7 @@ export function useFocusHighlight(opts: {
         if (highlightActiveRef.current && !row.classList.contains(HIGHLIGHT_CLASS)) {
           row.classList.add(HIGHLIGHT_CLASS);
         }
-        if (!intersectsViewport(row)) scrollFocusedRowIntoView(row);
+        if (!isInSafeZone(row)) scrollFocusedRowIntoView(row);
       }
       if (performance.now() < guardDeadline) {
         timers.guard = window.setTimeout(guard, GUARD_TICK_MS);

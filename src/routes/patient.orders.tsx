@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { format } from "date-fns";
+import { z } from "zod";
 import {
   Loader2,
   Package,
@@ -28,8 +29,13 @@ import { OrderPaymentStep } from "@/components/site/OrderPaymentStep";
 import type { PatientOrder } from "@/lib/patient-data";
 import { QueryError } from "@/components/admin/QueryError";
 import { cn } from "@/lib/utils";
+import { usePageFocus, useFocusHighlight } from "@/hooks/usePageFocus";
 
 export const Route = createFileRoute("/patient/orders")({
+  validateSearch: z.object({
+    focus: z.string().optional(),
+    id: z.string().optional(),
+  }),
   component: PatientOrders,
 });
 
@@ -89,6 +95,14 @@ function PatientOrders() {
   const [requestMessage, setRequestMessage] = useState("");
   const [requestError, setRequestError] = useState("");
   const [payFor, setPayFor] = useState<PatientOrder | null>(null);
+
+  // Deep-link focus: patient order notifications navigate to
+  // /patient/orders?focus=order&id=<uuid> — scroll to and highlight that order.
+  const pageFocus = usePageFocus();
+  useFocusHighlight({
+    focus: pageFocus?.focus === "order" ? pageFocus : null,
+    ready: !isLoading,
+  });
 
   useEffect(() => {
     if (!payFor) return;
@@ -274,7 +288,10 @@ function OrderCard({
   const timeline = (order.status_history ?? []).slice().reverse();
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-4 shadow-soft sm:p-5">
+    <div
+      className="rounded-2xl border border-border bg-card p-4 shadow-soft sm:p-5"
+      data-focus-id={order.id}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="font-display font-semibold text-foreground">
           {order.order_no ?? "Order"}

@@ -44,7 +44,7 @@ export function ReviewsSection() {
   }
 
   return (
-    <section id="reviews" className="relative overflow-hidden bg-black text-white">
+    <section className="relative overflow-hidden bg-black text-white">
       {/* Calm ambient teal/emerald orbs so the section matches the site theme */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -top-24 left-1/4 h-72 w-72 rounded-full bg-emerald-500/10 blur-[120px]" />

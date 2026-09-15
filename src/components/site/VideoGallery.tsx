@@ -9,10 +9,7 @@ export function VideoGallery() {
   const isInView = useInView(ref, { once: true, amount: 0.1 });
 
   return (
-    <section
-      id="videos"
-      className="relative overflow-hidden bg-black px-4 sm:px-6 lg:px-8 text-white"
-    >
+    <section className="relative overflow-hidden bg-black px-4 sm:px-6 lg:px-8 text-white">
       {/* Soothing deep teal/emerald ambient glow — easy on the eyes */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -top-32 left-1/3 h-96 w-96 rounded-full bg-emerald-500/[0.07] blur-[140px]" />

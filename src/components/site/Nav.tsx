@@ -3,7 +3,6 @@ import {
   Stethoscope,
   CalendarCheck,
   Star,
-  Search,
   UserCircle2,
   LogOut,
   UserRound,
@@ -28,9 +27,8 @@ interface SectionNavLink {
 
 interface RouteNavLink {
   id: string;
-  to: "/faq" | "/shop" | "/search";
+  to: "/faq";
   label: string;
-  Icon?: LucideIcon;
 }
 
 const SECTION_LINKS: SectionNavLink[] = [
@@ -39,15 +37,11 @@ const SECTION_LINKS: SectionNavLink[] = [
   { id: "services", hash: "#services", label: "Services" },
   { id: "products", hash: "#products", label: "Products" },
   { id: "videos", hash: "#videos", label: "Videos" },
-  { id: "contact", hash: "#contact", label: "Contact" },
   { id: "reviews", hash: "#reviews", label: "Reviews", Icon: Star },
+  { id: "contact", hash: "#contact", label: "Contact" },
 ];
 
-const ROUTE_LINKS: RouteNavLink[] = [
-  { id: "faq", to: "/faq", label: "FAQ" },
-  { id: "shop", to: "/shop", label: "Shop" },
-  { id: "search", to: "/search", label: "Search", Icon: Search },
-];
+const ROUTE_LINKS: RouteNavLink[] = [{ id: "faq", to: "/faq", label: "FAQ" }];
 
 const SECTION_IDS = SECTION_LINKS.map((l) => l.hash.replace(/^#/, ""));
 
@@ -69,8 +63,6 @@ function routeActiveId(pathname: string): string | null {
   if (pathname === "/") return null;
   if (pathname.startsWith("/about")) return "about";
   if (pathname.startsWith("/faq")) return "faq";
-  if (pathname.startsWith("/shop") || pathname.startsWith("/product")) return "shop";
-  if (pathname.startsWith("/search")) return "search";
   return null;
 }
 
@@ -97,21 +89,47 @@ export function Nav() {
 
   // Highlight the section currently in view (home page only — sections only
   // exist there). On every other page the active item comes from the route.
+  // Uses a scroll-based computation for deterministic section detection
+  // (IntersectionObserver with a narrow band can miss sections in gaps).
   useEffect(() => {
     if (location.pathname !== "/") return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) setActiveSection(entry.target.id);
+
+    let ticking = false;
+
+    function computeActive() {
+      // The trigger line sits 40% from the viewport top — a section is
+      // "active" once its top crosses this line.
+      const triggerY = window.innerHeight * 0.4;
+      let current = "home";
+      for (const id of SECTION_IDS) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        if (el.getBoundingClientRect().top <= triggerY) {
+          current = id;
+        }
+      }
+      setActiveSection(current);
+    }
+
+    function onScroll() {
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(() => {
+          computeActive();
+          ticking = false;
         });
-      },
-      { rootMargin: "-45% 0px -50% 0px" },
-    );
-    const sections = SECTION_IDS.map((id) => document.getElementById(id)).filter(
-      (el): el is HTMLElement => Boolean(el),
-    );
-    sections.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
+      }
+    }
+
+    // Compute once on mount / route change and after a short delay to let
+    // images and content load (which shift section positions).
+    computeActive();
+    const retry = window.setTimeout(computeActive, 800);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.clearTimeout(retry);
+      window.removeEventListener("scroll", onScroll);
+    };
   }, [location.pathname]);
 
   const activeId = location.pathname === "/" ? activeSection : routeActiveId(location.pathname);
@@ -169,8 +187,7 @@ export function Nav() {
           ))}
           {ROUTE_LINKS.map((l) => (
             <Link key={l.id} to={l.to} className={desktopLinkClass(isActive(l.id))}>
-              {l.Icon && <l.Icon className="h-4 w-4" />}
-              <span className={l.Icon ? "hidden xl:inline" : undefined}>{l.label}</span>
+              <span>{l.label}</span>
             </Link>
           ))}
         </nav>
@@ -302,7 +319,6 @@ export function Nav() {
                 onClick={closeMenu}
                 className={`${mobileLinkClass} ${isActive(l.id) ? "bg-white/10 text-white" : ""}`}
               >
-                {l.Icon && <l.Icon className="mr-2 inline h-4 w-4 text-emerald-400" />}
                 {l.label}
               </Link>
             ))}

@@ -1,12 +1,16 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Loader2, Search as SearchIcon, ArrowRight, SearchX, AlertTriangle } from "lucide-react";
 import { Nav } from "@/components/site/Nav";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { Input } from "@/components/ui/input";
 import { useSearch } from "@/hooks/queries/useSiteExtra";
+import { z } from "zod";
 
 export const Route = createFileRoute("/search")({
+  validateSearch: z.object({
+    q: z.string().optional(),
+  }),
   head: () => ({
     meta: [
       { name: "robots", content: "noindex, nofollow" },
@@ -21,10 +25,19 @@ export const Route = createFileRoute("/search")({
 });
 
 function SearchPage() {
-  const [query, setQuery] = useState("");
+  const { q: initialQuery } = Route.useSearch();
+  const [query, setQuery] = useState(initialQuery ?? "");
+  const navigate = useNavigate();
   const { data: groups, isFetching, isError } = useSearch(query);
 
   const searching = query.trim().length >= 2;
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const q = query.trim();
+    if (q.length < 2) return;
+    void navigate({ to: "/search", search: { q } } as never);
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -38,13 +51,25 @@ function SearchPage() {
 
           <div className="relative mt-6">
             <SearchIcon className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              autoFocus
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search our products… e.g. medicine, supplement"
-              className="h-12 rounded-2xl pl-12 pr-10"
-            />
+            <form onSubmit={handleSubmit} role="search" className="contents">
+              <Input
+                autoFocus
+                value={query}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setQuery(val);
+                  if (val.trim().length >= 2) {
+                    void navigate({
+                      to: "/search",
+                      search: { q: val.trim() },
+                      replace: true,
+                    } as never);
+                  }
+                }}
+                placeholder="Search our products… e.g. medicine, supplement"
+                className="h-12 rounded-2xl pl-12 pr-10"
+              />
+            </form>
             {isFetching && searching && (
               <Loader2 className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-primary" />
             )}

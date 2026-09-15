@@ -1,5 +1,12 @@
-import { ShoppingCart, Loader2, ArrowRight, Ban, Sparkles } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import {
+  ShoppingCart,
+  Loader2,
+  ArrowRight,
+  Ban,
+  Sparkles,
+  Search as SearchIcon,
+} from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { usePublishedProducts } from "@/hooks/queries/useContent";
 import { useCart } from "@/lib/cart";
 import { todayInClinic } from "@/lib/clinic";
@@ -10,11 +17,21 @@ import {
   isProductOrderable,
 } from "@/lib/product-offer-types";
 import { motion } from "framer-motion";
+import { useState } from "react";
 
 export function ConsultationProducts() {
   const { data: products, isLoading } = usePublishedProducts();
   const cart = useCart();
   const today = todayInClinic();
+  const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState("");
+
+  function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const q = searchQuery.trim();
+    if (!q) return;
+    void navigate({ to: "/search", search: { q } });
+  }
 
   return (
     <section className="relative overflow-hidden bg-black px-4 sm:px-6 lg:px-8">
@@ -25,10 +42,7 @@ export function ConsultationProducts() {
           viewport={{ once: true }}
           transition={{ duration: 0.6, delay: 0.2 }}
         >
-          <div
-            id="products"
-            className="group/card relative h-full overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg backdrop-blur-md liquid-glass transition-all duration-300 hover:-translate-y-1 hover:border-emerald-400/40 active:scale-[0.99] md:p-8"
-          >
+          <div className="group/card relative h-full overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg backdrop-blur-md liquid-glass transition-all duration-300 hover:-translate-y-1 hover:border-emerald-400/40 active:scale-[0.99] md:p-8">
             <span
               aria-hidden
               className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-emerald-400/50 to-transparent opacity-0 transition-opacity duration-500 group-hover/card:opacity-100"
@@ -57,6 +71,32 @@ export function ConsultationProducts() {
                 View all <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
+
+            {/* Search — searches the clinic's product catalogue on /search */}
+            <form
+              onSubmit={handleSearch}
+              role="search"
+              className="relative mb-6"
+              aria-label="Search our products"
+            >
+              <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-white/40" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search products… e.g. medicine, supplement"
+                aria-label="Search products"
+                className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 pl-11 pr-24 text-[15px] text-white outline-none transition placeholder:text-white/35 focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/20 sm:text-sm"
+              />
+              <button
+                type="submit"
+                className="absolute right-2 top-1/2 flex h-9 -translate-y-1/2 items-center gap-1.5 rounded-xl bg-emerald-400 px-4 text-[13px] font-semibold text-black transition-all duration-300 hover:bg-emerald-300 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={!searchQuery.trim()}
+              >
+                <SearchIcon className="h-4 w-4" />
+                <span className="hidden sm:inline">Search</span>
+              </button>
+            </form>
             {isLoading ? (
               <div className="relative flex justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-white/40" />
