@@ -357,6 +357,10 @@ create policy reminders_admin_all on public.reminders
 
 -- ============================================================
 -- 9) doctor_profile — single-row doctor/about content
+--
+--    user_id links this content row to the clinic owner's auth
+--    user so the consultation trigger can assign the correct
+--    doctor participant to new conversations.
 -- ============================================================
 create table if not exists public.doctor_profile (
   id int primary key default 1 check (id = 1),
@@ -375,6 +379,7 @@ create table if not exists public.doctor_profile (
   address text,
   social_links jsonb not null default '{}',
   is_active boolean not null default true,
+  user_id uuid references auth.users(id) on delete set null,
   updated_at timestamptz not null default now()
 );
 

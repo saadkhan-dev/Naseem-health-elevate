@@ -24,6 +24,8 @@ interface Props {
    * doctor/admin on the staff list. Optional — defaults to the patient list.
    */
   listFor?: "patient" | "staff";
+  /** When provided, becomes `data-focus-id` on the row (focus deep-link target). */
+  dataFocusId?: string;
 }
 
 export function ConversationListItem({
@@ -34,6 +36,7 @@ export function ConversationListItem({
   contactName,
   patientGender,
   listFor = "patient",
+  dataFocusId,
 }: Props) {
   const title = contactName || item.serviceName || item.appointmentNo || "Consultation";
   const meta = [
@@ -62,6 +65,7 @@ export function ConversationListItem({
   return (
     <Link
       to={to}
+      data-focus-id={dataFocusId}
       onClick={(e) => {
         if (onSelect) {
           e.preventDefault();

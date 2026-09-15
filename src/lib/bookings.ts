@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { FALLBACK_SERVICES } from "@/lib/fallback-content";
 import { createBooking, checkAppointmentStatus, recoverAppointment } from "@/lib/actions.functions";
-import { toClinicDate } from "@/lib/clinic";
+import { toClinicDate, todayInClinic } from "@/lib/clinic";
 import { slotOverlapsAny, type TimeInterval } from "@/lib/slot-logic";
 import type { NotificationResult } from "@/lib/notifications";
 
@@ -49,6 +49,19 @@ export interface AvailabilitySlot {
   is_available: boolean;
 }
 
+/** One-time availability for a SPECIFIC date, on top of the weekly schedule. */
+export interface CustomAvailabilitySlot {
+  id: string;
+  /** Optional doctor/provider; null = clinic-wide. */
+  doctor_id: string | null;
+  specific_date: string;
+  start_time: string;
+  end_time: string;
+  is_available: boolean;
+  notes: string | null;
+  created_at: string;
+}
+
 export interface Appointment {
   id: string;
   patient_id: string;
@@ -86,6 +99,22 @@ export async function getAvailability(): Promise<AvailabilitySlot[]> {
   return data ?? [];
 }
 
+/**
+ * Extra / custom availability slots for TODAY onwards. These are one-time
+ * slots for a specific date (e.g. a special Sunday clinic) and are merged
+ * with the regular weekly schedule when listing bookable times.
+ */
+export async function getCustomAvailability(): Promise<CustomAvailabilitySlot[]> {
+  const { data } = await supabase
+    .from("custom_availability")
+    .select("*")
+    .eq("is_available", true)
+    .gte("specific_date", todayInClinic())
+    .order("specific_date")
+    .order("start_time");
+  return data ?? [];
+}
+
 export interface BookedSlotInterval {
   /** "HH:mm" start time. */
   slot: string;
@@ -119,6 +148,7 @@ export function generateTimeSlots(
   durationMinutes: number | null,
   todayStr = "",
   nowTime = "00:00",
+  customAvailability: CustomAvailabilitySlot[] = [],
 ): string[] {
   // Flexible services (e.g. Home Visit) have no fixed slots — the doctor
   // confirms the time after booking.
@@ -126,7 +156,13 @@ export function generateTimeSlots(
 
   const dateStr = toClinicDate(date);
   const dayOfWeek = date.getDay();
-  const slots = availability.filter((a) => a.day_of_week === dayOfWeek);
+  // Regular weekly windows for this weekday + any one-time custom windows for
+  // this exact date (custom slots ADD to the schedule, they never replace it).
+  const regularSlots = availability.filter((a) => a.day_of_week === dayOfWeek);
+  const customSlots = customAvailability.filter(
+    (c) => c.specific_date === dateStr && c.is_available,
+  );
+  const slots = [...regularSlots, ...customSlots];
   if (slots.length === 0) return [];
 
   const bookedStartTimes = new Set(bookedSlots.map((b) => b.slot));
@@ -142,6 +178,7 @@ export function generateTimeSlots(
   });
 
   const times: string[] = [];
+  const seen = new Set<string>();
   for (const slot of slots) {
     const [startH, startM] = slot.start_time.split(":").map(Number);
     const [endH, endM] = slot.end_time.split(":").map(Number);
@@ -152,7 +189,6 @@ export function generateTimeSlots(
     // single source of truth), so a 15-minute service yields 15-minute slots,
     // a 40-minute service 40-minute slots, etc.
     const interval = durationMinutes;
-    const seen = new Set<string>();
 
     for (let m = 0; m + interval <= totalMinutes; m += interval) {
       const mins = startMinutes + m;
@@ -166,6 +202,11 @@ export function generateTimeSlots(
       times.push(timeStr);
     }
   }
+  times.sort((a, b) => {
+    const [ah, am] = a.split(":").map(Number);
+    const [bh, bm] = b.split(":").map(Number);
+    return ah * 60 + am - (bh * 60 + bm);
+  });
   return times;
 }
 

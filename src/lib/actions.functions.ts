@@ -31,7 +31,7 @@ import {
   buildAdminNotificationDedupKey,
   resolvePatientName,
 } from "./server/patient-notifications";
-import { validateAppointmentSlot } from "./server/slot-validation";
+import { validateAppointmentSlot, getOpenAvailabilityWindows } from "./server/slot-validation";
 import { buildAdminFocusLink } from "@/lib/admin-focus";
 import {
   createAppointmentReminder,
@@ -316,22 +316,16 @@ export const createBooking = createServerFn({ method: "POST" })
     }
 
     if (!isHomeVisit) {
-      const [y, m, d] = data.date.split("-").map(Number);
-      const dayOfWeek = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
       const interval = duration;
       const timeMin = toMinutes(data.time!);
 
-      const { data: windows } = await admin
-        .from("availability")
-        .select("start_time, end_time")
-        .eq("day_of_week", dayOfWeek)
-        .eq("is_available", true);
+      // Open windows for this date = regular weekly schedule + any one-time
+      // custom_availability rows for the exact date (same logic patients see).
+      const windows = await getOpenAvailabilityWindows(admin, data.date);
 
-      const inOpenWindow = (windows ?? []).some((w) => {
-        const start = toMinutes(w.start_time);
-        const end = toMinutes(w.end_time);
-        if (timeMin < start || timeMin >= end || timeMin + interval > end) return false;
-        return (timeMin - start) % interval === 0;
+      const inOpenWindow = windows.some((w) => {
+        if (timeMin < w.start || timeMin >= w.end || timeMin + interval > w.end) return false;
+        return (timeMin - w.start) % interval === 0;
       });
 
       if (!inOpenWindow) {
@@ -888,6 +882,154 @@ export const adminUpdateAvailability = createServerFn({ method: "POST" })
   });
 
 // ---------------------------------------------------------------------------
+// Admin — extra / custom availability (one-time slots for a specific date)
+// ---------------------------------------------------------------------------
+
+const customAvailabilityInputSchema = z.object({
+  doctor_id: uuidSchema.nullable().optional(),
+  specific_date: dateSchema,
+  start_time: timeSchema,
+  end_time: timeSchema,
+  is_available: z.boolean().optional(),
+  notes: z.string().max(500).nullable().optional(),
+});
+
+/**
+ * Rejects obvious mistakes (end before start) and overlapping slots on the
+ * SAME date + doctor (clinic-wide `doctor_id = null` is treated like its own
+ * scope). Returns a friendly error string or null when the slot is acceptable.
+ */
+async function customAvailabilityConflict(
+  input: {
+    doctor_id: string | null;
+    specific_date: string;
+    start_time: string;
+    end_time: string;
+  },
+  excludeId?: string,
+): Promise<string | null> {
+  if (toMinutes(input.end_time) <= toMinutes(input.start_time)) {
+    return "End time must be after the start time.";
+  }
+
+  const admin = getSupabaseAdmin();
+  const { data: existing } = await admin
+    .from("custom_availability")
+    .select("id, doctor_id, start_time, end_time")
+    .eq("specific_date", input.specific_date)
+    .eq("is_available", true);
+
+  const conflicts = (existing ?? []).some((row) => {
+    if (excludeId && row.id === excludeId) return false;
+    const sameDoctor = (row.doctor_id ?? null) === (input.doctor_id ?? null);
+    if (!sameDoctor) return false;
+    return intervalsOverlap(
+      toMinutes(input.start_time),
+      toMinutes(input.end_time) - toMinutes(input.start_time),
+      toMinutes(row.start_time as string),
+      toMinutes(row.end_time as string) - toMinutes(row.start_time as string),
+    );
+  });
+
+  return conflicts
+    ? "That time overlaps another extra slot for the same date and doctor. Pick a different time."
+    : null;
+}
+
+export const adminCreateCustomAvailability = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(customAvailabilityInputSchema)
+  .handler(async ({ data }) => {
+    const conflict = await customAvailabilityConflict({
+      doctor_id: data.doctor_id ?? null,
+      specific_date: data.specific_date,
+      start_time: data.start_time,
+      end_time: data.end_time,
+    });
+    if (conflict) return { error: conflict };
+
+    const { error } = await getSupabaseAdmin()
+      .from("custom_availability")
+      .insert({
+        doctor_id: data.doctor_id ?? null,
+        specific_date: data.specific_date,
+        start_time: data.start_time,
+        end_time: data.end_time,
+        is_available: data.is_available ?? true,
+        notes: data.notes ?? null,
+      });
+    return { error: error?.message ?? null };
+  });
+
+export const adminUpdateCustomAvailability = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(
+    z.object({
+      id: uuidSchema,
+      data: z.object({
+        doctor_id: uuidSchema.nullable().optional(),
+        specific_date: dateSchema.optional(),
+        start_time: timeSchema.optional(),
+        end_time: timeSchema.optional(),
+        is_available: z.boolean().optional(),
+        notes: z.string().max(500).nullable().optional(),
+      }),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const current = await getSupabaseAdmin()
+      .from("custom_availability")
+      .select("id, doctor_id, specific_date, start_time, end_time")
+      .eq("id", data.id)
+      .maybeSingle();
+
+    if (!current.data) return { error: "That slot no longer exists." };
+
+    const next = {
+      doctor_id: data.data.doctor_id === undefined ? current.data.doctor_id : data.data.doctor_id,
+      specific_date: data.data.specific_date ?? (current.data.specific_date as string),
+      start_time: data.data.start_time ?? (current.data.start_time as string),
+      end_time: data.data.end_time ?? (current.data.end_time as string),
+    };
+
+    const conflict = await customAvailabilityConflict(
+      {
+        doctor_id: next.doctor_id,
+        specific_date: next.specific_date,
+        start_time: next.start_time,
+        end_time: next.end_time,
+      },
+      data.id,
+    );
+    if (conflict) return { error: conflict };
+
+    const { error } = await getSupabaseAdmin()
+      .from("custom_availability")
+      .update({
+        doctor_id: next.doctor_id,
+        specific_date: next.specific_date,
+        start_time: next.start_time,
+        end_time: next.end_time,
+        is_available: data.data.is_available,
+        notes: data.data.notes === undefined ? undefined : data.data.notes,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.id);
+    return { error: error?.message ?? null };
+  });
+
+export const adminDeleteCustomAvailability = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(z.object({ id: uuidSchema }))
+  .handler(async ({ data }) => {
+    const { error } = await getSupabaseAdmin()
+      .from("custom_availability")
+      .delete()
+      .eq("id", data.id);
+    return { error: error?.message ?? null };
+  });
+
+// ---------------------------------------------------------------------------
 // Admin — services
 // ---------------------------------------------------------------------------
 
@@ -964,22 +1106,71 @@ const productInputSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .nullable()
     .optional(),
+  // Phase 2 — optional packing/size and condition labels.
+  pack_size: z.string().trim().max(100).nullable().optional(),
+  product_condition: z.string().trim().max(100).nullable().optional(),
 });
+
+const productImagesSchema = z
+  .array(z.string().trim().max(1000))
+  .max(12, "A product can have at most 12 images.")
+  .optional();
 
 export const adminCreateProduct = createServerFn({ method: "POST" })
   .middleware([adminMiddleware])
-  .validator(productInputSchema)
+  .validator(productInputSchema.extend({ images: productImagesSchema }))
   .handler(async ({ data }) => {
-    const { error } = await getSupabaseAdmin().from("products").insert(data);
-    return { error: error?.message ?? null };
+    const { images, ...fields } = data;
+    const primary = images?.[0] ?? fields.image_url;
+    const { data: created, error } = await getSupabaseAdmin()
+      .from("products")
+      .insert({ ...fields, image_url: primary || null })
+      .select("id")
+      .single();
+    if (error || !created)
+      return { error: error?.message ?? "Could not create product.", id: null };
+
+    if ((images ?? []).length > 0) {
+      const { error: imagesError } = await getSupabaseAdmin()
+        .from("product_images")
+        .insert(images!.map((url, position) => ({ product_id: created.id, position, url })));
+      if (imagesError) return { error: imagesError.message, id: created.id };
+    }
+    return { error: null, id: created.id };
   });
 
 export const adminUpdateProduct = createServerFn({ method: "POST" })
   .middleware([adminMiddleware])
-  .validator(z.object({ id: uuidSchema, data: productInputSchema.partial() }))
+  .validator(
+    z.object({
+      id: uuidSchema,
+      data: productInputSchema.partial().extend({ images: productImagesSchema }),
+    }),
+  )
   .handler(async ({ data }) => {
-    const { error } = await getSupabaseAdmin().from("products").update(data.data).eq("id", data.id);
-    return { error: error?.message ?? null };
+    const admin = getSupabaseAdmin();
+    const { images, ...fields } = data.data;
+    const upsert: Record<string, unknown> = { ...fields };
+    if (images !== undefined) {
+      upsert.image_url = images[0] ?? null;
+    }
+    const { error } = await admin.from("products").update(upsert).eq("id", data.id);
+    if (error) return { error: error.message };
+
+    if (images !== undefined) {
+      const { error: clearError } = await admin
+        .from("product_images")
+        .delete()
+        .eq("product_id", data.id);
+      if (clearError) return { error: clearError.message };
+      if (images.length > 0) {
+        const { error: imagesError } = await admin
+          .from("product_images")
+          .insert(images.map((url, position) => ({ product_id: data.id, position, url })));
+        if (imagesError) return { error: imagesError.message };
+      }
+    }
+    return { error: null };
   });
 
 export const adminDeleteProduct = createServerFn({ method: "POST" })

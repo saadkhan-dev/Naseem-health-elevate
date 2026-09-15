@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import {
   Loader2,
@@ -11,6 +11,8 @@ import {
   Truck,
   ArrowLeft,
   Check,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Nav } from "@/components/site/Nav";
 import { SiteFooter } from "@/components/site/SiteFooter";
@@ -19,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { QueryError } from "@/components/admin/QueryError";
 import {
   useProductDetail,
+  useProductImages,
   useProductReviews,
   useSubmitProductReview,
 } from "@/hooks/queries/useShop";
@@ -78,9 +81,97 @@ export const Route = createFileRoute("/product/$productId")({
   component: ProductDetail,
 });
 
+function ProductGallery({ images, alt }: { images: string[]; alt: string }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [index, setIndex] = useState(0);
+  const count = images.length;
+
+  const handleScroll = useCallback(() => {
+    const el = trackRef.current;
+    if (!el || el.clientWidth === 0) return;
+    const i = Math.round(el.scrollLeft / el.clientWidth);
+    setIndex(Math.max(0, Math.min(count - 1, i)));
+  }, [count]);
+
+  function scrollTo(i: number) {
+    const el = trackRef.current;
+    if (!el) return;
+    el.scrollTo({ left: el.clientWidth * i, behavior: "smooth" });
+  }
+
+  if (count <= 1) {
+    return (
+      <div className="overflow-hidden rounded-3xl border border-border bg-card">
+        {count === 1 ? (
+          <img src={images[0]} alt={alt} className="aspect-square h-auto w-full object-cover" />
+        ) : (
+          <div className="flex aspect-square items-center justify-center text-sm text-muted-foreground">
+            No image
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative overflow-hidden rounded-3xl border border-border bg-card">
+      {/* Swipeable, snaps to a full image per slide. */}
+      <div
+        ref={trackRef}
+        onScroll={handleScroll}
+        className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain scroll-smooth"
+      >
+        {images.map((src, i) => (
+          <img
+            key={i}
+            src={src}
+            alt={alt}
+            className="aspect-square h-auto w-full shrink-0 snap-center object-cover"
+            draggable={false}
+          />
+        ))}
+      </div>
+
+      <button
+        type="button"
+        aria-label="Previous image"
+        disabled={index === 0}
+        onClick={() => scrollTo(index - 1)}
+        className="absolute left-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white shadow transition hover:bg-black/60 disabled:opacity-0"
+      >
+        <ChevronLeft className="h-5 w-5" />
+      </button>
+      <button
+        type="button"
+        aria-label="Next image"
+        disabled={index === count - 1}
+        onClick={() => scrollTo(index + 1)}
+        className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white shadow transition hover:bg-black/60 disabled:opacity-0"
+      >
+        <ChevronRight className="h-5 w-5" />
+      </button>
+
+      <div className="absolute inset-x-0 bottom-2 flex justify-center gap-1.5">
+        {images.map((_, i) => (
+          <button
+            key={i}
+            type="button"
+            aria-label={`Go to image ${i + 1}`}
+            onClick={() => scrollTo(i)}
+            className={`h-1.5 rounded-full transition-all ${
+              i === index ? "w-4 bg-white" : "w-1.5 bg-white/60"
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ProductDetail() {
   const { productId } = Route.useParams();
   const { data: product, isLoading, isError, error } = useProductDetail(productId);
+  const { data: galleryImages } = useProductImages(productId);
   const { data: reviews, isLoading: reviewsLoading } = useProductReviews(productId);
   const cart = useCart();
   const { user } = useAuth();
@@ -161,20 +252,17 @@ function ProductDetail() {
             </div>
           ) : product ? (
             <div className="mt-4 grid gap-8 lg:grid-cols-2">
-              {/* Image */}
-              <div className="overflow-hidden rounded-3xl border border-border bg-card">
-                {product.image_url ? (
-                  <img
-                    src={product.image_url}
-                    alt={product.name}
-                    className="aspect-square h-auto w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex aspect-square items-center justify-center text-sm text-muted-foreground">
-                    No image
-                  </div>
-                )}
-              </div>
+              {/* Image gallery */}
+              <ProductGallery
+                images={
+                  (galleryImages ?? []).length > 0
+                    ? (galleryImages ?? []).map((g) => g.url)
+                    : product.image_url
+                      ? [product.image_url]
+                      : []
+                }
+                alt={product.name}
+              />
 
               {/* Details */}
               <div>
@@ -225,6 +313,21 @@ function ProductDetail() {
                   <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
                     {product.description}
                   </p>
+                )}
+
+                {(product.pack_size || product.product_condition) && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {product.pack_size && (
+                      <span className="inline-flex items-center rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-foreground">
+                        Packing: {product.pack_size}
+                      </span>
+                    )}
+                    {product.product_condition && (
+                      <span className="inline-flex items-center rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-foreground">
+                        {product.product_condition}
+                      </span>
+                    )}
+                  </div>
                 )}
 
                 {product && (

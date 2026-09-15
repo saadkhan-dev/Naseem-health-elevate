@@ -143,7 +143,7 @@ export function Nav() {
           </div>
           <div className="hidden min-w-0 leading-tight sm:block">
             <div className="truncate font-display text-[15px] font-semibold text-white">
-              Dr. Naseem
+              Dr. Naseem Ahmed 
             </div>
             <div className="hidden truncate text-[10px] text-white/55 xl:block">
               Homeopath & Physiotherapist

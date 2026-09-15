@@ -9,7 +9,12 @@ import {
   isDateBeforeTodayClinic,
   toMinutes,
 } from "../src/lib/clinic";
-import { generateTimeSlots, formatTimeDisplay, type AvailabilitySlot } from "../src/lib/bookings";
+import {
+  generateTimeSlots,
+  formatTimeDisplay,
+  type AvailabilitySlot,
+  type CustomAvailabilitySlot,
+} from "../src/lib/bookings";
 
 const MON = new Date(2026, 7, 17, 12, 0, 0);
 const SUN = new Date(2026, 7, 23, 12, 0, 0);
@@ -225,6 +230,109 @@ describe("generateTimeSlots", () => {
     );
     expect(slots).toEqual(["19:00", "19:30", "20:00", "20:30", "21:00", "21:30", "22:00", "22:30"]);
     expect(new Set(slots).size).toBe(8);
+  });
+});
+
+describe("generateTimeSlots with extra/custom availability", () => {
+  const SUN = new Date(2026, 7, 23, 12, 0, 0); // Sunday
+  const MON = new Date(2026, 7, 17, 12, 0, 0);
+
+  function custom(
+    specific_date: string,
+    start_time: string,
+    end_time: string,
+    doctor_id: string | null = null,
+  ): CustomAvailabilitySlot {
+    return {
+      id: `c-${specific_date}-${start_time}`,
+      doctor_id,
+      specific_date,
+      start_time,
+      end_time,
+      is_available: true,
+      notes: null,
+      created_at: "2026-08-01T00:00:00.000Z",
+    };
+  }
+
+  it("enables a normally-closed day via a one-time slot (doctor unavailable Sunday → extra Sunday 4–7 PM)", () => {
+    // Regular schedule has NO Sunday rows at all (closed), exactly like the
+    // example in the requirements.
+    const slots = generateTimeSlots([], SUN, [], 30, "", "", [
+      custom("2026-08-23", "16:00", "19:00"),
+    ]);
+    expect(slots).toEqual(["16:00", "16:30", "17:00", "17:30", "18:00", "18:30"]);
+  });
+
+  it("adds custom windows on top of an already-open weekday", () => {
+    const slots = generateTimeSlots([window(1, "19:00", "23:00")], MON, [], 30, "", "", [
+      custom("2026-08-17", "16:00", "17:00"),
+    ]);
+    expect(slots).toContain("16:00");
+    expect(slots).toContain("16:30");
+    expect(slots).toContain("19:00");
+    expect(slots).toContain("22:30");
+  });
+
+  it("lists merged regular + custom times in ascending chronological order", () => {
+    const slots = generateTimeSlots([window(1, "19:00", "23:00")], MON, [], 30, "", "", [
+      custom("2026-08-17", "16:00", "19:00"),
+    ]);
+    expect(slots).toEqual([
+      "16:00",
+      "16:30",
+      "17:00",
+      "17:30",
+      "18:00",
+      "18:30",
+      "19:00",
+      "19:30",
+      "20:00",
+      "20:30",
+      "21:00",
+      "21:30",
+      "22:00",
+      "22:30",
+    ]);
+  });
+
+  it("does not offer times past the custom window end", () => {
+    const slots = generateTimeSlots([], SUN, [], 30, "", "", [
+      custom("2026-08-23", "16:00", "17:30"),
+    ]);
+    // Last slot starts at 17:00 and ends exactly at 17:30 (window end).
+    expect(slots).toEqual(["16:00", "16:30", "17:00"]);
+    expect(slots).not.toContain("17:30");
+  });
+
+  it("ignores custom slots for a different date", () => {
+    const slots = generateTimeSlots(
+      [],
+      SUN,
+      [],
+      30,
+      "",
+      "",
+      [custom("2026-08-24", "16:00", "19:00")], // Monday's slot, not Sunday
+    );
+    expect(slots).toEqual([]);
+  });
+
+  it("dedupes when a custom window overlaps a regular window", () => {
+    const slots = generateTimeSlots([window(1, "19:00", "23:00")], MON, [], 30, "", "", [
+      custom("2026-08-17", "18:00", "20:00"),
+    ]);
+    expect(new Set(slots).size).toBe(slots.length);
+    expect(slots.filter((t) => t === "19:00")).toHaveLength(1);
+  });
+
+  it("filters out custom slots marked unavailable", () => {
+    const closed = {
+      ...custom("2026-08-23", "16:00", "19:00"),
+      is_available: false,
+    };
+    const slots = generateTimeSlots([], SUN, [], 30, "", "", [closed]);
+    expect(slots).toEqual([]);
   });
 });
 

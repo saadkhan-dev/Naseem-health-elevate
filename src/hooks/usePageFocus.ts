@@ -5,8 +5,13 @@ import { parseFocusTarget, type PageFocus } from "@/lib/admin-focus";
 const HIGHLIGHT_CLASS = "focus-flash";
 const HIGHLIGHT_DURATION_MS = 2600;
 const FOCUS_ATTRIBUTE = "data-focus-id";
-const MAX_RETRIES = 25;
 const RETRY_DELAY_MS = 120;
+/** How long `perform` waits for the row element to appear before giving up. */
+const FIND_ROW_LIMIT_MS = 3000;
+/** Poll interval of the persistent scroll guard (cheap; see the guard comment). */
+const GUARD_TICK_MS = 120;
+/** How long past the URL strip the guard keeps correcting (covers late resets). */
+const GUARD_BUFFER_MS = 1600;
 
 /**
  * Scroll the focused row to the vertical center of the viewport. Plain
@@ -20,10 +25,23 @@ const RETRY_DELAY_MS = 120;
  * ancestors is fragile because a container's `scrollHeight` can change as
  * rows finish loading, turning a real scroll into a silent no-op and leaving
  * the row offscreen.
+ *
+ * Corrections can overlap (guard tick landing while a previous jump's restore
+ * is still pending). The restore is therefore de-duplicated: only the LAST
+ * pending restore wins, and it always restores the behavior captured before
+ * the FIRST override — an interleaved pair of calls can never leave
+ * `scroll-behavior: auto` stuck inline (which would silently break the app's
+ * smooth scrolling until reload).
  */
+let pendingBehaviorRestore: number | undefined;
+let originalScrollBehavior: string | null = null;
 function scrollFocusedRowIntoView(el: HTMLElement) {
   const htmlEl = document.documentElement;
-  const prevScrollBehavior = htmlEl.style.scrollBehavior;
+  if (pendingBehaviorRestore === undefined) {
+    originalScrollBehavior = htmlEl.style.scrollBehavior;
+  } else {
+    window.clearTimeout(pendingBehaviorRestore);
+  }
   htmlEl.style.scrollBehavior = "auto";
 
   const jumpTo = () => {
@@ -44,15 +62,20 @@ function scrollFocusedRowIntoView(el: HTMLElement) {
     jumpTo();
     // Re-measure after the browser commits the layout change; if the row is
     // still outside the viewport (content shifted during the jump), retry.
-    window.setTimeout(() => {
+    pendingBehaviorRestore = window.setTimeout(() => {
+      pendingBehaviorRestore = undefined;
       const rect = el.getBoundingClientRect();
       const vh = window.innerHeight || document.documentElement.clientHeight || 720;
       const outside = rect.bottom < 0 || rect.top > vh || rect.top < 0 || rect.bottom > vh;
       if (outside) jumpTo();
-      htmlEl.style.scrollBehavior = prevScrollBehavior;
+      htmlEl.style.scrollBehavior = originalScrollBehavior ?? "";
     }, 130);
   } catch {
-    htmlEl.style.scrollBehavior = prevScrollBehavior;
+    if (pendingBehaviorRestore !== undefined) {
+      window.clearTimeout(pendingBehaviorRestore);
+      pendingBehaviorRestore = undefined;
+    }
+    htmlEl.style.scrollBehavior = originalScrollBehavior ?? "";
     // Fallback — best-effort native behavior if anything above throws.
     try {
       el.scrollIntoView({ behavior: "auto", block: "center" });
@@ -95,7 +118,27 @@ export function useFocusHighlight(opts: {
   ensureVisibleRef.current = ensureVisible;
   const router = useRouter();
 
+  // Timers live in a ref ON PURPOSE: the URL-strip navigation clears
+  // `location.search`, which turns `focusKey` null and re-runs this effect —
+  // effect-local timer variables would be wiped by that exact moment. The
+  // guard must outlive the strip re-render so it can undo any scroll reset
+  // the router (or Radix focus-return) fires during/after it.
+  const timersRef = useRef<{ retry?: number; strip?: number; guard?: number }>({});
+  const highlightActiveRef = useRef(false);
+
   const focusKey = focus ? `${focus.focus}:${focus.id}` : null;
+
+  // Unmount-only cleanup (deps []): when the PAGE goes away, stop everything —
+  // in particular the strip timer must never fire a router.navigate after the
+  // component is gone (it would rewrite the NEXT page's URL).
+  useEffect(() => {
+    const timers = timersRef.current;
+    return () => {
+      if (timers.retry) window.clearTimeout(timers.retry);
+      if (timers.strip) window.clearTimeout(timers.strip);
+      if (timers.guard) window.clearTimeout(timers.guard);
+    };
+  }, []);
 
   useEffect(() => {
     if (!focusKey || !ready) return;
@@ -104,10 +147,17 @@ export function useFocusHighlight(opts: {
 
     ensureVisibleRef.current?.({ focus: focusKey.slice(0, splitAt) as PageFocus["focus"], id });
 
-    let attempt = 0;
-    let finished = false;
-    let retryTimer: number | undefined;
-    let stripTimer: number | undefined;
+    const timers = timersRef.current;
+    // A re-run (second notification click while a previous flow is still
+    // winding down) supersedes the previous flow's timers entirely.
+    if (timers.retry) window.clearTimeout(timers.retry);
+    if (timers.strip) window.clearTimeout(timers.strip);
+    if (timers.guard) window.clearTimeout(timers.guard);
+    timers.retry = undefined;
+    timers.strip = undefined;
+    timers.guard = undefined;
+
+    const findStart = performance.now();
 
     const clearQuery = () => {
       try {
@@ -133,7 +183,6 @@ export function useFocusHighlight(opts: {
     };
 
     const findRow = () => document.querySelector<HTMLElement>(`[${FOCUS_ATTRIBUTE}="${id}"]`);
-
     /** True when any part of the row is currently within the viewport. */
     const intersectsViewport = (el: HTMLElement) => {
       const r = el.getBoundingClientRect();
@@ -141,93 +190,114 @@ export function useFocusHighlight(opts: {
       return r.top < vh && r.bottom > 0;
     };
 
-    const jumpAndFlash = (el: HTMLElement) => {
-      // Restart the animation on repeat corrections so a re-scrolled row still
-      // carries a visible highlight.
-      el.classList.remove(HIGHLIGHT_CLASS);
-      void el.getBoundingClientRect();
-      scrollFocusedRowIntoView(el);
-      el.classList.add(HIGHLIGHT_CLASS);
-    };
-
     // Strip the ?focus=&id= params only AFTER the highlight completes.
     //
-    // Ordering matters: passing a fresh search through the router (or a raw
-    // `history.replaceState`) makes the router re-render with an empty
-    // `location.search`, which re-runs this effect's cleanup — killing any
-    // pending correction timers and removing the just-added highlight class.
-    // The strip is therefore scheduled only once the row has actually landed
-    // in the viewport; until then the verify loop below keeps correcting.
-    // Deferring the strip lets the 2.6s animation finish first; once the URL
+    // Ordering matters: the strip navigation re-renders the route with an
+    // empty `location.search`, which turns `focusKey` null and tears this
+    // effect down (clearing the guard). Deferring the strip until the
+    // highlight finishes lets the 2.6s animation play out first; once the URL
     // is clean, clicking the SAME notification again produces a location
     // change and re-triggers the focus flow.
     let stripScheduled = false;
-    const scheduleStrip = (el: HTMLElement | null) => {
+    const scheduleStrip = () => {
       if (stripScheduled) return;
       stripScheduled = true;
-      stripTimer = window.setTimeout(() => {
-        el?.classList.remove(HIGHLIGHT_CLASS);
+      timers.strip = window.setTimeout(() => {
+        timers.strip = undefined;
+        highlightActiveRef.current = false;
+        findRow()?.classList.remove(HIGHLIGHT_CLASS);
         clearQuery();
       }, HIGHLIGHT_DURATION_MS);
+    };
+
+    // ── Guard loop ──────────────────────────────────────────────────────────
+    // The previous implementation "verified" the landing on a timer that
+    // SURRENDERED a few seconds after the jump. That raced against scroll
+    // writers that fire LATER, and whichever landed after the surrender won —
+    // yanking the page to the top right after the target had been correctly
+    // reached (the reported inconsistency):
+    //
+    //   1. TanStack Router's scroll restoration: on every rendered navigation
+    //      it resets the window scroll (onRendered → scrollTo(0,0)) unless the
+    //      navigation passed `resetScroll: false`. This fires on the INITIAL
+    //      focus navigation — and on slow devices its layout effect can land
+    //      well after our first jump.
+    //   2. Radix focus-return: closing the notification Popover (desktop) or
+    //      Sheet (mobile) returns focus to the bell trigger, which sits at the
+    //      TOP of the admin page. `focus()` scrolls its target into view, so
+    //      this quietly scrolls the page back to the top — on mobile the sheet
+    //      close animation delays it until AFTER our jump.
+    //   3. React Query background refetches (15s/60s intervals, realtime
+    //      invalidations) re-render the table; rows can shift at any time and
+    //      push the target out of the viewport.
+    //
+    // Fix: don't verify for a while and stop — keep a GUARD armed for the
+    // whole highlight window plus a buffer past the URL strip. Each tick
+    // re-finds the row (a re-render may swap the element for a new node with
+    // the same data-focus-id), keeps the highlight class on the current node
+    // while the flash is active, and scrolls it back instantly whenever it
+    // has drifted out of the viewport. The guard lives in refs, so it stays
+    // alive ACROSS the URL-strip re-render — the LAST scroll writer in the
+    // race is the guard itself, and the final resting position is always the
+    // target row. It self-terminates shortly after the strip, when every
+    // deep-link-related writer has already fired.
+    const guardDeadline = findStart + HIGHLIGHT_DURATION_MS + GUARD_BUFFER_MS;
+    const guard = () => {
+      timers.guard = undefined;
+      const row = findRow();
+      if (row) {
+        if (highlightActiveRef.current && !row.classList.contains(HIGHLIGHT_CLASS)) {
+          row.classList.add(HIGHLIGHT_CLASS);
+        }
+        if (!intersectsViewport(row)) scrollFocusedRowIntoView(row);
+      }
+      if (performance.now() < guardDeadline) {
+        timers.guard = window.setTimeout(guard, GUARD_TICK_MS);
+      }
     };
 
     const perform = () => {
       const el = findRow();
       if (!el) {
-        if (attempt < MAX_RETRIES) {
-          attempt += 1;
-          retryTimer = window.setTimeout(perform, RETRY_DELAY_MS);
+        // Row not mounted yet (page data / filters still settling) — retry.
+        if (performance.now() - findStart < FIND_ROW_LIMIT_MS) {
+          timers.retry = window.setTimeout(perform, RETRY_DELAY_MS);
         } else {
           clearQuery(); // row genuinely missing — don't leave stale params behind
         }
         return;
       }
 
-      finished = true;
-      jumpAndFlash(el);
+      highlightActiveRef.current = true;
+      // Initial landing: restart the flash animation for a crisp highlight,
+      // then jump. Guard corrections never restart the animation — they are
+      // reactive position fixes, not new focus events.
+      el.classList.remove(HIGHLIGHT_CLASS);
+      void el.getBoundingClientRect();
+      scrollFocusedRowIntoView(el);
+      el.classList.add(HIGHLIGHT_CLASS);
 
-      // Filters/search the caller resets in `ensureVisible` are async: the row
-      // list re-renders AFTER the first jump, which can land the row off-screen
-      // again. Keep correcting until the row is actually visible (or give up a
-      // few seconds later) instead of assuming the single jump was enough.
-      const verifyStart = performance.now();
-      const verifyLimit = HIGHLIGHT_DURATION_MS + 2000;
-      // Row must land AND stay put. TanStack's scroll restoration fires a beat
-      // after navigation (`window.scrollTo(0)`), which would otherwise reset
-      // the just-made jump. Only strip once the row has been visibly centred
-      // across a few consecutive correction ticks, so a later restoration can't
-      // strand it offscreen for the rest of the highlight.
-      let stableTicks = 0;
-      const verify = () => {
-        const row = findRow();
-        if (row && intersectsViewport(row)) {
-          stableTicks += 1;
-          if (stableTicks >= 3) {
-            scheduleStrip(row);
-            return;
-          }
-        } else {
-          stableTicks = 0;
-          if (row) jumpAndFlash(row);
-        }
-        if (performance.now() - verifyStart < verifyLimit) {
-          retryTimer = window.setTimeout(verify, RETRY_DELAY_MS);
-        } else {
-          scheduleStrip(row);
-        }
-      };
-      retryTimer = window.setTimeout(verify, 130);
+      scheduleStrip();
+      guard();
     };
 
     perform();
 
     return () => {
-      if (retryTimer) window.clearTimeout(retryTimer);
-      if (stripTimer) window.clearTimeout(stripTimer);
-      if (finished) {
-        const el = findRow();
-        el?.classList.remove(HIGHLIGHT_CLASS);
-      }
+      // Normal completion (the strip set focusKey → null): the guard lives in
+      // refs and must KEEP running through the strip re-render, so this
+      // cleanup deliberately does nothing.
+      if (!highlightActiveRef.current) return;
+      // Early teardown while the highlight is still active (ready flipped,
+      // superseded flow, unmount): stop this flow's timers and visuals. The
+      // unmount-only effect above is the backstop that clears any leftovers.
+      if (timers.retry) window.clearTimeout(timers.retry);
+      if (timers.strip) window.clearTimeout(timers.strip);
+      if (timers.guard) window.clearTimeout(timers.guard);
+      timers.retry = undefined;
+      timers.strip = undefined;
+      timers.guard = undefined;
+      findRow()?.classList.remove(HIGHLIGHT_CLASS);
     };
   }, [focusKey, ready, router]);
 }

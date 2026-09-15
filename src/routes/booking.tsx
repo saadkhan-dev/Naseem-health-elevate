@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import {
   useServices,
   useAvailability,
+  useCustomAvailability,
   useTimeSlots,
   useCreateAppointment,
 } from "@/hooks/queries/useBookings";
@@ -27,7 +28,7 @@ import {
   isVideoConsultationService,
   HOME_VISIT_FEE_LABEL,
 } from "@/lib/bookings";
-import { isDateBeforeTodayClinic } from "@/lib/clinic";
+import { isDateBeforeTodayClinic, toClinicDate } from "@/lib/clinic";
 import { saveRecentAppointment } from "@/lib/recent-appointment";
 import { BookingConfirmation } from "@/components/site/BookingConfirmation";
 import { VideoPaymentStep } from "@/components/site/VideoPaymentStep";
@@ -82,6 +83,7 @@ function BookingPage() {
 
   const { data: services, isLoading: servicesLoading } = useServices();
   const { data: availability } = useAvailability();
+  const { data: customAvailability } = useCustomAvailability();
   const { slots, isLoading: slotsLoading } = useTimeSlots(date, serviceId, services);
   const createAppointment = useCreateAppointment();
   const { data: videoOffers } = usePublicVideoOffers();
@@ -115,6 +117,13 @@ function BookingPage() {
   const openDays = React.useMemo(
     () => new Set(availability?.map((a) => a.day_of_week) ?? []),
     [availability],
+  );
+
+  // Calendar dates that have a one-time extra/custom slot (e.g. a special
+  // Sunday clinic) — those stay bookable even when the weekday is closed.
+  const customDates = React.useMemo(
+    () => new Set(customAvailability?.map((c) => c.specific_date) ?? []),
+    [customAvailability],
   );
 
   async function handleBook() {
@@ -255,7 +264,10 @@ function BookingPage() {
                     setTime(undefined);
                   }}
                   disabled={(d) =>
-                    isDateBeforeTodayClinic(d) || (!isHomeVisit && !openDays.has(d.getDay()))
+                    isDateBeforeTodayClinic(d) ||
+                    (!isHomeVisit &&
+                      !openDays.has(d.getDay()) &&
+                      !customDates.has(toClinicDate(d)))
                   }
                   initialFocus
                   className="mx-auto [--cell-size:1.75rem] min-[360px]:[--cell-size:2rem]"

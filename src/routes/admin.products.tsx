@@ -1,6 +1,17 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus, Loader2, Pencil, Trash2, Tag } from "lucide-react";
+import {
+  Plus,
+  Loader2,
+  Pencil,
+  Trash2,
+  Tag,
+  Upload,
+  ArrowUp,
+  ArrowDown,
+  X,
+  ImagePlus,
+} from "lucide-react";
 import {
   useAdminProducts,
   useCreateProduct,
@@ -27,7 +38,8 @@ import {
   productDiscountPercent,
   isProductOfferActive,
 } from "@/lib/product-offer-types";
-import type { Product } from "@/lib/admin-data";
+import { getProductImages, type Product } from "@/lib/admin-data";
+import { uploadProductImage, deleteStoredProductImages } from "@/lib/product-images";
 import { QueryError } from "@/components/admin/QueryError";
 
 export const Route = createFileRoute("/admin/products")({
@@ -50,6 +62,28 @@ const emptyForm = {
   offer_end_date: "",
 };
 
+/** Optional packing/size presets. "Other" lets the admin type a custom value. */
+const PACK_SIZE_OPTIONS = [
+  "10g",
+  "25g",
+  "50g",
+  "100g",
+  "250g",
+  "500g",
+  "1kg",
+  "25ml",
+  "50ml",
+  "100ml",
+  "250ml",
+];
+
+const CONDITION_OPTIONS = ["Fresh Condition"];
+const OTHER = "__other__";
+
+function isPackPreset(value: string) {
+  return PACK_SIZE_OPTIONS.includes(value);
+}
+
 function AdminProducts() {
   const { data: products, isLoading, isError, error } = useAdminProducts();
   const createProduct = useCreateProduct();
@@ -59,6 +93,14 @@ function AdminProducts() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [images, setImages] = useState<string[]>([]);
+  const [prevImages, setPrevImages] = useState<string[]>([]);
+  const [imageUrlInput, setImageUrlInput] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [packSize, setPackSize] = useState("");
+  const [packSizeOther, setPackSizeOther] = useState("");
+  const [condition, setCondition] = useState("");
+  const [conditionOther, setConditionOther] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const today = todayInClinic();
@@ -66,11 +108,18 @@ function AdminProducts() {
   function openCreate() {
     setEditing(null);
     setForm(emptyForm);
+    setImages([]);
+    setPrevImages([]);
+    setImageUrlInput("");
+    setPackSize("");
+    setPackSizeOther("");
+    setCondition("Fresh Condition");
+    setConditionOther("");
     setSaveError(null);
     setDialogOpen(true);
   }
 
-  function openEdit(p: Product) {
+  async function openEdit(p: Product) {
     setEditing(p);
     setForm({
       name: p.name,
@@ -87,6 +136,32 @@ function AdminProducts() {
       offer_start_date: p.offer_start_date ?? "",
       offer_end_date: p.offer_end_date ?? "",
     });
+
+    const gallery = await getProductImages(p.id);
+    const loadedImages =
+      gallery.length > 0 ? gallery.map((g) => g.url) : p.image_url ? [p.image_url] : [];
+    setImages(loadedImages);
+    setPrevImages(loadedImages);
+    setImageUrlInput("");
+
+    const size = p.pack_size?.trim() ?? "";
+    if (size && isPackPreset(size)) {
+      setPackSize(size);
+      setPackSizeOther("");
+    } else {
+      setPackSize(size ? OTHER : "");
+      setPackSizeOther(size);
+    }
+
+    const cond = p.product_condition?.trim() ?? "";
+    if (cond && CONDITION_OPTIONS.includes(cond)) {
+      setCondition(cond);
+      setConditionOther("");
+    } else {
+      setCondition(cond ? OTHER : "");
+      setConditionOther(cond);
+    }
+
     setSaveError(null);
     setDialogOpen(true);
   }
@@ -110,18 +185,67 @@ function AdminProducts() {
     setForm({ ...form, offer_percent, discount_price });
   }
 
+  function addImageUrl() {
+    const url = imageUrlInput.trim();
+    if (!url) return;
+    setImages((prev) => [...prev, url]);
+    setImageUrlInput("");
+  }
+
+  async function handlePickImage(file: File | undefined) {
+    if (!file) return;
+    setSaveError(null);
+    setUploadingImage(true);
+    try {
+      const res = await uploadProductImage(file);
+      if (res.error) {
+        setSaveError(res.error);
+        return;
+      }
+      if (res.url) setImages((prev) => [...prev, res.url!]);
+    } finally {
+      setUploadingImage(false);
+    }
+  }
+
+  function moveImage(index: number, dir: -1 | 1) {
+    setImages((prev) => {
+      const next = [...prev];
+      const target = index + dir;
+      if (target < 0 || target >= next.length) return prev;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
+  function removeImage(index: number) {
+    setImages((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function handleSave() {
+    const packSizeValue = packSize === OTHER ? packSizeOther.trim() : packSize.trim();
+    const conditionValue = condition === OTHER ? conditionOther.trim() : condition.trim();
+
     const data = {
       ...form,
       offer_start_date: form.offer_start_date || null,
       offer_end_date: form.offer_end_date || null,
+      pack_size: packSizeValue || null,
+      product_condition: conditionValue || null,
+      images,
     };
+
     const result = editing
       ? await updateProduct.mutateAsync({ id: editing.id, data })
       : await createProduct.mutateAsync(data);
     if (result.error) {
       setSaveError(result.error);
       return;
+    }
+    // Clean up any uploaded objects that are no longer referenced.
+    const removed = prevImages.filter((u) => !images.includes(u));
+    if (removed.length > 0) {
+      deleteStoredProductImages(removed);
     }
     setSaveError(null);
     setDialogOpen(false);
@@ -190,6 +314,7 @@ function AdminProducts() {
                       Rs. {productEffectivePrice(p, today)}
                       {offerActive && <span className="ml-1 line-through">Rs. {p.price}</span>}
                       {p.category && <span className="ml-1 capitalize">· {p.category}</span>}
+                      {p.pack_size && <span className="ml-1">· {p.pack_size}</span>}
                       {typeof p.stock_quantity === "number" && (
                         <span className="ml-1">· {p.stock_quantity} in stock</span>
                       )}
@@ -237,7 +362,7 @@ function AdminProducts() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit Product" : "Add Product"}</DialogTitle>
             <DialogDescription>Configure the product details</DialogDescription>
@@ -267,7 +392,7 @@ function AdminProducts() {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-foreground">Category</label>
+                <label className="text-sm font-medium text-foreground">Product Form</label>
                 <Input
                   value={form.category}
                   placeholder="e.g. Drops, Tablets, Ointment…"
@@ -288,12 +413,182 @@ function AdminProducts() {
                   }
                 />
               </div>
-              <div>
-                <label className="text-sm font-medium text-foreground">Image URL</label>
+            </div>
+
+            {/* Product images — first image is the primary / front image */}
+            <div className="rounded-xl border border-border p-4">
+              <div className="text-sm font-medium text-foreground">Product images</div>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                The first image is the main product image. Add more for an optional swipe/slider
+                gallery on the shop. Use an image URL or upload from your device.
+              </p>
+
+              {images.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {images.map((url, i) => (
+                    <div
+                      key={`${i}-${url}`}
+                      className="flex items-center gap-3 rounded-xl border border-border bg-background px-3 py-2"
+                    >
+                      <img
+                        src={url}
+                        alt=""
+                        className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                      />
+                      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                        {url}
+                      </span>
+                      {i === 0 ? (
+                        <Badge variant="secondary" className="shrink-0">
+                          Primary
+                        </Badge>
+                      ) : (
+                        <span className="hidden shrink-0 text-[11px] text-muted-foreground sm:inline">
+                          Image {i + 1}
+                        </span>
+                      )}
+                      <div className="flex shrink-0 gap-0.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          aria-label="Move image earlier"
+                          disabled={i === 0}
+                          onClick={() => moveImage(i, -1)}
+                        >
+                          <ArrowUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          aria-label="Move image later"
+                          disabled={i === images.length - 1}
+                          onClick={() => moveImage(i, 1)}
+                        >
+                          <ArrowDown className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          aria-label="Remove image"
+                          className="text-red-600"
+                          onClick={() => removeImage(i)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
                 <Input
-                  value={form.image_url}
-                  onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+                  value={imageUrlInput}
+                  placeholder="Paste an image URL…"
+                  onChange={(e) => setImageUrlInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addImageUrl();
+                    }
+                  }}
                 />
+                <Button type="button" variant="outline" onClick={addImageUrl}>
+                  <ImagePlus className="h-4 w-4" /> Add URL
+                </Button>
+              </div>
+
+              <div className="mt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full gap-2 sm:w-auto"
+                  disabled={uploadingImage}
+                  asChild
+                >
+                  <label htmlFor="product-file-input" className="cursor-pointer">
+                    {uploadingImage ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4" />
+                    )}
+                    {uploadingImage ? "Uploading…" : "Upload from device"}
+                  </label>
+                </Button>
+                <input
+                  id="product-file-input"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+                  className="sr-only"
+                  disabled={uploadingImage}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    handlePickImage(f);
+                    e.target.value = "";
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Packing / size */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="text-sm font-medium text-foreground">
+                  Packing / size{" "}
+                  <span className="font-normal text-muted-foreground">(optional)</span>
+                </label>
+                <select
+                  value={packSize}
+                  onChange={(e) => setPackSize(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground outline-none transition focus:border-primary/50"
+                >
+                  <option value="">None</option>
+                  {PACK_SIZE_OPTIONS.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                  <option value={OTHER}>Other</option>
+                </select>
+                {packSize === OTHER && (
+                  <Input
+                    className="mt-2"
+                    value={packSizeOther}
+                    placeholder="e.g. 2kg, 30 tablets…"
+                    onChange={(e) => setPackSizeOther(e.target.value)}
+                  />
+                )}
+              </div>
+
+              {/* Condition */}
+              <div>
+                <label className="text-sm font-medium text-foreground">
+                  Condition <span className="font-normal text-muted-foreground">(optional)</span>
+                </label>
+                <select
+                  value={condition}
+                  onChange={(e) => setCondition(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground outline-none transition focus:border-primary/50"
+                >
+                  <option value="">None</option>
+                  {CONDITION_OPTIONS.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                  <option value={OTHER}>Other</option>
+                </select>
+                {condition === OTHER && (
+                  <Input
+                    className="mt-2"
+                    value={conditionOther}
+                    placeholder="e.g. Slightly expired stock"
+                    onChange={(e) => setConditionOther(e.target.value)}
+                  />
+                )}
               </div>
             </div>
 
@@ -437,9 +732,15 @@ function AdminProducts() {
             </DialogClose>
             <Button
               onClick={handleSave}
-              disabled={createProduct.isPending || updateProduct.isPending}
+              disabled={createProduct.isPending || updateProduct.isPending || uploadingImage}
             >
-              {editing ? "Update" : "Create"}
+              {createProduct.isPending || updateProduct.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : editing ? (
+                "Update"
+              ) : (
+                "Create"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

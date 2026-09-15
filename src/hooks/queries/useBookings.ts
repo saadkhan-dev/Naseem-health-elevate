@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getServices,
   getAvailability,
+  getCustomAvailability,
   getBookedSlots,
   generateTimeSlots,
   createAppointment,
@@ -9,6 +10,7 @@ import {
   recoverAppointments,
   type Service,
   type AvailabilitySlot,
+  type CustomAvailabilitySlot,
   type AppointmentStatus,
   type RecoveredAppointment,
 } from "@/lib/bookings";
@@ -31,6 +33,15 @@ export function useAvailability() {
   });
 }
 
+/** One-time / custom availability slots for specific dates (today onwards). */
+export function useCustomAvailability() {
+  return useQuery<CustomAvailabilitySlot[]>({
+    queryKey: ["customAvailability"],
+    queryFn: getCustomAvailability,
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
 export function useTimeSlots(
   date: Date | undefined,
   selectedServiceId: string | undefined,
@@ -49,6 +60,7 @@ export function useTimeSlots(
   });
 
   const availQuery = useAvailability();
+  const customQuery = useCustomAvailability();
 
   const slots = (() => {
     if (!date || !availQuery.data || !bookedQuery.data) return [];
@@ -59,10 +71,11 @@ export function useTimeSlots(
       duration,
       todayInClinic(),
       nowTimeInClinic(),
+      customQuery.data,
     );
   })();
 
-  return { slots, isLoading: bookedQuery.isLoading || availQuery.isLoading };
+  return { slots, isLoading: bookedQuery.isLoading || availQuery.isLoading || customQuery.isLoading };
 }
 
 export function useCreateAppointment() {

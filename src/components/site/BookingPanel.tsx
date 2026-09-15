@@ -27,6 +27,7 @@ import {
   useServices,
   useTimeSlots,
   useAvailability,
+  useCustomAvailability,
   useCreateAppointment,
 } from "@/hooks/queries/useBookings";
 import {
@@ -35,7 +36,7 @@ import {
   isVideoConsultationService,
   HOME_VISIT_FEE_LABEL,
 } from "@/lib/bookings";
-import { isDateBeforeTodayClinic } from "@/lib/clinic";
+import { isDateBeforeTodayClinic, toClinicDate } from "@/lib/clinic";
 import { useAuth } from "@/hooks/useAuth";
 import type { NotificationResult } from "@/lib/notifications";
 import { BookingConfirmation } from "./BookingConfirmation";
@@ -55,6 +56,7 @@ export function BookingPanel() {
 
   const { data: services, isLoading: servicesLoading } = useServices();
   const { data: availability } = useAvailability();
+  const { data: customAvailability } = useCustomAvailability();
   const { slots, isLoading: slotsLoading } = useTimeSlots(date, serviceId, services);
   const createAppointment = useCreateAppointment();
   const bookingServices = services
@@ -75,6 +77,12 @@ export function BookingPanel() {
   const openDays = React.useMemo(
     () => new Set(availability?.map((a) => a.day_of_week) ?? []),
     [availability],
+  );
+
+  // Dates with a one-time extra/custom slot stay bookable even on a closed day.
+  const customDates = React.useMemo(
+    () => new Set(customAvailability?.map((c) => c.specific_date) ?? []),
+    [customAvailability],
   );
 
   // Prefill the contact fields from the signed-in patient's trusted profile.
@@ -245,7 +253,10 @@ export function BookingPanel() {
                       setTime(undefined);
                     }}
                     disabled={(d) =>
-                      isDateBeforeTodayClinic(d) || (!isHomeVisit && !openDays.has(d.getDay()))
+                      isDateBeforeTodayClinic(d) ||
+                      (!isHomeVisit &&
+                        !openDays.has(d.getDay()) &&
+                        !customDates.has(toClinicDate(d)))
                     }
                     initialFocus
                     className="p-3 pointer-events-auto text-white [--cell-size:1.75rem] min-[360px]:[--cell-size:2rem]"

@@ -4,6 +4,7 @@ import { Loader2, MessageSquare } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { usePatientConsultationHistory, useConsultationDetail } from "@/hooks/useConsultation";
+import { usePageFocus, useFocusHighlight } from "@/hooks/usePageFocus";
 import { ConversationListItem } from "@/components/consultation/ConversationListItem";
 import { ConsultationChat } from "@/components/consultation/ConsultationChat";
 import { ChatEmptyState, ChatLoadingState } from "@/components/consultation/shared";
@@ -24,6 +25,19 @@ function PatientConsultations() {
   }, [selectedId]);
 
   const viewingChat = !!selectedId;
+
+  // Deep-link focus: ?focus=consultation&id=<conversationId> from a
+  // notification — open that conversation inline and highlight its list row.
+  const pageFocus = usePageFocus();
+  const focusConversation =
+    pageFocus?.focus === "consultation" ? pageFocus : null;
+  useFocusHighlight({ focus: focusConversation, ready: !isLoading });
+
+  useEffect(() => {
+    if (focusConversation?.id && focusConversation.id !== selectedId) {
+      setSelectedId(focusConversation.id);
+    }
+  }, [focusConversation?.id, selectedId]);
 
   return (
     <div className="space-y-6">
@@ -69,11 +83,12 @@ function PatientConsultations() {
               <ConversationListItem
                 key={item.conversationId}
                 item={item}
-                to="/patient/consultations"
-                active={item.conversationId === selectedId}
-                onSelect={() => setSelectedId(item.conversationId)}
-                listFor="patient"
-              />
+to="/patient/consultations"
+                  active={item.conversationId === selectedId}
+                  onSelect={() => setSelectedId(item.conversationId)}
+                  listFor="patient"
+                  dataFocusId={item.conversationId}
+                />
             ))
           )}
         </section>

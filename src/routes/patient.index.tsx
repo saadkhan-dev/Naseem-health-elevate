@@ -43,6 +43,7 @@ import { ensureConsultationConversation } from "@/lib/consultation-data";
 import {
   formatTimeDisplay,
   getAvailability,
+  getCustomAvailability,
   getBookedSlots,
   generateTimeSlots,
 } from "@/lib/bookings";
@@ -233,8 +234,8 @@ function RescheduleDialog({
     }
     let cancelled = false;
     setLoading(true);
-    Promise.all([getAvailability(), getBookedSlots(date)])
-      .then(([availability, booked]) => {
+    Promise.all([getAvailability(), getCustomAvailability(), getBookedSlots(date)])
+      .then(([availability, customAvailability, booked]) => {
         if (cancelled) return;
         const times = generateTimeSlots(
           availability,
@@ -243,6 +244,7 @@ function RescheduleDialog({
           duration,
           todayInClinic(),
           nowTimeInClinic(),
+          customAvailability,
         );
         setAvailableTimes(times);
         setTime((cur) => (times.includes(cur) ? cur : (times[0] ?? "")));

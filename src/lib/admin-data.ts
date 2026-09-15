@@ -3,6 +3,9 @@ import { todayInClinic } from "@/lib/clinic";
 import {
   adminUpdateAppointmentStatus,
   adminUpdateAvailability,
+  adminCreateCustomAvailability,
+  adminUpdateCustomAvailability,
+  adminDeleteCustomAvailability,
   adminCreateService,
   adminUpdateService,
   adminDeleteService,
@@ -23,7 +26,7 @@ import {
   adminUpdateVideoOffer,
   adminDeleteVideoOffer,
 } from "@/lib/actions.functions";
-import type { Service, AvailabilitySlot } from "./bookings";
+import type { Service, AvailabilitySlot, CustomAvailabilitySlot } from "./bookings";
 import type { PaymentMethod, PaymentStatus } from "./payment";
 
 export type VideoOfferType = "waive" | "percent" | "fixed";
@@ -66,6 +69,26 @@ export async function getAllServices(): Promise<Service[]> {
 export async function getAllAvailability(): Promise<AvailabilitySlot[]> {
   const { data } = await staffSupabase.from("availability").select("*").order("day_of_week");
   return data ?? [];
+}
+
+/** All extra / custom availability slots (one-time slots for a specific date). */
+export async function getAllCustomAvailability(): Promise<CustomAvailabilitySlot[]> {
+  const { data } = await staffSupabase
+    .from("custom_availability")
+    .select("*")
+    .order("specific_date", { ascending: true })
+    .order("start_time", { ascending: true });
+  return data ?? [];
+}
+
+/** Doctors/admins who can be assigned an extra availability slot. */
+export async function getStaffMembers(): Promise<Array<{ id: string; full_name: string | null }>> {
+  const { data } = await staffSupabase
+    .from("profiles")
+    .select("id, full_name, role")
+    .or("role.eq.admin,role.eq.doctor")
+    .order("full_name");
+  return (data ?? []) as Array<{ id: string; full_name: string | null }>;
 }
 
 export interface AppointmentWithDetails {
@@ -311,6 +334,27 @@ export async function updateAvailability(
   return adminUpdateAvailability({ data: { id, data } });
 }
 
+export type CustomAvailabilityInput = {
+  doctor_id?: string | null;
+  specific_date: string;
+  start_time: string;
+  end_time: string;
+  is_available?: boolean;
+  notes?: string | null;
+};
+
+export async function createCustomAvailability(data: CustomAvailabilityInput) {
+  return adminCreateCustomAvailability({ data });
+}
+
+export async function updateCustomAvailability(id: string, data: Partial<CustomAvailabilityInput>) {
+  return adminUpdateCustomAvailability({ data: { id, data } });
+}
+
+export async function deleteCustomAvailability(id: string) {
+  return adminDeleteCustomAvailability({ data: { id } });
+}
+
 // --- Services ---
 
 export async function createService(data: {
@@ -359,7 +403,27 @@ export interface Product {
   offer_percent: number | null;
   offer_start_date: string | null;
   offer_end_date: string | null;
+  pack_size: string | null;
+  product_condition: string | null;
   created_at: string;
+}
+
+/** One entry in the optional product gallery. position 0 = primary image. */
+export interface ProductImage {
+  id: string;
+  product_id: string;
+  position: number;
+  url: string;
+  created_at: string;
+}
+
+export async function getProductImages(productId: string): Promise<ProductImage[]> {
+  const { data } = await supabase
+    .from("product_images")
+    .select("id, product_id, position, url, created_at")
+    .eq("product_id", productId)
+    .order("position", { ascending: true });
+  return (data ?? []) as ProductImage[];
 }
 
 export async function getProducts(): Promise<Product[]> {
@@ -416,6 +480,10 @@ export async function createProduct(data: {
   offer_percent?: number | null;
   offer_start_date?: string | null;
   offer_end_date?: string | null;
+  pack_size?: string | null;
+  product_condition?: string | null;
+  /** Ordered gallery URLs. position 0 becomes image_url + the primary image. */
+  images?: string[];
 }) {
   return adminCreateProduct({ data });
 }
@@ -436,6 +504,10 @@ export async function updateProduct(
     offer_percent?: number | null;
     offer_start_date?: string | null;
     offer_end_date?: string | null;
+    pack_size?: string | null;
+    product_condition?: string | null;
+    /** Ordered gallery URLs. position 0 becomes image_url + the primary image. */
+    images?: string[];
   },
 ) {
   return adminUpdateProduct({ data: { id, data } });

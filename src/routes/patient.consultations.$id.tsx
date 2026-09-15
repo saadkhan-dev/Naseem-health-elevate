@@ -1,69 +1,20 @@
-import { useEffect } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Loader2 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/hooks/useAuth";
-import { useConsultationDetail } from "@/hooks/useConsultation";
-import { ConsultationChat } from "@/components/consultation/ConsultationChat";
-import { Button } from "@/components/ui/button";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+/**
+ * Deep-link to a single patient conversation. Mirrors the admin side: the
+ * parent `/patient/consultations` route renders list + inline chat without an
+ * `<Outlet />`, so a deep-link URL only matches this child. Redirect to the
+ * list page with the focus param so the conversation opens inline and gets
+ * scrolled/highlighted, avoiding a second (dead) full-page layout.
+ */
 export const Route = createFileRoute("/patient/consultations/$id")({
   head: () => ({ meta: [{ name: "robots", content: "noindex, nofollow" }] }),
-  component: PatientConversationView,
+  beforeLoad: ({ params }) => {
+    throw redirect({
+      to: "/patient/consultations",
+      search: { focus: "consultation", id: params.id },
+      replace: true,
+    } as never);
+  },
+  component: () => null,
 });
-
-function PatientConversationView() {
-  const { id } = Route.useParams();
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const {
-    data: detail,
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useConsultationDetail(id, true, "public");
-
-  useEffect(() => {
-    window.scrollTo({ top: 0 });
-  }, [id]);
-
-  if (!user || isLoading) {
-    return (
-      <div className="flex min-h-[70vh] items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex h-[calc(100dvh-9.5rem)] min-h-0 flex-col gap-3 max-sm:fixed max-sm:inset-x-0 max-sm:top-0 max-sm:z-40 max-sm:h-[100dvh] max-sm:overflow-hidden max-sm:bg-background max-sm:px-3 max-sm:pb-3 max-sm:pt-[4.5rem] lg:h-[calc(100dvh-7rem)]">
-      {isError && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-destructive">
-              Could not load this conversation.
-            </p>
-            <p className="mt-0.5 break-all text-xs text-destructive/80">
-              {error instanceof Error ? error.message : String(error)}
-            </p>
-          </div>
-          <Button variant="outline" size="sm" className="shrink-0" onClick={() => void refetch()}>
-            Try again
-          </Button>
-        </div>
-      )}
-
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
-        <ConsultationChat
-          client={supabase}
-          conversationId={id}
-          viewer={{ id: user.id, role: "patient", name: "", title: "Patient" }}
-          detail={detail ?? null}
-          showBackButton
-          onBack={() => navigate({ to: "/patient/consultations" })}
-        />
-      </div>
-    </div>
-  );
-}

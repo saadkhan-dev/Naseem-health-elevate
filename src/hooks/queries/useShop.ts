@@ -14,7 +14,13 @@ import {
   type OrderPaymentVerification,
   type AdminProductReview,
 } from "@/lib/shop";
-import { getProductById, getPublishedProductReviews, type Product } from "@/lib/admin-data";
+import {
+  getProductById,
+  getProductImages,
+  getPublishedProductReviews,
+  type Product,
+  type ProductImage,
+} from "@/lib/admin-data";
 import { getActivePaymentMethods } from "@/lib/payment";
 
 // --- Payment methods (shared with the video flow) ---
@@ -97,6 +103,14 @@ export function useProductDetail(productId: string | null) {
   return useQuery<Product | null>({
     queryKey: ["product", productId],
     queryFn: () => getProductById(productId!),
+    enabled: !!productId,
+  });
+}
+
+export function useProductImages(productId: string | null) {
+  return useQuery<ProductImage[]>({
+    queryKey: ["product-images", productId],
+    queryFn: () => getProductImages(productId!),
     enabled: !!productId,
   });
 }

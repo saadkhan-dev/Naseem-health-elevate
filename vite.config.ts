@@ -10,21 +10,60 @@ export default defineConfig({
         output: {
           manualChunks(id) {
             if (!id.includes("node_modules")) return;
-            if (id.includes("@supabase")) return "vendor-supabase";
-            if (id.includes("react-dom") || id.includes("react/") || id.includes("scheduler"))
-              return "vendor-react";
-            if (
-              id.includes("@tanstack/react-router") ||
-              id.includes("@tanstack/react-query") ||
-              id.includes("@tanstack/router-")
-            )
-              return "vendor-tanstack";
-            if (id.includes("framer-motion") || id.includes("motion-dom") || id.includes("motion/"))
-              return "vendor-motion";
-            if (id.includes("recharts")) return "vendor-recharts";
-            if (id.includes("date-fns")) return "vendor-date-fns";
-            if (id.includes("@radix-ui")) return "vendor-radix";
-            if (id.includes("lucide-react")) return "vendor-lucide";
+            const norm = id.replace(/\\/g, "/");
+            const rest = norm.split("node_modules/")[1] || norm;
+            const firstSeg = rest.split("/")[0];
+            const isScoped = firstSeg.startsWith("@");
+            const pkg = isScoped
+              ? `${firstSeg}/${rest.split("/")[1]}`
+              : firstSeg.split("_")[0];
+            switch (pkg) {
+              case "@supabase/supabase-js":
+              case "@supabase/realtime-js":
+              case "@supabase/postgrest-js":
+              case "@supabase/storage-js":
+              case "@supabase/functions-js":
+              case "@supabase/auth-js":
+                return "vendor-supabase";
+              case "@tanstack/react-router":
+              case "@tanstack/react-query":
+              case "@tanstack/router-core":
+              case "@tanstack/react-store":
+              case "@tanstack/store":
+                return "vendor-tanstack";
+              case "@radix-ui/react-accordion":
+              case "@radix-ui/react-dialog":
+              case "@radix-ui/react-label":
+              case "@radix-ui/react-popover":
+              case "@radix-ui/react-select":
+              case "@radix-ui/react-slot":
+              case "@radix-ui/react-switch":
+              case "@radix-ui/react-tabs":
+              case "@radix-ui/react-tooltip":
+              case "@radix-ui/react-visually-hidden":
+                return "vendor-radix";
+              case "@livekit/components-react":
+                return "vendor-livekit";
+              case "livekit-client":
+              case "livekit-server-sdk":
+                return "vendor-livekit";
+              case "react":
+              case "react-dom":
+              case "scheduler":
+                return "vendor-react";
+              case "framer-motion":
+              case "motion":
+              case "motion-dom":
+              case "motion-utils":
+                return "vendor-motion";
+              case "recharts":
+                return "vendor-recharts";
+              case "date-fns":
+                return "vendor-date-fns";
+              case "lucide-react":
+              case "react-day-picker":
+                return "vendor-lucide";
+            }
           },
         },
       },

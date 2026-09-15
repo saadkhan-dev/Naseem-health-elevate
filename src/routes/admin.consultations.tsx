@@ -4,6 +4,7 @@ import { Calendar, Loader2, MessageSquare, Search, X } from "lucide-react";
 import { staffSupabase } from "@/lib/supabase";
 import { useStaffAuth } from "@/hooks/useStaffAuth";
 import { useStaffConsultationHistory, useConsultationDetail } from "@/hooks/useConsultation";
+import { usePageFocus, useFocusHighlight } from "@/hooks/usePageFocus";
 import { ConversationListItem } from "@/components/consultation/ConversationListItem";
 import { ConsultationChat } from "@/components/consultation/ConsultationChat";
 import {
@@ -83,6 +84,32 @@ function AdminConsultations() {
       pick(suggestions[0].conversationId);
     }
   }
+
+  // Deep-link focus: a notification / suggestion navigates here with
+  // ?focus=consultation&id=<conversationId> — open that conversation inline,
+  // scroll to and highlight the exact list row (mirrors appointments).
+  const pageFocus = usePageFocus();
+  const focusConversation =
+    pageFocus?.focus === "consultation" ? pageFocus : null;
+  useFocusHighlight({
+    focus: focusConversation,
+    ready: !isLoading,
+    ensureVisible: (f) => {
+      const row = (data ?? []).find((c) => c.conversationId === f.id);
+      if (!row) return;
+      if (status !== "all") setStatus("all");
+      if (dateFilter) setDateFilter("");
+      if (q.trim() && !(row.patientName ?? "").toLowerCase().includes(q.toLowerCase())) setQ("");
+    },
+  });
+
+  // Open the focused conversation in the inline chat pane when a
+  // consultation focus arrives (from a notification deep-link).
+  useEffect(() => {
+    if (focusConversation?.id && focusConversation.id !== selectedId) {
+      setSelectedId(focusConversation.id);
+    }
+  }, [focusConversation?.id, selectedId]);
 
   return (
     <div className="space-y-6">
@@ -234,6 +261,7 @@ function AdminConsultations() {
                 contactName={item.patientName}
                 patientGender={item.patientGender}
                 listFor="staff"
+                dataFocusId={item.conversationId}
               />
             ))
           )}

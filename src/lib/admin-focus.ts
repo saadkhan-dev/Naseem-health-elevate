@@ -12,7 +12,7 @@
  * (actions.functions.ts, payment/consultation helpers) AND client components.
  */
 
-export type FocusKind = "appointment" | "patient" | "order" | "support";
+export type FocusKind = "appointment" | "patient" | "order" | "support" | "consultation";
 
 export interface PageFocus {
   focus: FocusKind;
@@ -32,7 +32,7 @@ export function parseFocusTarget(search: Record<string, unknown>): PageFocus | n
   const focus = typeof search.focus === "string" ? search.focus.trim().toLowerCase() : "";
   const id = typeof search.id === "string" ? search.id.trim() : "";
   if (!focus || !id) return null;
-  const kinds: FocusKind[] = ["appointment", "patient", "order", "support"];
+  const kinds: FocusKind[] = ["appointment", "patient", "order", "support", "consultation"];
   if (!kinds.includes(focus as FocusKind)) return null;
   return { focus: focus as FocusKind, id };
 }

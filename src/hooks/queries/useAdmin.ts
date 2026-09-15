@@ -6,6 +6,11 @@ import {
   updateAvailability,
   getAllServices,
   getAllAvailability,
+  getAllCustomAvailability,
+  createCustomAvailability,
+  updateCustomAvailability,
+  deleteCustomAvailability,
+  getStaffMembers,
   createService,
   updateService,
   deleteService,
@@ -35,10 +40,11 @@ import {
   type VideoOffer,
   type VideoPaymentStatusView,
   type RecentPatient,
+  type CustomAvailabilityInput,
 } from "@/lib/admin-data";
 import { adminGetChatUsage } from "@/lib/actions.functions";
 import type { ChatUsageRange, ChatUsageStats } from "@/lib/server/chat-usage";
-import type { Service, AvailabilitySlot } from "@/lib/bookings";
+import type { Service, AvailabilitySlot, CustomAvailabilitySlot } from "@/lib/bookings";
 import type { PaymentMethod } from "@/lib/payment";
 
 // --- Appointments ---
@@ -99,6 +105,61 @@ export function useUpdateAvailability() {
       data: { start_time?: string; end_time?: string; is_available?: boolean };
     }) => updateAvailability(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "availability"] }),
+  });
+}
+
+// --- Extra / custom availability (one-time slots for a specific date) ---
+
+export function useAdminCustomAvailability() {
+  return useQuery<CustomAvailabilitySlot[]>({
+    queryKey: ["admin", "custom-availability"],
+    queryFn: getAllCustomAvailability,
+  });
+}
+
+/** Doctors/admins who can be assigned an extra availability slot. */
+export function useStaffMembers() {
+  return useQuery<Array<{ id: string; full_name: string | null }>>({
+    queryKey: ["admin", "staff-members"],
+    queryFn: getStaffMembers,
+    staleTime: 1000 * 60 * 30,
+  });
+}
+
+export function useCreateCustomAvailability() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CustomAvailabilityInput) => createCustomAvailability(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "custom-availability"] });
+      qc.invalidateQueries({ queryKey: ["customAvailability"] });
+      qc.invalidateQueries({ queryKey: ["bookedSlots"] });
+    },
+  });
+}
+
+export function useUpdateCustomAvailability() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<CustomAvailabilityInput> }) =>
+      updateCustomAvailability(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "custom-availability"] });
+      qc.invalidateQueries({ queryKey: ["customAvailability"] });
+      qc.invalidateQueries({ queryKey: ["bookedSlots"] });
+    },
+  });
+}
+
+export function useDeleteCustomAvailability() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteCustomAvailability(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "custom-availability"] });
+      qc.invalidateQueries({ queryKey: ["customAvailability"] });
+      qc.invalidateQueries({ queryKey: ["bookedSlots"] });
+    },
   });
 }
 

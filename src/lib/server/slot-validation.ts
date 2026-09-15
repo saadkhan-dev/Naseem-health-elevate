@@ -2,6 +2,48 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { todayInClinic, nowTimeInClinic, toMinutes } from "@/lib/clinic";
 import { intervalsOverlap } from "@/lib/slot-logic";
 
+export interface OpenWindow {
+  /** Start of the window in minutes since midnight. */
+  start: number;
+  /** End of the window in minutes since midnight. */
+  end: number;
+}
+
+/**
+ * Open availability windows for a specific calendar date, in minutes since
+ * midnight. Combines the regular weekly `availability` rows for that weekday
+ * with any one-time `custom_availability` rows for that exact date, so custom
+ * slots appear (and validate) exactly where patients see them.
+ */
+export async function getOpenAvailabilityWindows(
+  admin: SupabaseClient,
+  date: string,
+): Promise<OpenWindow[]> {
+  const [y, m, d] = date.split("-").map(Number);
+  const dayOfWeek = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+
+  const [regular, custom] = await Promise.all([
+    admin
+      .from("availability")
+      .select("start_time, end_time")
+      .eq("day_of_week", dayOfWeek)
+      .eq("is_available", true),
+    admin
+      .from("custom_availability")
+      .select("start_time, end_time")
+      .eq("specific_date", date)
+      .eq("is_available", true),
+  ]);
+
+  const windows: OpenWindow[] = [];
+  for (const row of [...(regular.data ?? []), ...(custom.data ?? [])]) {
+    const start = toMinutes(row.start_time as string);
+    const end = toMinutes(row.end_time as string);
+    if (end > start) windows.push({ start, end });
+  }
+  return windows;
+}
+
 /**
  * Shared server-side slot validation used by every (re)booking path so the
  * rules are identical everywhere:
@@ -38,22 +80,14 @@ export async function validateAppointmentSlot(
     return "That time has already passed. Please pick a later slot.";
   }
 
-  const [y, m, d] = input.date.split("-").map(Number);
-  const dayOfWeek = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
   const timeMin = toMinutes(input.time);
   const duration = input.durationMinutes;
 
-  const { data: windows } = await admin
-    .from("availability")
-    .select("start_time, end_time")
-    .eq("day_of_week", dayOfWeek)
-    .eq("is_available", true);
+  const windows = await getOpenAvailabilityWindows(admin, input.date);
 
-  const inOpenWindow = (windows ?? []).some((w) => {
-    const start = toMinutes(w.start_time);
-    const end = toMinutes(w.end_time);
-    if (timeMin < start || timeMin >= end || timeMin + duration > end) return false;
-    return (timeMin - start) % duration === 0;
+  const inOpenWindow = windows.some((w) => {
+    if (timeMin < w.start || timeMin >= w.end || timeMin + duration > w.end) return false;
+    return (timeMin - w.start) % duration === 0;
   });
 
   if (!inOpenWindow) {

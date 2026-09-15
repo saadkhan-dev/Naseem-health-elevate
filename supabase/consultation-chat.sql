@@ -856,18 +856,26 @@ begin
     insert into public.consultation_events
       (conversation_id, actor_id, actor_role, event_type, metadata)
     values (v_conversation_id, null, 'system',
-            'conversation_created', '{"source":"appointment"}'::jsonb);
+            'conversation_created', jsonb_build_object('source', 'appointment'));
   end if;
 
   insert into public.consultation_participants (conversation_id, user_id, role)
   values (v_conversation_id, new.patient_id, 'patient')
   on conflict (conversation_id, user_id) do nothing;
 
-  select id into v_doctor_id
-  from public.profiles
-  where role in ('doctor', 'admin')
-  order by (case when role = 'doctor' then 0 else 1 end), created_at
-  limit 1;
+  -- Prefer the configured doctor from doctor_profile (single source of truth),
+  -- falling back to the first doctor/admin profile if not configured.
+  select dp.user_id into v_doctor_id
+  from public.doctor_profile dp
+  where dp.id = 1 and dp.user_id is not null;
+
+  if v_doctor_id is null then
+    select id into v_doctor_id
+    from public.profiles
+    where role in ('doctor', 'admin')
+    order by (case when role = 'doctor' then 0 else 1 end), created_at
+    limit 1;
+  end if;
 
   if v_doctor_id is not null then
     insert into public.consultation_participants (conversation_id, user_id, role)
@@ -916,11 +924,19 @@ begin
     values (v_conversation_id, r.patient_id, 'patient')
     on conflict (conversation_id, user_id) do nothing;
 
-    select id into v_doctor_id
-    from public.profiles
-    where role in ('doctor', 'admin')
-    order by (case when role = 'doctor' then 0 else 1 end), created_at
-    limit 1;
+    -- Prefer the configured doctor from doctor_profile (single source of truth),
+    -- falling back to the first doctor/admin profile if not configured.
+    select dp.user_id into v_doctor_id
+    from public.doctor_profile dp
+    where dp.id = 1 and dp.user_id is not null;
+
+    if v_doctor_id is null then
+      select id into v_doctor_id
+      from public.profiles
+      where role in ('doctor', 'admin')
+      order by (case when role = 'doctor' then 0 else 1 end), created_at
+      limit 1;
+    end if;
 
     if v_doctor_id is not null then
       insert into public.consultation_participants (conversation_id, user_id, role)
