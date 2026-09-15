@@ -13,6 +13,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { todayInClinic } from "@/lib/clinic";
 import { productEffectivePrice, isProductOrderable } from "@/lib/product-offer-types";
 import { OrderPaymentStep } from "@/components/site/OrderPaymentStep";
+import { useScrollToSuccess } from "@/hooks/useScrollToSuccess";
 import type { Product } from "@/lib/admin-data";
 
 export const Route = createFileRoute("/checkout")({
@@ -68,6 +69,7 @@ function CheckoutPage() {
     total: number | null;
   } | null>(null);
   const [showPayment, setShowPayment] = useState(false);
+  const successRef = useScrollToSuccess<HTMLDivElement>(!!placed);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -124,7 +126,10 @@ function CheckoutPage() {
               <ArrowLeft className="h-4 w-4" /> Continue shopping
             </Link>
 
-            <div className="mt-6 rounded-3xl border border-border bg-card p-8 text-center shadow-soft">
+            <div
+              ref={successRef}
+              className="mt-6 rounded-3xl border border-border bg-card p-8 text-center shadow-soft"
+            >
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-green-600">
                 <CheckCircle2 className="h-8 w-8" />
               </div>

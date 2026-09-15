@@ -144,6 +144,45 @@ function getTargetTop(el: HTMLElement, id: string): number {
 }
 
 /* =========================================================
+   SCROLL TO AN ELEMENT (success sections)
+   ========================================================= */
+
+/**
+ * Scroll a specific element into view below the sticky navbar.
+ * `gapPx` is an extra breathing room above the element (defaults to the
+ * generic section gap). Used by the "auto-scroll after success" flow — it
+ * never touches the URL or history, so browser back/forward is preserved and
+ * it can't conflict with the notification deep-link focus.
+ */
+export function scrollToElement(el: HTMLElement, gapPx?: number, correction = 2): void {
+  const target = el.getBoundingClientRect().top + window.scrollY - navbarHeightPx();
+
+  const gap = typeof gapPx === "number" ? gapPx : getSectionGap("default");
+
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const go = () => {
+    window.scrollTo({
+      top: Math.max(target - gap, 0),
+      behavior: reducedMotion ? "auto" : "smooth",
+    });
+  };
+
+  go();
+
+  // Re-check once after the page settles (images/fonts can shift layout) and
+  // correct ONLY if the target genuinely left the viewport — never if the user
+  // scrolled away themselves (the element is still partly visible then).
+  window.setTimeout(() => {
+    if (correction <= 0) return;
+    const rect = el.getBoundingClientRect();
+    const vh = window.innerHeight || document.documentElement.clientHeight || 720;
+    const outside = rect.bottom < 0 || rect.top > vh;
+    if (outside) go();
+  }, 450);
+}
+
+/* =========================================================
    CHECK POSITION
    ========================================================= */
 

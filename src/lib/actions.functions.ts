@@ -468,7 +468,7 @@ export const createBooking = createServerFn({ method: "POST" })
             type: "appointment_status",
             title: "Appointment requested",
             body: `Your appointment ${appointmentNo} for ${service.name} on ${data.date} is pending confirmation.`,
-            link: "/patient",
+            link: buildAdminFocusLink("/patient", "appointment", inserted.id as string),
           });
         }
 
@@ -935,7 +935,7 @@ export const adminUpdateAppointmentStatus = createServerFn({ method: "POST" })
         type: "appointment_status",
         title: `Appointment ${data.status}`,
         body: `Your appointment ${(row.appointment_no as string | null) ?? data.id} is now "${data.status}".`,
-        link: "/patient",
+        link: buildAdminFocusLink("/patient", "appointment", data.id),
       });
     }
 
@@ -1724,7 +1724,7 @@ export const submitOrderPayment = createServerFn({ method: "POST" })
         type: "payment",
         title: "Payment proof received",
         body: "Your order payment was submitted. The clinic will verify it.",
-        link: "/patient/orders",
+        link: buildAdminFocusLink("/patient/orders", "order", order.id),
       });
     }
     return { error: result.error };
@@ -2088,7 +2088,7 @@ export const adminRescheduleAppointment = createServerFn({ method: "POST" })
         type: "appointment_rescheduled",
         title: "Reschedule request — please confirm",
         body: `Your appointment ${(row.appointment_no as string | null) ?? data.id} is proposed to move to ${data.date}${data.time ? ` at ${data.time.slice(0, 5)}` : ""}. Please accept or decline it from your dashboard.`,
-        link: "/patient",
+        link: buildAdminFocusLink("/patient", "appointment", data.id),
       });
     }
 
@@ -2356,7 +2356,7 @@ export const patientClaimAppointment = createServerFn({ method: "POST" })
       type: "appointment_status",
       title: "Appointment linked",
       body: `Appointment ${id} is now linked to your account.`,
-      link: "/patient",
+      link: buildAdminFocusLink("/patient", "appointment", row.id as string),
     });
     return { error: null };
   });
@@ -2399,7 +2399,7 @@ export const patientCancelAppointment = createServerFn({ method: "POST" })
       type: "appointment_cancelled",
       title: "Appointment cancelled",
       body: `Your appointment ${(row.appointment_no as string | null) ?? data.id} has been cancelled.`,
-      link: "/patient",
+      link: buildAdminFocusLink("/patient", "appointment", data.id),
     });
 
     // Best-effort admin notification (the patient initiated this cancellation).
@@ -2554,7 +2554,7 @@ export const adminApplyRescheduleAppointment = createServerFn({ method: "POST" }
           body: `Your reschedule request was not approved. Your appointment remains on ${row.date}${
             (row.time as string | null) ? ` at ${(row.time as string).slice(0, 5)}` : ""
           }.`,
-          link: "/patient",
+          link: buildAdminFocusLink("/patient", "appointment", row.id as string),
         });
       }
       return { error: null };
@@ -2605,7 +2605,7 @@ export const adminApplyRescheduleAppointment = createServerFn({ method: "POST" }
         body: `Your reschedule request was approved — your appointment is now on ${targetDate}${
           targetTime ? ` at ${targetTime}` : ""
         }.`,
-        link: "/patient",
+        link: buildAdminFocusLink("/patient", "appointment", row.id as string),
       });
     }
 
@@ -2731,7 +2731,7 @@ export const patientApplyRescheduleAppointment = createServerFn({ method: "POST"
       body: `Your appointment is confirmed on ${targetDate}${
         targetTime ? ` at ${targetTime}` : ""
       }.`,
-      link: "/patient",
+      link: buildAdminFocusLink("/patient", "appointment", row.id as string),
     });
 
     await createAdminNotification(admin, {
@@ -3152,7 +3152,7 @@ export const placeOrder = createServerFn({ method: "POST" })
             type: "order",
             title: "Order placed",
             body: `Your order ${orderNo} has been placed. Complete your payment so we can start processing it.`,
-            link: "/patient/orders",
+            link: buildAdminFocusLink("/patient/orders", "order", orderId),
           });
         }
 
@@ -3401,7 +3401,7 @@ export const patientReorder = createServerFn({ method: "POST" })
           type: "order",
           title: "Order placed",
           body: `Your reorder ${orderNo} has been placed. Complete your payment so we can start processing it.`,
-          link: "/patient/orders",
+          link: buildAdminFocusLink("/patient/orders", "order", orderId),
         });
         return { error: null, orderNo };
       }
@@ -3920,7 +3920,7 @@ export const adminUpdateOrderStatus = createServerFn({ method: "POST" })
         type: "order",
         title: `Order ${data.status}`,
         body: `Your order status changed to ${statusLabel}.`,
-        link: "/patient/orders",
+        link: buildAdminFocusLink("/patient/orders", "order", order.id),
       });
     }
     return { error: null };
@@ -4000,7 +4000,7 @@ export const adminUpdateOrderRequest = createServerFn({ method: "POST" })
     const admin = getSupabaseAdmin();
     const { data: req } = await admin
       .from("order_requests")
-      .select("id, patient_id, kind")
+      .select("id, patient_id, kind, order_id")
       .eq("id", data.id)
       .maybeSingle();
     if (!req) return { error: "Request not found." };
@@ -4032,7 +4032,7 @@ export const adminUpdateOrderRequest = createServerFn({ method: "POST" })
         type: "order",
         title: `${kindLabel} request ${data.status}`,
         body: data.adminNotes || `Your ${kindLabel.toLowerCase()} request is now ${data.status}.`,
-        link: "/patient/orders",
+        link: buildAdminFocusLink("/patient/orders", "order", req.order_id as string),
       });
     }
     return { error: null };

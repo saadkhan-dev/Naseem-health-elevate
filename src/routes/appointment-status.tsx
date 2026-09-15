@@ -41,6 +41,7 @@ import {
 import type { PatientAppointment, PatientOrder } from "@/lib/patient-data";
 import { APPOINTMENT_STATUS_LABELS } from "@/lib/notifications";
 import { todayInClinic } from "@/lib/clinic";
+import { useScrollToSuccess } from "@/hooks/useScrollToSuccess";
 
 export const Route = createFileRoute("/appointment-status")({
   validateSearch: z.object({
@@ -298,6 +299,8 @@ function GuestAppointmentLookup({
 
   const checkStatus = useCheckAppointmentStatus();
   const recoverStatus = useRecoverAppointment();
+  const resultRef = useScrollToSuccess<HTMLDivElement>(!!result);
+  const recoverRef = useScrollToSuccess<HTMLDivElement>(recoverResult !== null);
 
   const { apt } = Route.useSearch();
   React.useEffect(() => {
@@ -561,25 +564,33 @@ function GuestAppointmentLookup({
       {mode === "id" &&
         result &&
         (result.found ? (
-          result.appointment && <AppointmentStatusView appointment={result.appointment} />
+          result.appointment && (
+            <div ref={resultRef}>
+              <AppointmentStatusView appointment={result.appointment} />
+            </div>
+          )
         ) : (
-          <EmptyState
-            icon={<AlertTriangle className="h-8 w-8 text-muted-foreground" />}
-            title="No appointment found"
-            message="Double-check your Appointment ID and phone/email, or contact the clinic."
-          />
+          <div ref={resultRef}>
+            <EmptyState
+              icon={<AlertTriangle className="h-8 w-8 text-muted-foreground" />}
+              title="No appointment found"
+              message="Double-check your Appointment ID and phone/email, or contact the clinic."
+            />
+          </div>
         ))}
 
       {mode === "recover" &&
         recoverResult !== null &&
         (recoverResult.length === 0 ? (
-          <EmptyState
-            icon={<AlertTriangle className="h-8 w-8 text-muted-foreground" />}
-            title="No appointments found"
-            message="Double-check your name and phone/email, or contact the clinic."
-          />
+          <div ref={recoverRef}>
+            <EmptyState
+              icon={<AlertTriangle className="h-8 w-8 text-muted-foreground" />}
+              title="No appointments found"
+              message="Double-check your name and phone/email, or contact the clinic."
+            />
+          </div>
         ) : (
-          <div className="mt-6 space-y-4">
+          <div ref={recoverRef} className="mt-6 space-y-4">
             <p className="text-[15px] text-muted-foreground sm:text-sm">
               Found {recoverResult.length} appointment
               {recoverResult.length === 1 ? "" : "s"} for you.
@@ -941,6 +952,8 @@ function GuestOrderLookup({ onBackToMine }: { onBackToMine?: () => void }) {
 
   const checkOrderStatus = useCheckOrderStatus();
   const recoverOrderStatus = useRecoverOrder();
+  const resultRef = useScrollToSuccess<HTMLDivElement>(!!result);
+  const recoverRef = useScrollToSuccess<HTMLDivElement>(recoverResult !== null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -1195,25 +1208,33 @@ function GuestOrderLookup({ onBackToMine }: { onBackToMine?: () => void }) {
       {mode === "id" &&
         result &&
         (result.found ? (
-          result.order && <OrderStatusView order={result.order} />
+          result.order && (
+            <div ref={resultRef}>
+              <OrderStatusView order={result.order} />
+            </div>
+          )
         ) : (
-          <EmptyState
-            icon={<AlertTriangle className="h-8 w-8 text-muted-foreground" />}
-            title="No order found"
-            message="Double-check your Order ID and phone/email, or contact the clinic."
-          />
+          <div ref={resultRef}>
+            <EmptyState
+              icon={<AlertTriangle className="h-8 w-8 text-muted-foreground" />}
+              title="No order found"
+              message="Double-check your Order ID and phone/email, or contact the clinic."
+            />
+          </div>
         ))}
 
       {mode === "recover" &&
         recoverResult !== null &&
         (recoverResult.length === 0 ? (
-          <EmptyState
-            icon={<AlertTriangle className="h-8 w-8 text-muted-foreground" />}
-            title="No orders found"
-            message="Double-check your name and phone/email, or contact the clinic."
-          />
+          <div ref={recoverRef}>
+            <EmptyState
+              icon={<AlertTriangle className="h-8 w-8 text-muted-foreground" />}
+              title="No orders found"
+              message="Double-check your name and phone/email, or contact the clinic."
+            />
+          </div>
         ) : (
-          <div className="mt-6 space-y-4">
+          <div ref={recoverRef} className="mt-6 space-y-4">
             <p className="text-[15px] text-muted-foreground sm:text-sm">
               Found {recoverResult.length} order
               {recoverResult.length === 1 ? "" : "s"} for you.

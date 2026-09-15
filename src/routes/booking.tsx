@@ -37,6 +37,7 @@ import { SiteFooter } from "@/components/site/SiteFooter";
 import { VideoOfferCards } from "@/components/site/VideoOfferCards";
 import { usePublicVideoOffers } from "@/hooks/queries/useContent";
 import { useAuth } from "@/hooks/useAuth";
+import { useScrollToSuccess } from "@/hooks/useScrollToSuccess";
 import type { NotificationResult } from "@/lib/notifications";
 
 export const Route = createFileRoute("/booking")({
@@ -201,6 +202,8 @@ function BookingPage() {
   const bookingReady =
     confirmed && !!selectedService && !!date && (isVideoMode || isHomeVisit || !!time);
 
+  const confirmationRef = useScrollToSuccess<HTMLDivElement>(bookingReady);
+
   return (
     <div className="min-h-screen bg-background">
       <Nav />
@@ -280,7 +283,10 @@ function BookingPage() {
               </p>
             </div>
 
-            <div className="min-w-0 rounded-3xl border border-border bg-card p-5 shadow-soft md:p-6">
+            <div
+              ref={confirmationRef}
+              className="min-w-0 rounded-3xl border border-border bg-card p-5 shadow-soft md:p-6"
+            >
               {isVideoMode && (
                 <VideoOfferCards
                   offers={videoOffers ?? []}

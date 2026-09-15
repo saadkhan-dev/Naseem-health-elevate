@@ -351,7 +351,7 @@ export async function submitVideoPaymentReceipt(
       type: "payment",
       title: "Payment proof received",
       body: "Your payment receipt was uploaded. The clinic will verify it before your video consultation is unlocked.",
-      link: "/patient",
+      link: buildAdminFocusLink("/patient", "appointment", loaded.row.id),
     });
   }
 
@@ -440,7 +440,7 @@ export async function submitVideoPaymentByIdentifier(
       type: "payment",
       title: "Payment proof received",
       body: "Your payment transaction ID was submitted. The clinic will verify it before your video consultation is unlocked.",
-      link: "/patient",
+      link: buildAdminFocusLink("/patient", "appointment", loaded.row.id),
     });
   }
 
@@ -548,7 +548,7 @@ export async function setVideoPaymentStatus(
       body:
         bodies[input.status] ??
         `Your video consultation payment is now "${input.status.replace("payment_", "")}".`,
-      link: "/patient",
+      link: buildAdminFocusLink("/patient", "appointment", row.id),
     });
   }
 

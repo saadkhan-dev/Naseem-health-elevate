@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
 import { format } from "date-fns";
 import {
   Video,
@@ -62,8 +63,13 @@ import { NotificationList } from "@/components/notifications/NotificationList";
 import { VideoPaymentStep } from "@/components/site/VideoPaymentStep";
 import { useAuth } from "@/hooks/useAuth";
 import { PAYMENT_STATUS_LABELS, type PaymentStatus } from "@/lib/payment";
+import { usePageFocus, useFocusHighlight } from "@/hooks/usePageFocus";
 
 export const Route = createFileRoute("/patient/")({
+  validateSearch: z.object({
+    focus: z.string().optional(),
+    id: z.string().optional(),
+  }),
   component: PatientDashboard,
 });
 
@@ -412,6 +418,11 @@ function PatientDashboard() {
   const { user, profile } = useAuth();
   const { data: appointments, isLoading, isError, error } = useMyAppointments();
   const { data: consultationHistory } = usePatientConsultationHistory();
+
+  // Deep-link focus from notifications (?focus=appointment&id=<uuid>).
+  const pageFocus = usePageFocus();
+  const appointmentFocus = pageFocus?.focus === "appointment" ? pageFocus : null;
+  useFocusHighlight({ focus: appointmentFocus, ready: !isLoading });
   const cancel = useCancelMyAppointment();
   const respondReschedule = useRespondRescheduleRequest();
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
@@ -539,6 +550,7 @@ function PatientDashboard() {
           (appointments ?? []).map((a) => (
             <div
               key={a.id}
+              data-focus-id={a.id}
               className="rounded-2xl border border-border bg-card p-4 shadow-soft sm:p-5"
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
