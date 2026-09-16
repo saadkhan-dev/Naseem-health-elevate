@@ -14,6 +14,7 @@ export type AdminNotificationType =
   | "appointment_rescheduled"
   | "patient_message"
   | "new_order"
+  | "order_request"
   | "payment_update"
   | "support_message"
   | "video"
@@ -27,6 +28,7 @@ export const ADMIN_NOTIFICATION_TYPES: readonly AdminNotificationType[] = [
   "appointment_rescheduled",
   "patient_message",
   "new_order",
+  "order_request",
   "payment_update",
   "support_message",
   "video",

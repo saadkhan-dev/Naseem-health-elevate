@@ -16,6 +16,7 @@ import {
   ChevronRight,
   CalendarCheck,
   MessageSquare,
+  LifeBuoy,
 } from "lucide-react";
 import { signOut } from "@/lib/auth";
 import { useAuth } from "@/hooks/useAuth";
@@ -42,6 +43,7 @@ const navItems = [
   { href: "/patient/consultations", label: "Consultations", Icon: MessageSquare, exact: false },
   { href: "/patient/documents", label: "My Documents", Icon: FolderOpen, exact: false },
   { href: "/patient/orders", label: "My Orders", Icon: Package, exact: false },
+  { href: "/patient/support", label: "Support", Icon: LifeBuoy, exact: false },
   { href: "/patient/profile", label: "Profile", Icon: User, exact: false },
 ];
 

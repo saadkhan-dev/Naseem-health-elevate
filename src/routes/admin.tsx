@@ -20,6 +20,7 @@ import {
   FileText,
   BellRing,
   BarChart3,
+  Truck,
 } from "lucide-react";
 import { staffSupabase } from "@/lib/supabase";
 import { useStaffAuth } from "@/hooks/useStaffAuth";
@@ -45,6 +46,7 @@ const navItems = [
   { href: "/admin/offers", label: "Offers", Icon: BadgePercent, exact: false },
   { href: "/admin/products", label: "Products", Icon: Package, exact: false },
   { href: "/admin/orders", label: "Orders", Icon: Package, exact: false },
+  { href: "/admin/settings", label: "Delivery Charges", Icon: Truck, exact: false },
   { href: "/admin/product-reviews", label: "Product Reviews", Icon: Star, exact: false },
   { href: "/admin/documents", label: "Reports", Icon: FileText, exact: false },
   { href: "/admin/reminders", label: "Reminders", Icon: BellRing, exact: false },
@@ -70,6 +72,17 @@ function AdminLayout() {
 
   const isAdmin = profile?.role === "admin" || profile?.role === "doctor";
   const isLoginPage = location.pathname === "/admin/login";
+
+  // Real staff identity for the header/sidebar (falls back to the clinic name).
+  const staffName = profile?.full_name?.trim() || "Dr. Naseem Ahmed Khan";
+  const staffInitials =
+    staffName
+      .split(/\s+/)
+      .map((w) => w[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "NA";
 
   useEffect(() => {
     if (isLoginPage) {
@@ -106,10 +119,10 @@ function AdminLayout() {
       <header className="flex items-center justify-between gap-2 border-b bg-card px-4 py-3 lg:hidden">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-bold">
-            NA
+            {staffInitials}
           </div>
           <div className="leading-tight">
-            <div className="text-sm font-semibold text-foreground">Dr. Naseem Ahmed Khan</div>
+            <div className="text-sm font-semibold text-foreground">{staffName}</div>
             <div className="text-xs text-muted-foreground capitalize">{profile.role}</div>
           </div>
         </div>
@@ -153,10 +166,10 @@ function AdminLayout() {
       <aside className="hidden w-64 flex-col border-r bg-card lg:flex">
         <div className="flex items-center gap-2 border-b px-5 py-4">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">
-            NA
+            {staffInitials}
           </div>
           <div className="leading-tight">
-            <div className="text-sm font-semibold text-foreground">Dr. Naseem Ahmed Khan</div>
+            <div className="text-sm font-semibold text-foreground">{staffName}</div>
             <div className="text-xs text-muted-foreground capitalize">{profile.role}</div>
           </div>
         </div>

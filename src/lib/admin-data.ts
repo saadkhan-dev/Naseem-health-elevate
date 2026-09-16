@@ -25,9 +25,36 @@ import {
   adminCreateVideoOffer,
   adminUpdateVideoOffer,
   adminDeleteVideoOffer,
+  adminCreateRecurringAvailability,
+  adminUpdateRecurringAvailability,
+  adminDeleteRecurringAvailability,
+  adminUpdateOrderDeliveryCharge,
+  getPublicStoreSettings,
+  adminUpdateStoreSettings,
+  adminCreateDeliveryArea,
+  adminUpdateDeliveryArea,
+  adminDeleteDeliveryArea,
+  adminGetDeliveryAreas,
+  adminPlaceOrder,
 } from "@/lib/actions.functions";
-import type { Service, AvailabilitySlot, CustomAvailabilitySlot } from "./bookings";
+import type {
+  Service,
+  AvailabilitySlot,
+  CustomAvailabilitySlot,
+  RecurringAvailabilitySlot,
+} from "./bookings";
+import { DEFAULT_STORE_SETTINGS, normalizeStoreSettings, type StoreSettings } from "./delivery";
 import type { PaymentMethod, PaymentStatus } from "./payment";
+
+export interface PlaceOrderInput {
+  items: Array<{ productId: string; quantity: number }>;
+  name: string;
+  phone: string;
+  email?: string;
+  address: string;
+  notes?: string;
+  deliveryAreaId?: string | null;
+}
 
 export type VideoOfferType = "waive" | "percent" | "fixed";
 export type VideoOfferEligibility = "all" | "new_patients";
@@ -77,6 +104,16 @@ export async function getAllCustomAvailability(): Promise<CustomAvailabilitySlot
     .from("custom_availability")
     .select("*")
     .order("specific_date", { ascending: true })
+    .order("start_time", { ascending: true });
+  return data ?? [];
+}
+
+/** All recurring (weekly) extra availability slots. */
+export async function getAllRecurringAvailability(): Promise<RecurringAvailabilitySlot[]> {
+  const { data } = await staffSupabase
+    .from("recurring_availability")
+    .select("*")
+    .order("day_of_week", { ascending: true })
     .order("start_time", { ascending: true });
   return data ?? [];
 }
@@ -355,6 +392,138 @@ export async function deleteCustomAvailability(id: string) {
   return adminDeleteCustomAvailability({ data: { id } });
 }
 
+export type RecurringAvailabilityInput = {
+  doctor_id?: string | null;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  is_available?: boolean;
+  notes?: string | null;
+};
+
+export async function createRecurringAvailability(data: RecurringAvailabilityInput) {
+  return adminCreateRecurringAvailability({ data });
+}
+
+export async function updateRecurringAvailability(
+  id: string,
+  data: Partial<RecurringAvailabilityInput>,
+) {
+  return adminUpdateRecurringAvailability({ data: { id, data } });
+}
+
+export async function deleteRecurringAvailability(id: string) {
+  return adminDeleteRecurringAvailability({ data: { id } });
+}
+
+// --- Store settings (delivery charge configuration) ---
+
+/**
+ * Store delivery configuration. Public read (RLS allows it) — the storefront
+ * needs the delivery charge before an order is placed. Falls back to
+ * "delivery charges off" when the row/table is not available yet.
+ */
+export async function getStoreSettings(): Promise<StoreSettings> {
+  try {
+    const result = await getPublicStoreSettings({ data: undefined });
+    if (result.settings) return normalizeStoreSettings(result.settings);
+  } catch {
+    // ignore — fall through to the default (no delivery charge) below
+  }
+  return DEFAULT_STORE_SETTINGS;
+}
+
+/** Admin — save the store delivery configuration. */
+export async function updateStoreSettings(data: {
+  delivery_charge: number;
+  free_delivery_threshold: number | null;
+  delivery_is_active: boolean;
+  delivery_note?: string | null;
+}) {
+  return adminUpdateStoreSettings({ data });
+}
+
+/** Admin — override the delivery charge on a single order. */
+export async function updateOrderDeliveryCharge(id: string, deliveryCharge: number) {
+  return adminUpdateOrderDeliveryCharge({ data: { id, deliveryCharge } });
+}
+
+// --- Delivery areas ---
+
+export interface DeliveryArea {
+  id: string;
+  name: string;
+  delivery_charge: number;
+  free_delivery_threshold: number | null;
+  is_active: boolean;
+  delivery_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getActiveDeliveryAreas(): Promise<DeliveryArea[]> {
+  try {
+    const { data, error } = await supabase
+      .from("delivery_areas")
+      .select("*")
+      .eq("is_active", true)
+      .order("name");
+    if (error) return [];
+    return (data ?? []) as DeliveryArea[];
+  } catch {
+    return [];
+  }
+}
+
+export async function getAllDeliveryAreas(): Promise<DeliveryArea[]> {
+  try {
+    const res = await adminGetDeliveryAreas();
+    return (res.areas ?? []) as DeliveryArea[];
+  } catch {
+    return [];
+  }
+}
+
+export async function createDeliveryArea(data: {
+  name: string;
+  delivery_charge: number;
+  free_delivery_threshold: number | null;
+  delivery_note: string | null;
+}) {
+  return adminCreateDeliveryArea({ data });
+}
+
+export async function updateDeliveryArea(
+  id: string,
+  data: {
+    name?: string;
+    delivery_charge?: number;
+    free_delivery_threshold?: number | null;
+    is_active?: boolean;
+    delivery_note?: string | null;
+  },
+) {
+  return adminUpdateDeliveryArea({ data: { id, data } });
+}
+
+export async function deleteDeliveryArea(id: string) {
+  return adminDeleteDeliveryArea({ data: { id } });
+}
+
+// --- Orders ---
+
+export async function placeOrder(data: PlaceOrderInput): Promise<{
+  error: string | null;
+  orderId: string | null;
+  orderNo: string | null;
+  total: number | null;
+  subtotal: number | null;
+  deliveryCharge: number | null;
+  deliveryAreaName: string | null;
+}> {
+  return adminPlaceOrder({ data });
+}
+
 // --- Services ---
 
 export async function createService(data: {
@@ -405,6 +574,8 @@ export interface Product {
   offer_end_date: string | null;
   pack_size: string | null;
   product_condition: string | null;
+  /** Optional estimated delivery time shown to patients (e.g. "3–5 days"). */
+  delivery_estimate: string | null;
   created_at: string;
 }
 
@@ -482,6 +653,8 @@ export async function createProduct(data: {
   offer_end_date?: string | null;
   pack_size?: string | null;
   product_condition?: string | null;
+  /** Optional estimated delivery time (e.g. "3–5 days"). */
+  delivery_estimate?: string | null;
   /** Ordered gallery URLs. position 0 becomes image_url + the primary image. */
   images?: string[];
 }) {
@@ -506,6 +679,8 @@ export async function updateProduct(
     offer_end_date?: string | null;
     pack_size?: string | null;
     product_condition?: string | null;
+    /** Optional estimated delivery time (e.g. "3–5 days"). */
+    delivery_estimate?: string | null;
     /** Ordered gallery URLs. position 0 becomes image_url + the primary image. */
     images?: string[];
   },

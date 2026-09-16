@@ -41,6 +41,7 @@ import { Route as AdminProductsRouteImport } from './routes/admin.products'
 import { Route as AdminRemindersRouteImport } from './routes/admin.reminders'
 import { Route as AdminReviewsRouteImport } from './routes/admin.reviews'
 import { Route as AdminServicesRouteImport } from './routes/admin.services'
+import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminSupportRouteImport } from './routes/admin.support'
 import { Route as AdminVideosRouteImport } from './routes/admin.videos'
 import { Route as PatientIndexRouteImport } from './routes/patient.index'
@@ -48,6 +49,7 @@ import { Route as PatientConsultationsRouteImport } from './routes/patient.consu
 import { Route as PatientDocumentsRouteImport } from './routes/patient.documents'
 import { Route as PatientOrdersRouteImport } from './routes/patient.orders'
 import { Route as PatientProfileRouteImport } from './routes/patient.profile'
+import { Route as PatientSupportRouteImport } from './routes/patient.support'
 import { Route as ProductProductIdRouteImport } from './routes/product.$productId'
 import { Route as VideoVcNoRouteImport } from './routes/video.$vcNo'
 import { Route as AdminConsultationsIdRouteImport } from './routes/admin.consultations.$id'
@@ -214,6 +216,11 @@ const AdminServicesRoute = AdminServicesRouteImport.update({
   path: '/services',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminSupportRoute = AdminSupportRouteImport.update({
   id: '/support',
   path: '/support',
@@ -247,6 +254,11 @@ const PatientOrdersRoute = PatientOrdersRouteImport.update({
 const PatientProfileRoute = PatientProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
+  getParentRoute: () => PatientRoute,
+} as any)
+const PatientSupportRoute = PatientSupportRouteImport.update({
+  id: '/support',
+  path: '/support',
   getParentRoute: () => PatientRoute,
 } as any)
 const ProductProductIdRoute = ProductProductIdRouteImport.update({
@@ -307,12 +319,14 @@ export interface FileRoutesByFullPath {
   '/admin/reminders': typeof AdminRemindersRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/admin/services': typeof AdminServicesRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/support': typeof AdminSupportRoute
   '/admin/videos': typeof AdminVideosRoute
   '/patient/consultations': typeof PatientConsultationsRouteWithChildren
   '/patient/documents': typeof PatientDocumentsRoute
   '/patient/orders': typeof PatientOrdersRoute
   '/patient/profile': typeof PatientProfileRoute
+  '/patient/support': typeof PatientSupportRoute
   '/product/$productId': typeof ProductProductIdRoute
   '/video/$vcNo': typeof VideoVcNoRoute
   '/admin/': typeof AdminIndexRoute
@@ -351,12 +365,14 @@ export interface FileRoutesByTo {
   '/admin/reminders': typeof AdminRemindersRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/admin/services': typeof AdminServicesRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/support': typeof AdminSupportRoute
   '/admin/videos': typeof AdminVideosRoute
   '/patient/consultations': typeof PatientConsultationsRouteWithChildren
   '/patient/documents': typeof PatientDocumentsRoute
   '/patient/orders': typeof PatientOrdersRoute
   '/patient/profile': typeof PatientProfileRoute
+  '/patient/support': typeof PatientSupportRoute
   '/product/$productId': typeof ProductProductIdRoute
   '/video/$vcNo': typeof VideoVcNoRoute
   '/admin': typeof AdminIndexRoute
@@ -398,12 +414,14 @@ export interface FileRoutesById {
   '/admin/reminders': typeof AdminRemindersRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/admin/services': typeof AdminServicesRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/support': typeof AdminSupportRoute
   '/admin/videos': typeof AdminVideosRoute
   '/patient/consultations': typeof PatientConsultationsRouteWithChildren
   '/patient/documents': typeof PatientDocumentsRoute
   '/patient/orders': typeof PatientOrdersRoute
   '/patient/profile': typeof PatientProfileRoute
+  '/patient/support': typeof PatientSupportRoute
   '/product/$productId': typeof ProductProductIdRoute
   '/video/$vcNo': typeof VideoVcNoRoute
   '/admin/': typeof AdminIndexRoute
@@ -446,12 +464,14 @@ export interface FileRouteTypes {
     | '/admin/reminders'
     | '/admin/reviews'
     | '/admin/services'
+    | '/admin/settings'
     | '/admin/support'
     | '/admin/videos'
     | '/patient/consultations'
     | '/patient/documents'
     | '/patient/orders'
     | '/patient/profile'
+    | '/patient/support'
     | '/product/$productId'
     | '/video/$vcNo'
     | '/admin/'
@@ -490,12 +510,14 @@ export interface FileRouteTypes {
     | '/admin/reminders'
     | '/admin/reviews'
     | '/admin/services'
+    | '/admin/settings'
     | '/admin/support'
     | '/admin/videos'
     | '/patient/consultations'
     | '/patient/documents'
     | '/patient/orders'
     | '/patient/profile'
+    | '/patient/support'
     | '/product/$productId'
     | '/video/$vcNo'
     | '/admin'
@@ -536,12 +558,14 @@ export interface FileRouteTypes {
     | '/admin/reminders'
     | '/admin/reviews'
     | '/admin/services'
+    | '/admin/settings'
     | '/admin/support'
     | '/admin/videos'
     | '/patient/consultations'
     | '/patient/documents'
     | '/patient/orders'
     | '/patient/profile'
+    | '/patient/support'
     | '/product/$productId'
     | '/video/$vcNo'
     | '/admin/'
@@ -797,6 +821,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminServicesRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/support': {
       id: '/admin/support'
       path: '/support'
@@ -844,6 +875,13 @@ declare module '@tanstack/react-router' {
       path: '/profile'
       fullPath: '/patient/profile'
       preLoaderRoute: typeof PatientProfileRouteImport
+      parentRoute: typeof PatientRoute
+    }
+    '/patient/support': {
+      id: '/patient/support'
+      path: '/support'
+      fullPath: '/patient/support'
+      preLoaderRoute: typeof PatientSupportRouteImport
       parentRoute: typeof PatientRoute
     }
     '/product/$productId': {
@@ -913,6 +951,7 @@ interface AdminRouteChildren {
   AdminRemindersRoute: typeof AdminRemindersRoute
   AdminReviewsRoute: typeof AdminReviewsRoute
   AdminServicesRoute: typeof AdminServicesRoute
+  AdminSettingsRoute: typeof AdminSettingsRoute
   AdminSupportRoute: typeof AdminSupportRoute
   AdminVideosRoute: typeof AdminVideosRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -936,6 +975,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminRemindersRoute: AdminRemindersRoute,
   AdminReviewsRoute: AdminReviewsRoute,
   AdminServicesRoute: AdminServicesRoute,
+  AdminSettingsRoute: AdminSettingsRoute,
   AdminSupportRoute: AdminSupportRoute,
   AdminVideosRoute: AdminVideosRoute,
   AdminIndexRoute: AdminIndexRoute,
@@ -959,6 +999,7 @@ interface PatientRouteChildren {
   PatientDocumentsRoute: typeof PatientDocumentsRoute
   PatientOrdersRoute: typeof PatientOrdersRoute
   PatientProfileRoute: typeof PatientProfileRoute
+  PatientSupportRoute: typeof PatientSupportRoute
   PatientIndexRoute: typeof PatientIndexRoute
 }
 
@@ -967,6 +1008,7 @@ const PatientRouteChildren: PatientRouteChildren = {
   PatientDocumentsRoute: PatientDocumentsRoute,
   PatientOrdersRoute: PatientOrdersRoute,
   PatientProfileRoute: PatientProfileRoute,
+  PatientSupportRoute: PatientSupportRoute,
   PatientIndexRoute: PatientIndexRoute,
 }
 

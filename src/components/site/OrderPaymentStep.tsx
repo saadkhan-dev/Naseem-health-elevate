@@ -23,6 +23,8 @@ interface OrderPaymentStepProps {
   email?: string;
   /** True when the customer is signed in (orderId path). */
   signedIn?: boolean;
+  /** Called when payment proof has been successfully submitted or waived. */
+  onPaymentSubmitted?: () => void;
   onClose: () => void;
 }
 
@@ -48,6 +50,7 @@ export function OrderPaymentStep({
   phone,
   email,
   signedIn = false,
+  onPaymentSubmitted,
   onClose,
 }: OrderPaymentStepProps) {
   const { data: methods, isLoading: methodsLoading } = usePaymentMethods();
@@ -156,6 +159,7 @@ export function OrderPaymentStep({
         return;
       }
       setDone(true);
+      onPaymentSubmitted?.();
     } catch (e) {
       setFormError(e instanceof Error ? e.message : "Could not submit your payment. Try again.");
     }
@@ -195,6 +199,7 @@ export function OrderPaymentStep({
         return;
       }
       setDone(true);
+      onPaymentSubmitted?.();
     } catch (err) {
       setGuestError(err instanceof Error ? err.message : "Could not upload your receipt.");
     }

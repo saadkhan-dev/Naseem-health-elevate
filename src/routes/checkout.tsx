@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { Link, createFileRoute, useRouter } from "@tanstack/react-router";
 import { Loader2, ArrowLeft, CheckCircle2, ShoppingBag, PackageX } from "lucide-react";
 import { Nav } from "@/components/site/Nav";
 import { SiteFooter } from "@/components/site/SiteFooter";
@@ -8,12 +8,19 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useCart } from "@/lib/cart";
 import { usePublishedProducts } from "@/hooks/queries/useContent";
-import { submitOrder } from "@/lib/site-extra";
+import { useActiveDeliveryAreas, useStoreSettings } from "@/hooks/queries/useShop";
 import { useAuth } from "@/hooks/useAuth";
 import { todayInClinic } from "@/lib/clinic";
 import { productEffectivePrice, isProductOrderable } from "@/lib/product-offer-types";
+import {
+  DEFAULT_STORE_SETTINGS,
+  deliveryChargeLabel,
+  productDeliveryLabel,
+  resolveDeliveryCharge,
+} from "@/lib/delivery";
 import { OrderPaymentStep } from "@/components/site/OrderPaymentStep";
 import { useScrollToSuccess } from "@/hooks/useScrollToSuccess";
+import { placeOrder } from "@/lib/admin-data";
 import type { Product } from "@/lib/admin-data";
 
 export const Route = createFileRoute("/checkout")({
@@ -31,7 +38,30 @@ function CheckoutPage() {
   const router = useRouter();
   const { user, profile } = useAuth();
   const { data: products, isLoading } = usePublishedProducts();
+  const { data: storeSettings } = useStoreSettings();
+  const { data: deliveryAreas } = useActiveDeliveryAreas();
   const today = todayInClinic();
+
+  const [name, setName] = useState(profile?.full_name ?? "");
+  const [phone, setPhone] = useState(profile?.phone ?? "");
+  const [email, setEmail] = useState("");
+  const [address, setAddress] = useState("");
+  const [notes, setNotes] = useState("");
+  const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
+  const selectedArea = deliveryAreas?.find((a) => a.id === selectedAreaId) ?? null;
+  const [formError, setFormError] = useState("");
+  const [placing, setPlacing] = useState(false);
+
+  const [placed, setPlaced] = useState<{
+    orderId: string | null;
+    orderNo: string | null;
+    subtotal: number;
+    deliveryCharge: number;
+    total: number | null;
+    deliveryAreaName: string | null;
+  } | null>(null);
+  const [paymentSubmitted, setPaymentSubmitted] = useState(false);
+  const successRef = useScrollToSuccess<HTMLDivElement>(!!placed);
 
   const byId = new Map((products ?? []).map((p) => [p.id, p]));
   const lines = cart.items
@@ -45,31 +75,19 @@ function CheckoutPage() {
     (sum, l) => sum + productEffectivePrice(l.product, today) * l.quantity,
     0,
   );
+  const settings = storeSettings ?? DEFAULT_STORE_SETTINGS;
+  const deliveryCharge =
+    selectedAreaId != null && deliveryAreas != null
+      ? resolveDeliveryCharge(settings, subtotal, deliveryAreas, selectedAreaId)
+      : resolveDeliveryCharge(settings, subtotal);
+  const total = subtotal + deliveryCharge;
 
-  // Client-side stock guard: block placing when an item is out of stock or the
-  // requested quantity exceeds what's available.
   const stockProblem = lines.find(
     (l) =>
       !isProductOrderable(l.product) ||
       (typeof l.product.stock_quantity === "number" && l.quantity > l.product.stock_quantity),
   );
   const stockBlocked = !!stockProblem;
-
-  const [name, setName] = useState(profile?.full_name ?? "");
-  const [phone, setPhone] = useState(profile?.phone ?? "");
-  const [email, setEmail] = useState("");
-  const [address, setAddress] = useState("");
-  const [notes, setNotes] = useState("");
-  const [formError, setFormError] = useState("");
-  const [placing, setPlacing] = useState(false);
-
-  const [placed, setPlaced] = useState<{
-    orderId: string | null;
-    orderNo: string | null;
-    total: number | null;
-  } | null>(null);
-  const [showPayment, setShowPayment] = useState(false);
-  const successRef = useScrollToSuccess<HTMLDivElement>(!!placed);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -86,27 +104,39 @@ function CheckoutPage() {
     }
     setPlacing(true);
     try {
-      const result = await submitOrder({
+      const result = await placeOrder({
         items: cart.items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
         name,
         phone,
         email: email || undefined,
         address,
         notes: notes || undefined,
+        deliveryAreaId: selectedAreaId,
       });
       if (result.error) {
         setFormError(result.error);
         setPlacing(false);
         return;
       }
-      const orderTotal = typeof result.total === "number" ? result.total : subtotal;
-      cart.clear();
+      // The server is the source of truth for the final snapshot. The order is
+      // stored as payment_pending — it is NOT confirmed until the clinic
+      // verifies the payment server-side.
+      const orderSubtotal = typeof result.subtotal === "number" ? result.subtotal : subtotal;
+      const orderDelivery =
+        typeof result.deliveryCharge === "number"
+          ? result.deliveryCharge
+          : Math.max(0, (typeof result.total === "number" ? result.total : total) - orderSubtotal);
       setPlaced({
         orderId: result.orderId ?? null,
         orderNo: result.orderNo ?? null,
-        total: orderTotal,
+        subtotal: orderSubtotal,
+        deliveryCharge: orderDelivery,
+        total: typeof result.total === "number" ? result.total : total,
+        deliveryAreaName: result.deliveryAreaName ?? null,
       });
-      setShowPayment(true);
+      setPaymentSubmitted(false);
+      // The cart stays intact until the payment proof is submitted, so a
+      // failed/cancelled payment never loses the patient's items.
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Could not place your order.");
       setPlacing(false);
@@ -134,33 +164,62 @@ function CheckoutPage() {
                 <CheckCircle2 className="h-8 w-8" />
               </div>
               <h1 className="mt-4 font-display text-2xl font-bold text-foreground">
-                Order Placed Successfully
+                {paymentSubmitted
+                  ? "Payment Submitted — Awaiting Verification"
+                  : "Order Received — Payment Pending"}
               </h1>
               <p className="mt-2 text-sm text-muted-foreground">
-                Your order{" "}
-                <span className="font-mono font-semibold text-foreground">{placed.orderNo}</span>{" "}
-                has been received.
+                {paymentSubmitted ? (
+                  <>
+                    Your payment proof for order{" "}
+                    <span className="font-mono font-semibold text-foreground">
+                      {placed.orderNo}
+                    </span>{" "}
+                    has been received. The clinic verifies it manually — once verified, your order
+                    will be confirmed.
+                  </>
+                ) : (
+                  <>
+                    Your order{" "}
+                    <span className="font-mono font-semibold text-foreground">
+                      {placed.orderNo}
+                    </span>{" "}
+                    has been received but is{" "}
+                    <span className="font-semibold text-foreground">not yet confirmed</span>.
+                    Complete the payment proof below — the clinic confirms the order only after
+                    verifying your payment.
+                  </>
+                )}
               </p>
 
               <div className="mx-auto mt-5 w-full max-w-sm space-y-2 rounded-xl bg-muted p-4 text-left text-sm">
                 <Row label="Order ID" value={placed.orderNo ?? "—"} mono />
-                <Row label="Amount" value={`Rs. ${(placed.total ?? 0).toLocaleString()}`} />
+                <Row label="Product Price" value={`Rs. ${placed.subtotal.toLocaleString()}`} />
+                <Row
+                  label={`Delivery — ${placed.deliveryAreaName ?? "—"}`}
+                  value={deliveryChargeLabel(placed.deliveryCharge)}
+                />
+                <div className="border-t border-border/70 pt-2">
+                  <Row label="Grand Total" value={`Rs. ${(placed.total ?? 0).toLocaleString()}`} />
+                </div>
               </div>
             </div>
 
-            {showPayment && (
-              <div className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-soft">
-                <OrderPaymentStep
-                  orderId={placed.orderId ?? undefined}
-                  orderNo={placed.orderNo}
-                  amount={placed.total ?? 0}
-                  signedIn={!!user}
-                  phone={phone}
-                  email={email}
-                  onClose={() => router.navigate({ to: "/shop" })}
-                />
-              </div>
-            )}
+            <div className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-soft">
+              <OrderPaymentStep
+                orderId={placed.orderId ?? undefined}
+                orderNo={placed.orderNo}
+                amount={placed.total ?? 0}
+                signedIn={!!user}
+                phone={phone}
+                email={email}
+                onPaymentSubmitted={() => {
+                  cart.clear();
+                  setPaymentSubmitted(true);
+                }}
+                onClose={() => router.navigate({ to: "/shop" })}
+              />
+            </div>
           </div>
         </main>
         <SiteFooter />
@@ -196,7 +255,6 @@ function CheckoutPage() {
             </div>
           ) : (
             <div className="mt-6 grid gap-6 lg:grid-cols-5">
-              {/* Delivery form */}
               <form
                 onSubmit={handleSubmit}
                 className="space-y-4 rounded-2xl border border-border bg-card p-6 lg:col-span-3"
@@ -257,6 +315,34 @@ function CheckoutPage() {
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-foreground">
+                    Delivery area
+                  </label>
+                  <div className="flex flex-col gap-1.5">
+                    <select
+                      value={selectedAreaId ?? ""}
+                      onChange={(e) => setSelectedAreaId(e.target.value || null)}
+                      disabled={placing}
+                      className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary"
+                    >
+                      <option value="">Select area</option>
+                      {(deliveryAreas ?? []).map((area) => (
+                        <option key={area.id} value={area.id}>
+                          {area.name}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedAreaId && deliveryAreas != null && (
+                      <p className="text-xs text-muted-foreground">
+                        Delivery charge:{" "}
+                        {deliveryChargeLabel(
+                          resolveDeliveryCharge(settings, subtotal, deliveryAreas, selectedAreaId),
+                        )}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-foreground">
                     Order notes (optional)
                   </label>
                   <Textarea
@@ -284,11 +370,10 @@ function CheckoutPage() {
                 >
                   {placing && <Loader2 className="h-4 w-4 animate-spin" />}
                   <ShoppingBag className="h-4 w-4" />
-                  Place Order — Rs. {subtotal.toLocaleString()}
+                  Place Order — Rs. {total.toLocaleString()}
                 </Button>
               </form>
 
-              {/* Order summary */}
               <div className="rounded-2xl border border-border bg-card p-6 lg:col-span-2">
                 <h2 className="font-display text-lg font-semibold text-foreground">
                   Order Summary
@@ -312,6 +397,11 @@ function CheckoutPage() {
                         <div className="text-[13px] text-muted-foreground sm:text-xs">
                           × {quantity}
                         </div>
+                        {productDeliveryLabel(product) && (
+                          <div className="text-[13px] text-muted-foreground sm:text-xs">
+                            {productDeliveryLabel(product)}
+                          </div>
+                        )}
                       </div>
                       <div className="text-[15px] font-semibold text-foreground sm:text-sm">
                         Rs. {(productEffectivePrice(product, today) * quantity).toLocaleString()}
@@ -319,15 +409,37 @@ function CheckoutPage() {
                     </div>
                   ))}
                 </div>
-                <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
-                  <span className="text-[15px] text-muted-foreground sm:text-sm">Subtotal</span>
-                  <span className="text-lg font-bold text-foreground">
-                    Rs. {subtotal.toLocaleString()}
-                  </span>
+                <div className="mt-4 space-y-2 border-t border-border pt-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[15px] text-muted-foreground sm:text-sm">Subtotal</span>
+                    <span className="text-[15px] font-medium text-foreground sm:text-sm">
+                      Rs. {subtotal.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[15px] text-muted-foreground sm:text-sm">
+                      Delivery {selectedArea ? `— ${selectedArea.name}` : "Charges"}
+                    </span>
+                    <span className="text-[15px] font-medium text-foreground sm:text-sm">
+                      {deliveryChargeLabel(deliveryCharge)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-border pt-2">
+                    <span className="text-[15px] font-semibold text-foreground sm:text-sm">
+                      Grand Total
+                    </span>
+                    <span className="text-lg font-bold text-foreground">
+                      Rs. {total.toLocaleString()}
+                    </span>
+                  </div>
                 </div>
                 <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground sm:text-xs">
+                  {settings.delivery_is_active && deliveryCharge === 0
+                    ? "Delivery is free on this order. "
+                    : ""}
                   After placing the order you'll be guided through the payment (bank transfer or
-                  mobile wallet). The clinic verifies your payment before processing the order.
+                  mobile wallet). The clinic verifies your payment before processing the order. Your
+                  delivery area and charge are stored with the order snapshot.
                 </p>
               </div>
             </div>

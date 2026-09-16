@@ -421,29 +421,56 @@ export async function setOrderPaymentStatus(
   }
 
   const updates: Record<string, string | number | null> = { payment_status: input.status };
+  let newOrderStatus: string | null = null;
+
   if (input.status === "payment_verified") {
     updates.payment_verified_at = new Date().toISOString();
     if (order.payment_amount === null) updates.payment_amount = order.payment_amount ?? 0;
+    if (order.status === "pending_payment" || order.status === "pending") {
+      updates.status = "confirmed";
+      newOrderStatus = "confirmed";
+    }
   }
   if (input.status === "waived") {
     updates.payment_amount = 0;
+    if (order.status === "pending_payment" || order.status === "pending") {
+      updates.status = "confirmed";
+      newOrderStatus = "confirmed";
+    }
   }
 
   const { error } = await admin.from("orders").update(updates).eq("id", input.orderId);
   if (error) return { error: error?.message ?? null };
 
+  if (newOrderStatus) {
+    await admin.from("order_status_history").insert({
+      order_id: input.orderId,
+      status: newOrderStatus,
+      note: input.status === "waived" ? "Payment waived — order confirmed" : "Payment verified — order confirmed",
+    });
+  } else if (input.status === "payment_failed") {
+    await admin.from("order_status_history").insert({
+      order_id: input.orderId,
+      status: order.status,
+      note: "Payment verification failed / rejected by clinic",
+    });
+  }
+
   if (order.patient_id) {
     const labels: Record<string, string> = {
-      payment_verified: "Payment verified",
+      payment_verified: "Payment verified — order confirmed",
       payment_failed: "Payment not accepted",
       refunded: "Payment refunded",
-      waived: "Payment waived",
+      waived: "Payment waived — order confirmed",
     };
     await createPatientNotification(admin, {
       userId: order.patient_id,
       type: "payment",
       title: labels[input.status] ?? "Payment updated",
-      body: `The payment for order ${order.order_no ?? ""} is now "${input.status.replace("payment_", "")}".`,
+      body:
+        input.status === "payment_verified"
+          ? `Your payment for order ${order.order_no ?? ""} has been verified and your order is now confirmed.`
+          : `The payment for order ${order.order_no ?? ""} is now "${input.status.replace("payment_", "")}".`,
       link: buildAdminFocusLink("/patient/orders", "order", order.id),
     });
   }

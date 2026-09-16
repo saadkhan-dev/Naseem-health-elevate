@@ -3,6 +3,7 @@ import {
   getServices,
   getAvailability,
   getCustomAvailability,
+  getRecurringAvailability,
   getBookedSlots,
   generateTimeSlots,
   createAppointment,
@@ -13,6 +14,7 @@ import {
   type Service,
   type AvailabilitySlot,
   type CustomAvailabilitySlot,
+  type RecurringAvailabilitySlot,
   type AppointmentStatus,
   type RecoveredAppointment,
   type OrderStatus,
@@ -46,6 +48,15 @@ export function useCustomAvailability() {
   });
 }
 
+/** Recurring weekly extra availability (applies to every matching weekday). */
+export function useRecurringAvailability() {
+  return useQuery<RecurringAvailabilitySlot[]>({
+    queryKey: ["recurringAvailability"],
+    queryFn: getRecurringAvailability,
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
 export function useTimeSlots(
   date: Date | undefined,
   selectedServiceId: string | undefined,
@@ -65,6 +76,7 @@ export function useTimeSlots(
 
   const availQuery = useAvailability();
   const customQuery = useCustomAvailability();
+  const recurringQuery = useRecurringAvailability();
 
   const slots = (() => {
     if (!date || !availQuery.data || !bookedQuery.data) return [];
@@ -76,12 +88,17 @@ export function useTimeSlots(
       todayInClinic(),
       nowTimeInClinic(),
       customQuery.data,
+      recurringQuery.data,
     );
   })();
 
   return {
     slots,
-    isLoading: bookedQuery.isLoading || availQuery.isLoading || customQuery.isLoading,
+    isLoading:
+      bookedQuery.isLoading ||
+      availQuery.isLoading ||
+      customQuery.isLoading ||
+      recurringQuery.isLoading,
   };
 }
 

@@ -28,6 +28,7 @@ import {
   useTimeSlots,
   useAvailability,
   useCustomAvailability,
+  useRecurringAvailability,
   useCreateAppointment,
 } from "@/hooks/queries/useBookings";
 import {
@@ -57,6 +58,7 @@ export function BookingPanel() {
   const { data: services, isLoading: servicesLoading } = useServices();
   const { data: availability } = useAvailability();
   const { data: customAvailability } = useCustomAvailability();
+  const { data: recurringAvailability } = useRecurringAvailability();
   const { slots, isLoading: slotsLoading } = useTimeSlots(date, serviceId, services);
   const createAppointment = useCreateAppointment();
   const bookingServices = services
@@ -74,9 +76,15 @@ export function BookingPanel() {
   const selectedService = services?.find((s) => s.id === serviceId);
   const isHomeVisit = selectedService ? isHomeVisitService(selectedService) : false;
 
+  // Weekdays with bookable times = regular weekly schedule + recurring weekly
+  // extra slots (a recurring slot opens its weekday even if it is normally closed).
   const openDays = React.useMemo(
-    () => new Set(availability?.map((a) => a.day_of_week) ?? []),
-    [availability],
+    () =>
+      new Set([
+        ...(availability?.map((a) => a.day_of_week) ?? []),
+        ...(recurringAvailability?.map((r) => r.day_of_week) ?? []),
+      ]),
+    [availability, recurringAvailability],
   );
 
   // Dates with a one-time extra/custom slot stay bookable even on a closed day.

@@ -45,6 +45,7 @@ import {
   sendAppointmentNotifications,
   sendStatusChangeNotifications,
   sendRescheduleNotifications,
+  sendSupportReplyNotifications,
   getServerNotificationEnv,
   getSiteUrl,
 } from "./server/notifications";
@@ -65,9 +66,21 @@ import { intervalsOverlap } from "./slot-logic";
 import { getChatUsageStats, type ChatUsageRange, type ChatUsageStats } from "./server/chat-usage";
 import { generateAppointmentNo, generateOrderNo } from "./ids";
 import { productEffectivePrice } from "./product-offer-types";
+import {
+  DEFAULT_STORE_SETTINGS,
+  normalizeStoreSettings,
+  resolveDeliveryCharge,
+  type StoreSettings,
+} from "./delivery";
 
 /** Max insert attempts when a freshly generated patient-facing ID collides. */
 const ID_RETRY_ATTEMPTS = 5;
+
+const paymentPendingStatuses = ["payment_pending", "payment_failed"] as const;
+
+function paymentStatusEditable(status: string): boolean {
+  return paymentPendingStatuses.includes(status as (typeof paymentPendingStatuses)[number]);
+}
 
 /**
  * TanStack Start server functions for every WRITE the app performs.
@@ -1131,6 +1144,166 @@ export const adminDeleteCustomAvailability = createServerFn({ method: "POST" })
   });
 
 // ---------------------------------------------------------------------------
+// Admin — recurring (weekly) extra availability
+// ---------------------------------------------------------------------------
+
+const recurringAvailabilityInputSchema = z.object({
+  doctor_id: uuidSchema.nullable().optional(),
+  // 0 = Sunday … 6 = Saturday (same convention as `availability`).
+  day_of_week: z.number().int().min(0).max(6),
+  start_time: timeSchema,
+  end_time: timeSchema,
+  is_available: z.boolean().optional(),
+  notes: z.string().max(500).nullable().optional(),
+});
+
+/**
+ * Rejects obvious mistakes (end before start) and overlapping recurring slots
+ * for the SAME weekday + doctor (clinic-wide `doctor_id = null` is its own
+ * scope). Mirrors `customAvailabilityConflict` — one-time and recurring slots
+ * live in separate tables and are simply merged (and deduplicated) at booking
+ * time, so a recurring slot never has to fight a one-time slot.
+ */
+async function recurringAvailabilityConflict(
+  input: {
+    doctor_id: string | null;
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+  },
+  excludeId?: string,
+): Promise<string | null> {
+  if (toMinutes(input.end_time) <= toMinutes(input.start_time)) {
+    return "End time must be after the start time.";
+  }
+
+  const admin = getSupabaseAdmin();
+  const { data: existing } = await admin
+    .from("recurring_availability")
+    .select("id, doctor_id, day_of_week, start_time, end_time")
+    .eq("day_of_week", input.day_of_week)
+    .eq("is_available", true);
+
+  const conflicts = (existing ?? []).some((row) => {
+    if (excludeId && row.id === excludeId) return false;
+    const sameDoctor = (row.doctor_id ?? null) === (input.doctor_id ?? null);
+    if (!sameDoctor) return false;
+    return intervalsOverlap(
+      toMinutes(input.start_time),
+      toMinutes(input.end_time) - toMinutes(input.start_time),
+      toMinutes(row.start_time as string),
+      toMinutes(row.end_time as string) - toMinutes(row.start_time as string),
+    );
+  });
+
+  return conflicts
+    ? "That time overlaps another recurring slot for the same weekday and doctor. Pick a different time."
+    : null;
+}
+
+export const adminCreateRecurringAvailability = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(recurringAvailabilityInputSchema)
+  .handler(async ({ data }) => {
+    const conflict = await recurringAvailabilityConflict({
+      doctor_id: data.doctor_id ?? null,
+      day_of_week: data.day_of_week,
+      start_time: data.start_time,
+      end_time: data.end_time,
+    });
+    if (conflict) return { error: conflict };
+
+    const { error } = await getSupabaseAdmin()
+      .from("recurring_availability")
+      .insert({
+        doctor_id: data.doctor_id ?? null,
+        day_of_week: data.day_of_week,
+        start_time: data.start_time,
+        end_time: data.end_time,
+        is_available: data.is_available ?? true,
+        notes: data.notes ?? null,
+      });
+    return { error: error?.message ?? null };
+  });
+
+/**
+ * Update a recurring slot. Because the slot repeats every week, editing it
+ * changes every FUTURE occurrence — already-booked appointments are untouched
+ * (they are stored rows of their own and are never rewritten here).
+ */
+export const adminUpdateRecurringAvailability = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(
+    z.object({
+      id: uuidSchema,
+      data: z.object({
+        doctor_id: uuidSchema.nullable().optional(),
+        day_of_week: z.number().int().min(0).max(6).optional(),
+        start_time: timeSchema.optional(),
+        end_time: timeSchema.optional(),
+        is_available: z.boolean().optional(),
+        notes: z.string().max(500).nullable().optional(),
+      }),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const current = await getSupabaseAdmin()
+      .from("recurring_availability")
+      .select("id, doctor_id, day_of_week, start_time, end_time")
+      .eq("id", data.id)
+      .maybeSingle();
+
+    if (!current.data) return { error: "That recurring slot no longer exists." };
+
+    const next = {
+      doctor_id: data.data.doctor_id === undefined ? current.data.doctor_id : data.data.doctor_id,
+      day_of_week: data.data.day_of_week ?? (current.data.day_of_week as number),
+      start_time: data.data.start_time ?? (current.data.start_time as string),
+      end_time: data.data.end_time ?? (current.data.end_time as string),
+    };
+
+    const conflict = await recurringAvailabilityConflict(
+      {
+        doctor_id: next.doctor_id,
+        day_of_week: next.day_of_week,
+        start_time: next.start_time,
+        end_time: next.end_time,
+      },
+      data.id,
+    );
+    if (conflict) return { error: conflict };
+
+    const { error } = await getSupabaseAdmin()
+      .from("recurring_availability")
+      .update({
+        doctor_id: next.doctor_id,
+        day_of_week: next.day_of_week,
+        start_time: next.start_time,
+        end_time: next.end_time,
+        is_available: data.data.is_available,
+        notes: data.data.notes === undefined ? undefined : data.data.notes,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.id);
+    return { error: error?.message ?? null };
+  });
+
+/**
+ * Delete a recurring slot — it disappears from every future date. Existing
+ * appointments are never deleted or modified.
+ */
+export const adminDeleteRecurringAvailability = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(z.object({ id: uuidSchema }))
+  .handler(async ({ data }) => {
+    const { error } = await getSupabaseAdmin()
+      .from("recurring_availability")
+      .delete()
+      .eq("id", data.id);
+    return { error: error?.message ?? null };
+  });
+
+// ---------------------------------------------------------------------------
 // Admin — services
 // ---------------------------------------------------------------------------
 
@@ -1178,6 +1351,140 @@ export const adminDeleteService = createServerFn({ method: "POST" })
   });
 
 // ---------------------------------------------------------------------------
+// Admin — delivery areas
+// ---------------------------------------------------------------------------
+
+export const adminCreateDeliveryArea = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(
+    z.object({
+      name: z.string().trim().min(1, "Area name is required").max(100),
+      delivery_charge: z.number().min(0),
+      free_delivery_threshold: z.number().min(0).nullable().optional(),
+      delivery_note: z.string().max(500).nullable().optional(),
+      is_active: z.boolean().optional(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const admin = getSupabaseAdmin();
+
+    const { error } = await admin.from("delivery_areas").insert({
+      name: data.name.trim(),
+      delivery_charge: data.delivery_charge,
+      free_delivery_threshold: data.free_delivery_threshold ?? null,
+      delivery_note: data.delivery_note ?? null,
+      is_active: data.is_active ?? true,
+    });
+
+    if (error) {
+      if (error.code === "23505") {
+        return { error: "An active area with that name already exists." };
+      }
+      return { error: error.message };
+    }
+
+    return { error: null };
+  });
+
+export const adminUpdateDeliveryArea = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(
+    z.object({
+      id: uuidSchema,
+      data: z.object({
+        name: z.string().trim().min(1, "Area name is required").max(100).optional(),
+        delivery_charge: z.number().min(0).optional(),
+        free_delivery_threshold: z.number().min(0).nullable().optional(),
+        delivery_note: z.string().max(500).nullable().optional(),
+        is_active: z.boolean().optional(),
+      }),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const admin = getSupabaseAdmin();
+
+    const existing = await admin
+      .from("delivery_areas")
+      .select("id, name, is_active")
+      .eq("id", data.id)
+      .maybeSingle();
+
+    if (!existing) return { error: "Delivery area not found." };
+
+    const { error } = await admin
+      .from("delivery_areas")
+      .update({
+        ...(data.data.name && { name: data.data.name.trim() }),
+        ...(data.data.delivery_charge != null && { delivery_charge: data.data.delivery_charge }),
+        ...(data.data.free_delivery_threshold != null && {
+          free_delivery_threshold: data.data.free_delivery_threshold,
+        }),
+        ...(data.data.delivery_note !== undefined && { delivery_note: data.data.delivery_note }),
+        ...(data.data.is_active != null && { is_active: data.data.is_active }),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.id);
+
+    if (error) {
+      if (error.code === "23505") {
+        return { error: "Another active area with that name already exists." };
+      }
+      return { error: error.message };
+    }
+
+    return { error: null };
+  });
+
+export const adminGetDeliveryAreas = createServerFn({ method: "GET" })
+  .middleware([adminMiddleware])
+  .handler(async () => {
+    const admin = getSupabaseAdmin();
+    try {
+      const { data, error } = await admin
+        .from("delivery_areas")
+        .select("*")
+        .order("name", { ascending: true });
+      if (error) {
+        return { error: null, areas: [] };
+      }
+      return { error: null, areas: data ?? [] };
+    } catch {
+      return { error: null, areas: [] };
+    }
+  });
+
+export const adminDeleteDeliveryArea = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(
+    z.object({
+      id: uuidSchema,
+    }),
+  )
+  .handler(async ({ data }) => {
+    const admin = getSupabaseAdmin();
+    const { error } = await admin.from("delivery_areas").delete().eq("id", data.id);
+    if (error) {
+      // Fall back to disabling the area if foreign key or other restriction prevents hard deletion
+      const { error: softError } = await admin
+        .from("delivery_areas")
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq("id", data.id);
+      if (softError) return { error: softError.message };
+    }
+    return { error: null };
+  });
+
+export interface PlaceOrderInput {
+  items: Array<{ productId: string; quantity: number }>;
+  name: string;
+  phone: string;
+  email?: string;
+  address: string;
+  notes?: string;
+  deliveryAreaId?: string | null;
+}
+
+// ---------------------------------------------------------------------------
 // Admin — products
 // ---------------------------------------------------------------------------
 
@@ -1210,6 +1517,8 @@ const productInputSchema = z.object({
   // Phase 2 — optional packing/size and condition labels.
   pack_size: z.string().trim().max(100).nullable().optional(),
   product_condition: z.string().trim().max(100).nullable().optional(),
+  // Phase 8 — optional estimated delivery time ("3–5 days"). NULL = not shown.
+  delivery_estimate: z.string().trim().max(60).nullable().optional(),
 });
 
 const productImagesSchema = z
@@ -3020,6 +3329,62 @@ export const submitReview = createServerFn({ method: "POST" })
   });
 
 // ---------------------------------------------------------------------------
+// Store settings — delivery charge configuration (public read, admin write)
+// ---------------------------------------------------------------------------
+
+/**
+ * Read the single store configuration row. Falls back to "delivery charges off"
+ * when the row (or the whole table, e.g. before the Phase 8 migration is
+ * applied) is missing, so order placement never breaks.
+ */
+async function loadStoreSettings(
+  admin: ReturnType<typeof getSupabaseAdmin>,
+): Promise<StoreSettings> {
+  const { data } = await admin
+    .from("store_settings")
+    .select("delivery_charge, free_delivery_threshold, delivery_is_active, delivery_note")
+    .eq("id", 1)
+    .maybeSingle();
+  return data ? normalizeStoreSettings(data) : DEFAULT_STORE_SETTINGS;
+}
+
+/** Public read — the storefront shows the delivery charge before ordering. */
+export const getPublicStoreSettings = createServerFn({ method: "GET" })
+  .validator((d: unknown) => d as undefined)
+  .handler(async () => {
+    const settings = await loadStoreSettings(getSupabaseAdmin());
+    return { error: null, settings };
+  });
+
+/** Admin — update the store delivery charge configuration. */
+export const adminUpdateStoreSettings = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(
+    z.object({
+      delivery_charge: z.number().min(0).max(100000),
+      free_delivery_threshold: z.number().min(0).max(10000000).nullable(),
+      delivery_is_active: z.boolean(),
+      delivery_note: z.string().trim().max(300).nullable().optional(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const { error } = await getSupabaseAdmin()
+      .from("store_settings")
+      .upsert(
+        {
+          id: 1,
+          delivery_charge: data.delivery_charge,
+          free_delivery_threshold: data.free_delivery_threshold,
+          delivery_is_active: data.delivery_is_active,
+          delivery_note: data.delivery_note?.trim() || null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" },
+      );
+    return { error: error?.message ?? null };
+  });
+
+// ---------------------------------------------------------------------------
 // Public — place a product order
 // ---------------------------------------------------------------------------
 
@@ -3038,6 +3403,7 @@ export const placeOrder = createServerFn({ method: "POST" })
       email: z.string().trim().email().max(200).toLowerCase().optional(),
       address: z.string().trim().min(1, "Enter your delivery address").max(1000),
       notes: z.string().trim().max(1000).optional(),
+      deliveryAreaId: z.string().uuid().nullable().optional(),
     }),
   )
   .handler(async ({ data, context }) => {
@@ -3057,10 +3423,22 @@ export const placeOrder = createServerFn({ method: "POST" })
         "id, name, price, discount_price, offer_is_active, offer_title, offer_percent, offer_start_date, offer_end_date, in_stock, stock_quantity",
       )
       .in("id", ids);
-    if (productsError) return { error: productsError.message, orderId: null, total: null };
+    if (productsError) {
+      return {
+        error: productsError.message,
+        orderId: null,
+        orderNo: null,
+        total: null,
+        subtotal: null,
+        deliveryCharge: null,
+        deliveryAreaName: null,
+      };
+    }
     const byId = new Map((products ?? []).map((p) => [p.id, p]));
     const today = todayInClinic();
-    let total = 0;
+    // Product subtotal only — the delivery charge is kept separate below and
+    // NEVER merged into a product price.
+    let subtotal = 0;
     const itemRows: Array<{
       product_id: string;
       product_name: string;
@@ -3069,21 +3447,43 @@ export const placeOrder = createServerFn({ method: "POST" })
     }> = [];
     for (const item of data.items) {
       const product = byId.get(item.productId);
-      if (!product)
-        return { error: "One of the products is no longer available.", orderId: null, total: null };
-      if (product.in_stock !== true)
-        return { error: `"${product.name}" is out of stock.`, orderId: null, total: null };
+      if (!product) {
+        return {
+          error: "One of the products is no longer available.",
+          orderId: null,
+          orderNo: null,
+          total: null,
+          subtotal: null,
+          deliveryCharge: null,
+          deliveryAreaName: null,
+        };
+      }
+      if (product.in_stock !== true) {
+        return {
+          error: `"${product.name}" is out of stock.`,
+          orderId: null,
+          orderNo: null,
+          total: null,
+          subtotal: null,
+          deliveryCharge: null,
+          deliveryAreaName: null,
+        };
+      }
       if (typeof product.stock_quantity === "number" && product.stock_quantity < item.quantity) {
         return {
           error: `Only ${product.stock_quantity} of "${product.name}" is in stock.`,
           orderId: null,
+          orderNo: null,
           total: null,
+          subtotal: null,
+          deliveryCharge: null,
+          deliveryAreaName: null,
         };
       }
       // Effective price = discounted sale price while the offer is active,
       // otherwise the list price (authoritative server-side pricing).
       const price = productEffectivePrice(product, today);
-      total += price * item.quantity;
+      subtotal += price * item.quantity;
       itemRows.push({
         product_id: item.productId,
         product_name: product.name as string,
@@ -3092,10 +3492,43 @@ export const placeOrder = createServerFn({ method: "POST" })
       });
     }
 
+    // Delivery charge resolution: check delivery area if chosen, then global store settings
+    let deliveryArea: { id: string; name: string } | null = null;
+    let areasList: Array<{
+      id: string;
+      name?: string;
+      delivery_charge: number;
+      free_delivery_threshold: number | null;
+      is_active: boolean;
+    }> = [];
+
+    if (data.deliveryAreaId) {
+      try {
+        const { data: areaRow } = await admin
+          .from("delivery_areas")
+          .select("id, name, delivery_charge, free_delivery_threshold, is_active")
+          .eq("id", data.deliveryAreaId)
+          .maybeSingle();
+        if (areaRow && areaRow.is_active !== false) {
+          deliveryArea = { id: areaRow.id, name: areaRow.name };
+          areasList = [areaRow];
+        }
+      } catch {
+        // Table might not exist yet if migration pending
+      }
+    }
+
+    const settings = await loadStoreSettings(admin);
+    const deliveryCharge = resolveDeliveryCharge(settings, subtotal, {
+      areas: areasList,
+      selectedAreaId: deliveryArea?.id,
+    });
+    const total = subtotal + deliveryCharge;
+
     const orderId = crypto.randomUUID();
     for (let attempt = 0; attempt < ID_RETRY_ATTEMPTS; attempt++) {
       const orderNo = generateOrderNo();
-      const { error: orderError } = await admin.from("orders").insert({
+      const orderPayload: Record<string, unknown> = {
         id: orderId,
         order_no: orderNo,
         patient_id: patientId,
@@ -3103,19 +3536,51 @@ export const placeOrder = createServerFn({ method: "POST" })
         phone: data.phone,
         email: data.email ?? null,
         address: data.address,
+        subtotal,
+        delivery_charge: deliveryCharge,
         total,
         payment_amount: total,
         payment_status: "payment_pending",
-        status: "pending",
+        status: "pending_payment",
         notes: data.notes ?? "",
-      });
+        delivery_area_id: deliveryArea?.id ?? null,
+        delivery_area_name: deliveryArea?.name ?? null,
+        delivery_charge_override: null,
+      };
+
+      let { error: orderError } = await admin.from("orders").insert(orderPayload);
+
+      // Fallback 1: If live DB constraint orders_status_check does not allow 'pending_payment' yet
+      if (orderError && /orders_status_check/i.test(orderError.message)) {
+        orderPayload.status = "pending";
+        const retry = await admin.from("orders").insert(orderPayload);
+        orderError = retry.error;
+      }
+
+      // Fallback 2: If live DB has not added delivery_area columns yet
+      if (orderError && /delivery_area/i.test(orderError.message)) {
+        delete orderPayload.delivery_area_id;
+        delete orderPayload.delivery_area_name;
+        delete orderPayload.delivery_charge_override;
+        const retry = await admin.from("orders").insert(orderPayload);
+        orderError = retry.error;
+      }
+
       if (!orderError) {
         const { error: itemsError } = await admin
           .from("order_items")
           .insert(itemRows.map((r) => ({ order_id: orderId, ...r })));
         if (itemsError) {
           await admin.from("orders").delete().eq("id", orderId);
-          return { error: itemsError.message, orderId: null, total: null };
+          return {
+            error: itemsError.message,
+            orderId: null,
+            orderNo: null,
+            total: null,
+            subtotal: null,
+            deliveryCharge: null,
+            deliveryAreaName: null,
+          };
         }
 
         // Decrement literal stock counts atomically (NULL = unlimited). A
@@ -3134,51 +3599,78 @@ export const placeOrder = createServerFn({ method: "POST" })
             return {
               error: `Only ${product.stock_quantity} of "${product.name}" is in stock.`,
               orderId: null,
+              orderNo: null,
               total: null,
+              subtotal: null,
+              deliveryCharge: null,
+              deliveryAreaName: null,
             };
           }
         }
 
-        // Seed the immutable timeline so the patient sees the placement event.
+        // Seed the immutable timeline
         await admin.from("order_status_history").insert({
           order_id: orderId,
-          status: "pending",
-          note: "Order placed",
+          status: (orderPayload.status as string) || "pending_payment",
+          note:
+            deliveryCharge > 0
+              ? `Order created (products Rs. ${subtotal} + delivery Rs. ${deliveryCharge}) — awaiting payment`
+              : "Order created — awaiting payment",
         });
 
         if (patientId) {
           await createPatientNotification(admin, {
             userId: patientId,
             type: "order",
-            title: "Order placed",
-            body: `Your order ${orderNo} has been placed. Complete your payment so we can start processing it.`,
+            title: "Order payment pending",
+            body: `Your order ${orderNo} has been created. Complete your payment proof submission so we can confirm and process it.`,
             link: buildAdminFocusLink("/patient/orders", "order", orderId),
           });
         }
 
-        // Best-effort admin notification (authed + guest). No payer contact
-        // details are included — just the order reference for the admin page.
+        // Best-effort admin notification (authed + guest).
         await createAdminNotification(admin, {
           type: "new_order",
-          title: "New order received",
-          body: `${data.name || "A customer"} placed order ${orderNo} and awaits payment.`,
+          title: "New order received (payment pending)",
+          body: `${data.name || "A customer"} placed order ${orderNo} and payment is pending.`,
           link: buildAdminFocusLink("/admin/orders", "order", orderId),
           dedupKey: buildAdminNotificationDedupKey("new_order", orderId),
         });
 
-        return { error: null, orderNo, orderId, total };
+        return {
+          error: null,
+          orderNo,
+          orderId,
+          total,
+          subtotal,
+          deliveryCharge,
+          deliveryAreaName: deliveryArea?.name ?? null,
+        };
       }
       const isCodeCollision = orderError.code === "23505" && /order_no/i.test(orderError.message);
       if (!isCodeCollision)
-        return { error: orderError.message, orderNo: null, orderId: null, total: null };
+        return {
+          error: orderError.message,
+          orderNo: null,
+          orderId: null,
+          total: null,
+          subtotal: null,
+          deliveryCharge: null,
+          deliveryAreaName: null,
+        };
     }
     return {
       error: "Could not generate a unique order number. Please try again.",
       orderNo: null,
       orderId: null,
       total: null,
+      subtotal: null,
+      deliveryCharge: null,
+      deliveryAreaName: null,
     };
   });
+
+export const adminPlaceOrder = placeOrder;
 
 export const patientGetMyOrders = createServerFn({ method: "POST" })
   .middleware([patientMiddleware])
@@ -3240,7 +3732,7 @@ export const patientSubmitOrderRequest = createServerFn({ method: "POST" })
     const admin = getSupabaseAdmin();
     const { data: order } = await admin
       .from("orders")
-      .select("patient_id, status")
+      .select("patient_id, status, order_no")
       .eq("id", data.orderId)
       .maybeSingle();
     if (!order) return { error: "Order not found." };
@@ -3265,14 +3757,62 @@ export const patientSubmitOrderRequest = createServerFn({ method: "POST" })
       }
     }
 
-    const { error } = await admin.from("order_requests").insert({
-      order_id: data.orderId,
-      patient_id: context.patientId,
-      kind: data.kind,
-      message: data.message,
-      status: "new",
+    const { data: inserted, error } = await admin
+      .from("order_requests")
+      .insert({
+        order_id: data.orderId,
+        patient_id: context.patientId,
+        kind: data.kind,
+        message: data.message,
+        status: "new",
+      })
+      .select("id")
+      .single();
+    if (error) return { error: error?.message ?? null };
+
+    // Best-effort admin notification so staff see the request immediately and
+    // can jump straight to the order's Patient requests section.
+    const patientName = await resolvePatientName(admin, { patientId: context.patientId });
+    const subjectLine = `${patientName ?? "A patient"} requested ${
+      data.kind === "query"
+        ? "information about their order"
+        : data.kind === "cancel"
+          ? "to cancel their order"
+          : data.kind === "return"
+            ? "a return"
+            : data.kind === "replacement"
+              ? "a replacement"
+              : "to file a complaint"
+    }${order.order_no ? ` (${order.order_no})` : ""}`;
+    await createAdminNotification(admin, {
+      type: "order_request",
+      title: "New patient order request",
+      body: subjectLine,
+      link: buildAdminFocusLink("/admin/orders", "order", data.orderId),
+      dedupKey: buildAdminNotificationDedupKey("order_request", inserted.id as string),
     });
-    return { error: error?.message ?? null };
+
+    // Confirmation for the patient so they know the clinic received it.
+    const patientKindLabel =
+      data.kind === "query"
+        ? "Query"
+        : data.kind === "cancel"
+          ? "Cancellation"
+          : data.kind === "return"
+            ? "Return"
+            : data.kind === "replacement"
+              ? "Replacement"
+              : "Complaint";
+    await createPatientNotification(admin, {
+      userId: context.patientId,
+      type: "order",
+      title: `${patientKindLabel} request submitted`,
+      body: "Your request has been received and will be reviewed by the clinic shortly.",
+      link: buildAdminFocusLink("/patient/orders", "order", data.orderId),
+      dedupKey: buildAdminNotificationDedupKey("order_request", inserted.id as string),
+    });
+
+    return { error: null };
   });
 
 // ---------------------------------------------------------------------------
@@ -3312,7 +3852,9 @@ export const patientReorder = createServerFn({ method: "POST" })
     const byId = new Map((products ?? []).map((p) => [p.id, p]));
     const today = todayInClinic();
 
-    let total = 0;
+    // Product subtotal only — delivery is resolved from the current store
+    // setting for this new order and stored separately.
+    let subtotal = 0;
     const itemRows: Array<{
       product_id: string;
       product_name: string;
@@ -3330,7 +3872,7 @@ export const patientReorder = createServerFn({ method: "POST" })
         typeof product.stock_quantity === "number" ? product.stock_quantity : 50,
       );
       const price = productEffectivePrice(product, today);
-      total += price * quantity;
+      subtotal += price * quantity;
       itemRows.push({
         product_id: product.id,
         product_name: product.name as string,
@@ -3345,6 +3887,9 @@ export const patientReorder = createServerFn({ method: "POST" })
       };
     }
 
+    const deliveryCharge = resolveDeliveryCharge(await loadStoreSettings(admin), subtotal);
+    const total = subtotal + deliveryCharge;
+
     const orderId = crypto.randomUUID();
     for (let attempt = 0; attempt < ID_RETRY_ATTEMPTS; attempt++) {
       const orderNo = generateOrderNo();
@@ -3356,6 +3901,8 @@ export const patientReorder = createServerFn({ method: "POST" })
         phone: order.phone,
         email: order.email,
         address: order.address,
+        subtotal,
+        delivery_charge: deliveryCharge,
         total,
         payment_amount: total,
         payment_status: "payment_pending",
@@ -3528,6 +4075,51 @@ export const getGoogleReviews = createServerFn({ method: "GET" })
     return getGoogleReviewsServer();
   });
 
+/** Shared insert + best-effort admin notification for the support inbox. */
+async function createSupportMessageRecord(
+  admin: ReturnType<typeof getSupabaseAdmin>,
+  input: {
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    subject?: string;
+    message: string;
+    patientId?: string | null;
+  },
+): Promise<{ id: string | null; error: string | null }> {
+  const { data: inserted, error } = await admin
+    .from("support_messages")
+    .insert({
+      name: input.name,
+      email: input.email ?? null,
+      phone: input.phone ?? null,
+      subject: input.subject ?? "",
+      message: input.message,
+      status: "new",
+      patient_id: input.patientId ?? null,
+    })
+    .select("id")
+    .single();
+  if (error) return { id: null, error: error?.message ?? null };
+
+  const isAccount = input.patientId
+    ? ((await resolvePatientName(admin, { patientId: input.patientId })) ?? input.name)
+    : input.name;
+
+  // Best-effort admin notification. Safe summary — no email/phone/body.
+  await createAdminNotification(admin, {
+    type: "support_message",
+    title: "New support message",
+    body: input.subject?.trim()
+      ? `New support message from ${isAccount}: ${input.subject.trim()}`
+      : `New support message from ${isAccount}.`,
+    link: buildAdminFocusLink("/admin/support", "support", inserted.id as string),
+    dedupKey: buildAdminNotificationDedupKey("support_message", inserted.id as string),
+  });
+
+  return { id: inserted.id as string, error: null };
+}
+
 export const submitSupportMessage = createServerFn({ method: "POST" })
   .validator(
     z.object({
@@ -3544,32 +4136,66 @@ export const submitSupportMessage = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const admin = getSupabaseAdmin();
-    const { data: inserted, error } = await admin
+    const { error } = await createSupportMessageRecord(admin, data);
+    return { error };
+  });
+
+// ---------------------------------------------------------------------------
+// Patient — support inbox (signed-in patient can track their own questions)
+// ---------------------------------------------------------------------------
+
+export const patientListMySupportMessages = createServerFn({ method: "GET" })
+  .middleware([patientMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async ({ context }) => {
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin
       .from("support_messages")
-      .insert({
-        name: data.name,
-        email: data.email ?? null,
-        phone: data.phone ?? null,
-        subject: data.subject ?? "",
-        message: data.message,
-        status: "new",
-      })
-      .select("id")
-      .single();
-    if (error) return { error: error?.message ?? null };
+      .select("*")
+      .eq("patient_id", context.patientId)
+      .order("created_at", { ascending: false })
+      .limit(200);
+    return { error: error?.message ?? null, messages: data ?? [] };
+  });
 
-    // Best-effort admin notification. Safe summary — no email/phone/body.
-    await createAdminNotification(admin, {
-      type: "support_message",
-      title: "New support message",
-      body: data.subject?.trim()
-        ? `New support message from ${data.name}: ${data.subject.trim()}`
-        : `New support message from ${data.name}.`,
-      link: buildAdminFocusLink("/admin/support", "support", inserted.id as string),
-      dedupKey: buildAdminNotificationDedupKey("support_message", inserted.id as string),
+export const patientSubmitSupportMessage = createServerFn({ method: "POST" })
+  .middleware([patientMiddleware])
+  .validator(
+    z.object({
+      subject: z.string().trim().max(200).optional(),
+      message: z
+        .string()
+        .trim()
+        .min(10, "Please describe your question (at least 10 characters)")
+        .max(4000),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const admin = getSupabaseAdmin();
+    const profile = await admin
+      .from("profiles")
+      .select("full_name, phone, email")
+      .eq("id", context.patientId)
+      .maybeSingle();
+    const { id, error } = await createSupportMessageRecord(admin, {
+      name: profile.data?.full_name ?? "Patient",
+      email: profile.data?.email ?? null,
+      phone: profile.data?.phone ?? null,
+      subject: data.subject,
+      message: data.message,
+      patientId: context.patientId,
     });
-
-    return { error: null };
+    if (!error && id) {
+      await createPatientNotification(admin, {
+        userId: context.patientId,
+        type: "support_reply",
+        title: "Support message received",
+        body: "Your message has been delivered to the clinic. A staff member will respond shortly.",
+        link: buildAdminFocusLink("/patient/support", "support", id),
+        dedupKey: buildAdminNotificationDedupKey("patient_support", id),
+      });
+    }
+    return { error };
   });
 
 // ---------------------------------------------------------------------------
@@ -3670,6 +4296,101 @@ export const adminUpdateSupportMessage = createServerFn({ method: "POST" })
       .update(updates)
       .eq("id", data.id);
     return { error: error?.message ?? null };
+  });
+
+export const adminReplySupportMessage = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(
+    z.object({
+      id: uuidSchema,
+      reply: z.string().trim().min(1, "Write a reply.").max(4000),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const admin = getSupabaseAdmin();
+    const { data: row } = await admin
+      .from("support_messages")
+      .select("id, name, email, phone, subject, status, patient_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!row)
+      return { error: "Support message not found.", notifications: [], inAppNotified: false };
+
+    const finalStatus = row.status === "closed" ? "closed" : "resolved";
+    const now = new Date().toISOString();
+    const { error } = await admin
+      .from("support_messages")
+      .update({
+        admin_reply: data.reply,
+        replied_at: now,
+        status: finalStatus,
+        resolved_at: now,
+      })
+      .eq("id", data.id);
+    if (error) return { error: error.message, notifications: [], inAppNotified: false };
+
+    // Clinic display name always comes from the real doctor profile.
+    let clinicName = "the clinic";
+    const { data: dp } = await admin
+      .from("doctor_profile")
+      .select("full_name")
+      .eq("id", 1)
+      .maybeSingle();
+    if (dp?.full_name?.trim()) clinicName = dp.full_name.trim();
+
+    const email = (row.email ?? "").trim().toLowerCase() || null;
+    const phone = (row.phone ?? "").trim() || null;
+
+    // In-app patient notification when the sender is a signed-in patient (via
+    // patient_id) or when the sender's email (or exact phone) matches a
+    // signed-in patient account. Deep-links to the patient's support inbox.
+    let inAppNotified = false;
+    let matchedUserId: string | null = null;
+    if (row.patient_id) {
+      matchedUserId = row.patient_id as string;
+    } else if (email) {
+      const { data: p } = await admin
+        .from("profiles")
+        .select("id")
+        .eq("email", email)
+        .maybeSingle();
+      if (p) matchedUserId = p.id as string;
+    }
+    if (!matchedUserId && phone) {
+      const { data: p } = await admin
+        .from("profiles")
+        .select("id")
+        .eq("phone", phone)
+        .maybeSingle();
+      if (p) matchedUserId = p.id as string;
+    }
+    if (matchedUserId) {
+      await createPatientNotification(admin, {
+        userId: matchedUserId,
+        type: "support_reply",
+        title: "Reply from the clinic",
+        body: data.reply.slice(0, 1000),
+        link: buildAdminFocusLink("/patient/support", "support", data.id),
+      });
+      inAppNotified = true;
+    }
+
+    // Best-effort email/SMS delivery to the contact details the sender gave.
+    const notifications: NotificationResult[] = [];
+    if (email || phone) {
+      notifications.push(
+        ...(await sendSupportReplyNotifications({
+          name: (row.name ?? "").trim() || "there",
+          clinicName,
+          reply: data.reply,
+          originalSubject: row.subject ?? "",
+          email,
+          phone,
+        })),
+      );
+    }
+
+    return { error: null, notifications, inAppNotified };
   });
 
 // ---------------------------------------------------------------------------
@@ -3926,6 +4647,85 @@ export const adminUpdateOrderStatus = createServerFn({ method: "POST" })
     return { error: null };
   });
 
+/**
+ * Admin — adjust the delivery charge on a single order.
+ *
+ * The product subtotal is never touched; the grand total is recomputed as
+ * subtotal + delivery charge and the order keeps a separate `delivery_charge`
+ * value. Only allowed while the order is still unpaid, so a submitted/verified
+ * payment amount can never be silently rewritten.
+ */
+export const adminUpdateOrderDeliveryCharge = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(
+    z.object({
+      id: uuidSchema,
+      deliveryCharge: z.number().min(0).max(100000),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const admin = getSupabaseAdmin();
+    const { data: order } = await admin
+      .from("orders")
+      .select("id, patient_id, order_no, total, subtotal, delivery_charge, payment_status, status")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!order) return { error: "Order not found." };
+
+    const paymentPendingStatuses = ["payment_pending", "payment_submitted", "payment_failed"];
+    if (!paymentPendingStatuses.includes((order.payment_status as string) ?? "payment_pending")) {
+      return {
+        error:
+          "The delivery charge can only be updated while payment is pending or awaiting verification.",
+      };
+    }
+
+    // Legacy orders have no stored subtotal — fall back to (total - delivery).
+    const currentDelivery = Number(order.delivery_charge ?? 0) || 0;
+    const subtotal =
+      order.subtotal != null
+        ? Number(order.subtotal)
+        : Math.max(0, Number(order.total ?? 0) - currentDelivery);
+    const total = subtotal + data.deliveryCharge;
+
+    const updatePayload: Record<string, unknown> = {
+      subtotal,
+      delivery_charge: data.deliveryCharge,
+      delivery_charge_override: data.deliveryCharge,
+      total,
+      payment_amount: total,
+    };
+
+    let { error } = await admin.from("orders").update(updatePayload).eq("id", data.id);
+
+    // Fallback if delivery_charge_override column is not yet present on live DB
+    if (error && /delivery_charge_override/i.test(error.message)) {
+      delete updatePayload.delivery_charge_override;
+      const res = await admin.from("orders").update(updatePayload).eq("id", data.id);
+      error = res.error;
+    }
+
+    if (error) return { error: error.message };
+
+    // Record timeline audit note
+    await admin.from("order_status_history").insert({
+      order_id: order.id,
+      status: order.status,
+      note: `Delivery charge adjusted to Rs. ${data.deliveryCharge.toLocaleString()} (New grand total: Rs. ${total.toLocaleString()})`,
+    });
+
+    if (order.patient_id) {
+      await createPatientNotification(admin, {
+        userId: order.patient_id,
+        type: "order",
+        title: "Delivery charge updated",
+        body: `The delivery charge for order ${order.order_no ?? ""} was adjusted to Rs. ${data.deliveryCharge.toLocaleString()}. Updated grand total: Rs. ${total.toLocaleString()}.`,
+        link: buildAdminFocusLink("/patient/orders", "order", order.id),
+      });
+    }
+    return { error: null };
+  });
+
 /** Admin/doctor — list patient order requests (queries, cancels, returns). */
 export const adminGetOrderRequests = createServerFn({ method: "GET" })
   .middleware([adminMiddleware])
@@ -4102,7 +4902,11 @@ export const adminSendDueReminders = createServerFn({ method: "POST" })
 
 export const adminGetAnalytics = createServerFn({ method: "GET" })
   .middleware([adminMiddleware])
-  .validator((d: unknown) => d as undefined)
-  .handler(async () => {
-    return getAnalytics(getSupabaseAdmin());
+  .validator(
+    z.object({
+      range: z.enum(["today", "7d", "30d", "90d"]).optional(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    return getAnalytics(getSupabaseAdmin(), data.range ?? "30d");
   });

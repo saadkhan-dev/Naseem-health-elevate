@@ -414,6 +414,57 @@ export function buildVideoReadyMessages(details: VideoReadyNotificationDetails):
 }
 
 /** Build the message text when the clinic moves an appointment to a new slot. */
+export interface SupportReplyNotificationDetails {
+  /** The sender's name from the support message. */
+  name: string;
+  /** Clinic display name (from the doctor profile when available). */
+  clinicName: string;
+  /** The reply text written by the clinic. */
+  reply: string;
+  /** The support message subject, shown so the sender knows what is being answered. */
+  originalSubject: string;
+  phone?: string;
+  email?: string;
+}
+
+/** Build the "the clinic replied to your message" message for every channel. */
+export function buildSupportReplyMessages(details: SupportReplyNotificationDetails): {
+  emailSubject: string;
+  emailText: string;
+  smsText: string;
+  whatsappText: string;
+  whatsappContentVariables: string[];
+} {
+  const subjectLine = details.originalSubject?.trim()
+    ? `\n\nAbout: ${details.originalSubject.trim()}`
+    : "";
+  const emailText = [
+    `Dear ${details.name.trim() || "there"},`,
+    ``,
+    `${details.clinicName} has replied to your message.`,
+    subjectLine.trim() || undefined,
+    ``,
+    `${details.reply}`,
+    ``,
+    `If you have more questions, send a new message from the website's Contact page — we will get back to you.`,
+    ``,
+    `Warm regards,`,
+    `${details.clinicName}`,
+  ]
+    .filter((line): line is string => line !== undefined)
+    .join("\n");
+
+  const smsText = `${details.clinicName} replied to your message${subjectLine ? ` (${details.originalSubject.trim()})` : ""}: ${details.reply}`.slice(0, 480);
+
+  return {
+    emailSubject: `Reply from ${details.clinicName} — your message`,
+    emailText,
+    smsText,
+    whatsappText: smsText,
+    whatsappContentVariables: [details.reply],
+  };
+}
+
 export function buildRescheduleMessages(details: RescheduleNotificationDetails): {
   emailSubject: string;
   emailText: string;

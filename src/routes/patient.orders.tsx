@@ -6,8 +6,6 @@ import {
   Loader2,
   Package,
   PackageX,
-  ChevronDown,
-  ChevronUp,
   HelpCircle,
   MessageSquare,
   X,
@@ -22,6 +20,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Link } from "@tanstack/react-router";
 import { useMyOrders, useSubmitOrderRequest } from "@/hooks/queries/usePatient";
 import { useReorderOrder } from "@/hooks/queries/useShop";
@@ -29,6 +33,7 @@ import { OrderPaymentStep } from "@/components/site/OrderPaymentStep";
 import type { PatientOrder } from "@/lib/patient-data";
 import { QueryError } from "@/components/admin/QueryError";
 import { cn } from "@/lib/utils";
+import { deliveryChargeLabel } from "@/lib/delivery";
 import { usePageFocus, useFocusHighlight } from "@/hooks/usePageFocus";
 
 export const Route = createFileRoute("/patient/orders")({
@@ -87,7 +92,6 @@ function PatientOrders() {
   const { data: orders, isLoading, isError, error } = useMyOrders();
   const submitRequest = useSubmitOrderRequest();
   const reorder = useReorderOrder();
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [requestFor, setRequestFor] = useState<{
     orderId: string;
     kind: RequestKind;
@@ -112,10 +116,6 @@ function PatientOrders() {
       document.body.style.overflow = prevOverflow;
     };
   }, [payFor]);
-
-  function toggle(id: string) {
-    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
-  }
 
   async function handleSubmitRequest(e: React.FormEvent) {
     e.preventDefault();
@@ -145,7 +145,6 @@ function PatientOrders() {
         setRequestError(result.error);
         return;
       }
-      setExpanded({});
       setRequestFor(null);
     } catch (err) {
       setRequestError(err instanceof Error ? err.message : "Could not reorder.");
@@ -181,8 +180,6 @@ function PatientOrders() {
             <OrderCard
               key={o.id}
               order={o}
-              expanded={!!expanded[o.id]}
-              onToggle={() => toggle(o.id)}
               requestFor={requestFor}
               requestMessage={requestMessage}
               setRequestMessage={setRequestMessage}
@@ -249,8 +246,6 @@ function PatientOrders() {
 
 interface OrderCardProps {
   order: PatientOrder;
-  expanded: boolean;
-  onToggle: () => void;
   requestFor: { orderId: string; kind: RequestKind } | null;
   requestMessage: string;
   setRequestMessage: (v: string) => void;
@@ -266,8 +261,6 @@ interface OrderCardProps {
 
 function OrderCard({
   order,
-  expanded,
-  onToggle,
   requestFor,
   requestMessage,
   setRequestMessage,
@@ -286,6 +279,15 @@ function OrderCard({
   const needsPayment =
     order.payment_status === "payment_pending" || order.payment_status === "payment_failed";
   const timeline = (order.status_history ?? []).slice().reverse();
+
+  // Delivery charge is stored separately from the product price. Legacy orders
+  // that predate the delivery-charge column have no stored subtotal — fall back
+  // to (total - delivery) so old orders keep rendering exactly as before.
+  const deliveryCharge = Number(order.delivery_charge ?? 0) || 0;
+  const subtotal =
+    order.subtotal != null
+      ? Number(order.subtotal)
+      : Math.max(0, Number(order.total) - deliveryCharge);
 
   return (
     <div
@@ -307,14 +309,6 @@ function OrderCard({
           >
             {paymentLabels[order.payment_status] ?? order.payment_status}
           </Badge>
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-label={expanded ? "Collapse order details" : "Expand order details"}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground"
-          >
-            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </button>
         </div>
       </div>
       <div className="mt-1 text-xs text-muted-foreground">
@@ -348,220 +342,268 @@ function OrderCard({
           </div>
         ))}
       </div>
-      <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-sm">
-        <span className="flex items-center gap-1.5 text-muted-foreground">
-          <Package className="h-4 w-4" /> Total
-        </span>
-        <span className="text-base font-bold text-foreground">
-          Rs. {Number(order.total).toLocaleString()}
-        </span>
+      <div className="mt-3 space-y-2 border-t border-border pt-3 text-sm">
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">Product Price</span>
+          <span className="font-medium text-foreground">Rs. {subtotal.toLocaleString()}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">Delivery Charges</span>
+          <span className="font-medium text-foreground">{deliveryChargeLabel(deliveryCharge)}</span>
+        </div>
+        <div className="flex items-center justify-between border-t border-border pt-2">
+          <span className="flex items-center gap-1.5 font-semibold text-foreground">
+            <Package className="h-4 w-4" /> Grand Total
+          </span>
+          <span className="text-base font-bold text-foreground">
+            Rs. {Number(order.total).toLocaleString()}
+          </span>
+        </div>
       </div>
 
-      {expanded && (
-        <div className="mt-4 space-y-4 border-t border-border pt-4">
-          {needsPayment && (
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
-              <div className="flex-1 text-sm text-amber-800">
-                <span className="font-semibold">Payment pending.</span>{" "}
-                <span className="text-amber-700">
-                  Complete your payment so the clinic can start processing your order.
-                </span>
-              </div>
-              <Button size="sm" className="gap-1.5" onClick={onPay}>
-                <CreditCard className="h-3.5 w-3.5" /> Pay Now
-              </Button>
-            </div>
-          )}
-          {order.payment_status === "payment_submitted" && (
-            <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-800">
-              Your payment has been submitted and is awaiting verification by the clinic. The clinic
-              will confirm it shortly.
-            </div>
-          )}
+      {needsPayment && (
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <div className="flex-1 text-sm text-amber-800">
+            <span className="font-semibold">Payment pending.</span>{" "}
+            <span className="text-amber-700">
+              Complete your payment so the clinic can start processing your order.
+            </span>
+          </div>
+          <Button size="sm" className="gap-1.5" onClick={onPay}>
+            <CreditCard className="h-3.5 w-3.5" /> Pay Now
+          </Button>
+        </div>
+      )}
+      {order.payment_status === "payment_submitted" && (
+        <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-800">
+          Your payment has been submitted and is awaiting verification by the clinic. The clinic
+          will confirm it shortly.
+        </div>
+      )}
+      {order.payment_status === "payment_verified" && (
+        <div className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          <CreditCard className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            Payment verified on{" "}
+            {order.payment_verified_at
+              ? format(new Date(order.payment_verified_at), "MMM d, yyyy, h:mm a")
+              : "receipt"}
+            .
+            {order.status === "confirmed" && " Your order is confirmed and being prepared for you."}
+          </span>
+        </div>
+      )}
+      {order.status === "cancelled" && (
+        <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>This order has been cancelled.</span>
+        </div>
+      )}
 
+      {(timeline.length > 0 || (order.requests ?? []).length > 0) && (
+        <Accordion
+          type="multiple"
+          defaultValue={[
+            ...(timeline.length > 0 ? ["timeline"] : []),
+            ...((order.requests ?? []).length > 0 ? ["requests"] : []),
+          ]}
+          className="mt-4 border-t border-border pt-2"
+        >
           {timeline.length > 0 && (
-            <div>
-              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <History className="h-3.5 w-3.5" /> Order timeline
-              </div>
-              <ol className="space-y-2">
-                {timeline.map((h) => (
-                  <li key={h.id} className="flex items-start gap-2 text-sm">
-                    <span
-                      className={cn(
-                        "mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full",
-                        h.status === order.status ? "bg-primary" : "bg-muted-foreground/40",
-                      )}
-                    />
-                    <span>
-                      <span className="font-medium capitalize text-foreground">{h.status}</span>
-                      <span className="text-muted-foreground">
-                        {" "}
-                        · {format(new Date(h.created_at), "MMM d, h:mm a")}
+            <AccordionItem value="timeline" className="border-b-0">
+              <AccordionTrigger className="py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <History className="h-3.5 w-3.5" /> Order timeline
+                </span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <ol className="space-y-2">
+                  {timeline.map((h) => (
+                    <li key={h.id} className="flex items-start gap-2 text-sm">
+                      <span
+                        className={cn(
+                          "mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full",
+                          h.status === order.status ? "bg-primary" : "bg-muted-foreground/40",
+                        )}
+                      />
+                      <span>
+                        <span className="font-medium capitalize text-foreground">{h.status}</span>
+                        <span className="text-muted-foreground">
+                          {" "}
+                          · {format(new Date(h.created_at), "MMM d, h:mm a")}
+                        </span>
+                        {h.note && (
+                          <span className="block text-xs text-muted-foreground">{h.note}</span>
+                        )}
                       </span>
-                      {h.note && (
-                        <span className="block text-xs text-muted-foreground">{h.note}</span>
-                      )}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            </div>
+                    </li>
+                  ))}
+                </ol>
+              </AccordionContent>
+            </AccordionItem>
           )}
 
           {(order.requests ?? []).length > 0 && (
-            <div>
-              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <MessageSquare className="h-3.5 w-3.5" /> Your requests
-              </div>
-              <div className="space-y-2">
-                {(order.requests ?? []).map((r) => (
-                  <div key={r.id} className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-                    <div className="flex flex-wrap items-center gap-2 text-sm">
-                      <Badge className={`capitalize ${requestKindStyles[r.kind] ?? ""}`}>
-                        {requestKindLabels[r.kind] ?? r.kind}
-                      </Badge>
-                      <span
-                        className={`rounded-full px-2 py-1 text-[11px] font-medium capitalize ${
-                          r.status === "resolved"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : r.status === "closed"
-                              ? "bg-muted text-muted-foreground"
-                              : "bg-amber-100 text-amber-700"
-                        }`}
-                      >
-                        {r.status}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-sm text-foreground">{r.message}</p>
-                    {r.admin_notes && (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Clinic reply: {r.admin_notes}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {requestFor?.orderId === order.id ? (
-            <form
-              onSubmit={onSubmitRequest}
-              className="space-y-2 rounded-xl border border-border bg-muted/20 p-3"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-foreground">
-                  {requestFor.kind === "query"
-                    ? "Ask about this order"
-                    : requestFor.kind === "cancel"
-                      ? "Request cancellation"
-                      : requestFor.kind === "return"
-                        ? "Request a return"
-                        : requestFor.kind === "complaint"
-                          ? "File a complaint"
-                          : "Request a replacement"}
+            <AccordionItem value="requests" className="border-b-0">
+              <AccordionTrigger className="py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <MessageSquare className="h-3.5 w-3.5" /> Your requests
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                    {(order.requests ?? []).length}
+                  </span>
                 </span>
-                <button
-                  type="button"
-                  onClick={onCancelRequest}
-                  aria-label="Close request form"
-                  className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <Textarea
-                rows={3}
-                value={requestMessage}
-                onChange={(e) => setRequestMessage(e.target.value)}
-                placeholder={
-                  requestFor.kind === "query"
-                    ? "Your question about this order..."
-                    : requestFor.kind === "cancel"
-                      ? "Reason for cancelling (e.g. changed my mind)..."
-                      : requestFor.kind === "return"
-                        ? "Reason for returning (e.g. received a damaged item)..."
-                        : requestFor.kind === "complaint"
-                          ? "Describe your complaint..."
-                          : "Reason for replacement (e.g. wrong item received)..."
-                }
-              />
-              {requestError && (
-                <p className="text-sm font-medium text-destructive">{requestError}</p>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-2">
+                  {(order.requests ?? []).map((r) => (
+                    <div
+                      key={r.id}
+                      className="rounded-lg border border-border bg-muted/30 px-3 py-2"
+                    >
+                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                        <Badge className={`capitalize ${requestKindStyles[r.kind] ?? ""}`}>
+                          {requestKindLabels[r.kind] ?? r.kind}
+                        </Badge>
+                        <span
+                          className={`rounded-full px-2 py-1 text-[11px] font-medium capitalize ${
+                            r.status === "resolved"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : r.status === "closed"
+                                ? "bg-muted text-muted-foreground"
+                                : "bg-amber-100 text-amber-700"
+                          }`}
+                        >
+                          {r.status}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm text-foreground">{r.message}</p>
+                      {r.admin_notes && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Clinic reply: {r.admin_notes}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          )}
+        </Accordion>
+      )}
+
+      {requestFor?.orderId === order.id ? (
+        <form
+          onSubmit={onSubmitRequest}
+          className="mt-3 space-y-2 rounded-xl border border-border bg-muted/20 p-3"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-foreground">
+              {requestFor.kind === "query"
+                ? "Ask about this order"
+                : requestFor.kind === "cancel"
+                  ? "Request cancellation"
+                  : requestFor.kind === "return"
+                    ? "Request a return"
+                    : requestFor.kind === "complaint"
+                      ? "File a complaint"
+                      : "Request a replacement"}
+            </span>
+            <button
+              type="button"
+              onClick={onCancelRequest}
+              aria-label="Close request form"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <Textarea
+            rows={3}
+            value={requestMessage}
+            onChange={(e) => setRequestMessage(e.target.value)}
+            placeholder={
+              requestFor.kind === "query"
+                ? "Your question about this order..."
+                : requestFor.kind === "cancel"
+                  ? "Reason for cancelling (e.g. changed my mind)..."
+                  : requestFor.kind === "return"
+                    ? "Reason for returning (e.g. received a damaged item)..."
+                    : requestFor.kind === "complaint"
+                      ? "Describe your complaint..."
+                      : "Reason for replacement (e.g. wrong item received)..."
+            }
+          />
+          {requestError && <p className="text-sm font-medium text-destructive">{requestError}</p>}
+          <Button type="submit" size="sm" disabled={submitting || !requestMessage.trim()}>
+            {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            Submit request
+          </Button>
+        </form>
+      ) : (
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onRequest("query")}
+            className="gap-1.5 sm:w-auto"
+          >
+            <HelpCircle className="h-3.5 w-3.5" /> Ask a question
+          </Button>
+          {canCancel && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-red-600 sm:w-auto"
+              onClick={() => onRequest("cancel")}
+            >
+              Request cancellation
+            </Button>
+          )}
+          {canReturn && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-orange-600 sm:w-auto"
+              onClick={() => onRequest("return")}
+            >
+              Request a return
+            </Button>
+          )}
+          {canReturn && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-teal-700 sm:w-auto"
+              onClick={() => onRequest("replacement")}
+            >
+              <PackageCheck className="h-3.5 w-3.5" /> Request replacement
+            </Button>
+          )}
+          {order.status === "delivered" && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-purple-700 sm:w-auto"
+              onClick={() => onRequest("complaint")}
+            >
+              <AlertTriangle className="h-3.5 w-3.5" /> File complaint
+            </Button>
+          )}
+          {canReorder && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-blue-700 sm:w-auto"
+              onClick={onBuyAgain}
+              disabled={reordering}
+            >
+              {reordering ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RotateCcw className="h-3.5 w-3.5" />
               )}
-              <Button type="submit" size="sm" disabled={submitting || !requestMessage.trim()}>
-                {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                Submit request
-              </Button>
-            </form>
-          ) : (
-            <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onRequest("query")}
-                className="gap-1.5 sm:w-auto"
-              >
-                <HelpCircle className="h-3.5 w-3.5" /> Ask a question
-              </Button>
-              {canCancel && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 text-red-600 sm:w-auto"
-                  onClick={() => onRequest("cancel")}
-                >
-                  Request cancellation
-                </Button>
-              )}
-              {canReturn && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 text-orange-600 sm:w-auto"
-                  onClick={() => onRequest("return")}
-                >
-                  Request a return
-                </Button>
-              )}
-              {canReturn && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 text-teal-700 sm:w-auto"
-                  onClick={() => onRequest("replacement")}
-                >
-                  <PackageCheck className="h-3.5 w-3.5" /> Request replacement
-                </Button>
-              )}
-              {order.status === "delivered" && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 text-purple-700 sm:w-auto"
-                  onClick={() => onRequest("complaint")}
-                >
-                  <AlertTriangle className="h-3.5 w-3.5" /> File complaint
-                </Button>
-              )}
-              {canReorder && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 text-blue-700 sm:w-auto"
-                  onClick={onBuyAgain}
-                  disabled={reordering}
-                >
-                  {reordering ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <RotateCcw className="h-3.5 w-3.5" />
-                  )}
-                  Buy again
-                </Button>
-              )}
-            </div>
+              Buy again
+            </Button>
           )}
         </div>
       )}

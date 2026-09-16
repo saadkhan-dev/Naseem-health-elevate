@@ -5,8 +5,15 @@ import { SiteFooter } from "@/components/site/SiteFooter";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart";
 import { usePublishedProducts } from "@/hooks/queries/useContent";
+import { useStoreSettings } from "@/hooks/queries/useShop";
 import { todayInClinic } from "@/lib/clinic";
 import { productEffectivePrice, isProductOrderable } from "@/lib/product-offer-types";
+import {
+  DEFAULT_STORE_SETTINGS,
+  deliveryChargeLabel,
+  productDeliveryLabel,
+  resolveDeliveryCharge,
+} from "@/lib/delivery";
 import type { Product } from "@/lib/admin-data";
 
 export const Route = createFileRoute("/cart")({
@@ -23,6 +30,7 @@ function CartPage() {
   const cart = useCart();
   const router = useRouter();
   const { data: products, isLoading } = usePublishedProducts();
+  const { data: storeSettings } = useStoreSettings();
   const today = todayInClinic();
 
   const byId = new Map((products ?? []).map((p) => [p.id, p]));
@@ -38,6 +46,11 @@ function CartPage() {
     (sum, l) => sum + productEffectivePrice(l.product, today) * l.quantity,
     0,
   );
+  // Delivery charge is calculated separately and never merged into a product
+  // price. 0 = charges switched off / free-delivery threshold reached.
+  const settings = storeSettings ?? DEFAULT_STORE_SETTINGS;
+  const deliveryCharge = resolveDeliveryCharge(settings, subtotal);
+  const total = subtotal + deliveryCharge;
 
   // Insufficient-stock lines block checkout until corrected.
   const unavailable = lines.filter((l) => !isProductOrderable(l.product));
@@ -110,6 +123,11 @@ function CartPage() {
                     <div className="mt-0.5 text-[15px] font-medium text-primary sm:text-sm">
                       Rs. {productEffectivePrice(product, today).toLocaleString()}
                     </div>
+                    {productDeliveryLabel(product) && (
+                      <div className="mt-0.5 text-[13px] text-muted-foreground sm:text-xs">
+                        {productDeliveryLabel(product)}
+                      </div>
+                    )}
                   </div>
                   <div className="flex h-9 items-center gap-1 rounded-xl border border-border bg-background px-1">
                     <button
@@ -165,13 +183,31 @@ function CartPage() {
               <div className="mt-6 rounded-2xl border border-border bg-card p-5">
                 <div className="flex items-center justify-between">
                   <span className="text-[15px] text-muted-foreground sm:text-sm">Subtotal</span>
-                  <span className="text-lg font-bold text-foreground">
+                  <span className="text-[15px] font-medium text-foreground sm:text-sm">
                     Rs. {subtotal.toLocaleString()}
                   </span>
                 </div>
+                <div className="mt-2 flex items-center justify-between">
+                  <span className="text-[15px] text-muted-foreground sm:text-sm">
+                    Delivery Charges
+                  </span>
+                  <span className="text-[15px] font-medium text-foreground sm:text-sm">
+                    {deliveryChargeLabel(deliveryCharge)}
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
+                  <span className="text-[15px] font-semibold text-foreground sm:text-sm">
+                    Grand Total
+                  </span>
+                  <span className="text-lg font-bold text-foreground">
+                    Rs. {total.toLocaleString()}
+                  </span>
+                </div>
                 <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground sm:text-xs">
-                  Delivery charges and final total are confirmed by the clinic after your payment is
-                  verified.
+                  {settings.delivery_is_active && deliveryCharge === 0
+                    ? "Delivery is free on this order."
+                    : (settings.delivery_note ??
+                      "Delivery charges are shown separately from the product price and are confirmed by the clinic after your payment is verified.")}
                 </p>
                 {blocked && (
                   <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] font-medium text-red-700 sm:text-xs">

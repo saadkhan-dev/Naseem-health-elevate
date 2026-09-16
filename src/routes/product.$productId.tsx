@@ -36,6 +36,7 @@ import {
   isProductOfferActive,
   isProductOrderable,
 } from "@/lib/product-offer-types";
+import { productDeliveryEstimate } from "@/lib/delivery";
 import { getProductById } from "@/lib/admin-data";
 
 export const Route = createFileRoute("/product/$productId")({
@@ -330,6 +331,13 @@ function ProductDetail() {
                   </div>
                 )}
 
+                {productDeliveryEstimate(product) && (
+                  <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary-soft/50 px-3 py-1 text-[13px] font-medium text-foreground sm:text-xs">
+                    <Truck className="h-3.5 w-3.5 text-primary" /> Delivery:{" "}
+                    {productDeliveryEstimate(product)}
+                  </div>
+                )}
+
                 {product && (
                   <div
                     className={`mt-3 inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-full px-3 py-1 text-[13px] font-semibold sm:text-xs ${
@@ -402,7 +410,10 @@ function ProductDetail() {
                         <ShieldCheck className="h-4 w-4 text-primary" /> Verified by the clinic
                       </div>
                       <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5">
-                        <Truck className="h-4 w-4 text-primary" /> Delivery available
+                        <Truck className="h-4 w-4 text-primary" />
+                        {productDeliveryEstimate(product)
+                          ? `Delivery: ${productDeliveryEstimate(product)}`
+                          : "Delivery available"}
                       </div>
                       <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5">
                         <Star className="h-4 w-4 text-primary" /> Quality products

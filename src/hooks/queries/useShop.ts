@@ -18,10 +18,34 @@ import {
   getProductById,
   getProductImages,
   getPublishedProductReviews,
+  getStoreSettings,
+  getActiveDeliveryAreas,
   type Product,
   type ProductImage,
+  type DeliveryArea,
 } from "@/lib/admin-data";
+import type { StoreSettings } from "@/lib/delivery";
 import { getActivePaymentMethods } from "@/lib/payment";
+
+// --- Store settings (delivery charge shown on cart + checkout) ---
+
+export function useStoreSettings() {
+  return useQuery<StoreSettings>({
+    queryKey: ["store-settings"],
+    queryFn: getStoreSettings,
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+// --- Active delivery areas for checkout ---
+
+export function useActiveDeliveryAreas() {
+  return useQuery<DeliveryArea[]>({
+    queryKey: ["active-delivery-areas"],
+    queryFn: getActiveDeliveryAreas,
+    staleTime: 1000 * 60 * 5,
+  });
+}
 
 // --- Payment methods (shared with the video flow) ---
 

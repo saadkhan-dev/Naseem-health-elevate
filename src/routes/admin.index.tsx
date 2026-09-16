@@ -1,13 +1,15 @@
 import { useMemo } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { CalendarCheck, Clock, Users, Activity, Loader2 } from "lucide-react";
+import { CalendarCheck, Clock, Users, Activity, Loader2, Truck, ArrowRight } from "lucide-react";
 import {
   useAppointments,
   useDashboardStats,
   useRecentPatients,
   usePatientById,
 } from "@/hooks/queries/useAdmin";
+import { useStoreSettings } from "@/hooks/queries/useShop";
+import { DEFAULT_STORE_SETTINGS } from "@/lib/delivery";
 import { formatTimeDisplay } from "@/lib/bookings";
 import { QueryError } from "@/components/admin/QueryError";
 import { ChatUsagePanel } from "@/components/admin/ChatUsagePanel";
@@ -31,6 +33,8 @@ function AdminDashboard() {
     error: appointmentsErr,
   } = useAppointments();
   const { data: recentPatients, isLoading: recentLoading } = useRecentPatients();
+  const { data: storeSettings, isLoading: settingsLoading } = useStoreSettings();
+  const delivery = storeSettings ?? DEFAULT_STORE_SETTINGS;
 
   // Deep-link focus: "New patient registration" notifications navigate to
   // /admin?focus=patient&id=<uuid> — the exact patient is pinned on top of the
@@ -112,6 +116,37 @@ function AdminDashboard() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Store delivery charges — status + shortcut to the settings page. */}
+      <div className="mt-6 rounded-xl border bg-card p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+              <Truck className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-foreground">Delivery Charges</div>
+              <div className="text-xs text-muted-foreground">
+                {settingsLoading
+                  ? "Loading…"
+                  : delivery.delivery_is_active
+                    ? `Enabled — Rs. ${delivery.delivery_charge.toLocaleString()} per order${
+                        delivery.free_delivery_threshold != null
+                          ? ` · free over Rs. ${delivery.free_delivery_threshold.toLocaleString()}`
+                          : ""
+                      }`
+                    : "No delivery charge is added to product orders"}
+              </div>
+            </div>
+          </div>
+          <Link
+            to="/admin/settings"
+            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-card transition hover:brightness-[1.05]"
+          >
+            Manage delivery charges <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
       </div>
 
       <div className="mt-8">

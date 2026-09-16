@@ -11,9 +11,13 @@ export interface OpenWindow {
 
 /**
  * Open availability windows for a specific calendar date, in minutes since
- * midnight. Combines the regular weekly `availability` rows for that weekday
- * with any one-time `custom_availability` rows for that exact date, so custom
- * slots appear (and validate) exactly where patients see them.
+ * midnight. Combines three independent sources for that date:
+ *   - the regular weekly `availability` rows for that weekday,
+ *   - the recurring weekly `recurring_availability` rows for that weekday,
+ *   - any one-time `custom_availability` rows for that exact date.
+ * Extra slots ADD to the schedule (they never replace the regular hours), and
+ * overlapping/duplicate windows are harmless — the slot grid deduplicates the
+ * generated times, and booked appointments are filtered separately.
  */
 export async function getOpenAvailabilityWindows(
   admin: SupabaseClient,
@@ -22,9 +26,14 @@ export async function getOpenAvailabilityWindows(
   const [y, m, d] = date.split("-").map(Number);
   const dayOfWeek = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 
-  const [regular, custom] = await Promise.all([
+  const [regular, recurring, custom] = await Promise.all([
     admin
       .from("availability")
+      .select("start_time, end_time")
+      .eq("day_of_week", dayOfWeek)
+      .eq("is_available", true),
+    admin
+      .from("recurring_availability")
       .select("start_time, end_time")
       .eq("day_of_week", dayOfWeek)
       .eq("is_available", true),
@@ -36,7 +45,7 @@ export async function getOpenAvailabilityWindows(
   ]);
 
   const windows: OpenWindow[] = [];
-  for (const row of [...(regular.data ?? []), ...(custom.data ?? [])]) {
+  for (const row of [...(regular.data ?? []), ...(recurring.data ?? []), ...(custom.data ?? [])]) {
     const start = toMinutes(row.start_time as string);
     const end = toMinutes(row.end_time as string);
     if (end > start) windows.push({ start, end });

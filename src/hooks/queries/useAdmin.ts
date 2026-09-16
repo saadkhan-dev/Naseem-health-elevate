@@ -10,6 +10,12 @@ import {
   createCustomAvailability,
   updateCustomAvailability,
   deleteCustomAvailability,
+  getAllRecurringAvailability,
+  createRecurringAvailability,
+  updateRecurringAvailability,
+  deleteRecurringAvailability,
+  updateStoreSettings,
+  updateOrderDeliveryCharge,
   getStaffMembers,
   createService,
   updateService,
@@ -34,6 +40,12 @@ import {
   deletePaymentMethod,
   getRecentPatients,
   getPatientById,
+  createDeliveryArea,
+  updateDeliveryArea,
+  deleteDeliveryArea,
+  getActiveDeliveryAreas,
+  getAllDeliveryAreas,
+  type DeliveryArea,
   type AppointmentWithDetails,
   type Product,
   type DashboardStats,
@@ -41,10 +53,16 @@ import {
   type VideoPaymentStatusView,
   type RecentPatient,
   type CustomAvailabilityInput,
+  type RecurringAvailabilityInput,
 } from "@/lib/admin-data";
 import { adminGetChatUsage } from "@/lib/actions.functions";
 import type { ChatUsageRange, ChatUsageStats } from "@/lib/server/chat-usage";
-import type { Service, AvailabilitySlot, CustomAvailabilitySlot } from "@/lib/bookings";
+import type {
+  Service,
+  AvailabilitySlot,
+  CustomAvailabilitySlot,
+  RecurringAvailabilitySlot,
+} from "@/lib/bookings";
 import type { PaymentMethod } from "@/lib/payment";
 
 // --- Appointments ---
@@ -159,6 +177,120 @@ export function useDeleteCustomAvailability() {
       qc.invalidateQueries({ queryKey: ["admin", "custom-availability"] });
       qc.invalidateQueries({ queryKey: ["customAvailability"] });
       qc.invalidateQueries({ queryKey: ["bookedSlots"] });
+    },
+  });
+}
+
+// --- Recurring (weekly) extra availability ---
+
+export function useAdminRecurringAvailability() {
+  return useQuery<RecurringAvailabilitySlot[]>({
+    queryKey: ["admin", "recurring-availability"],
+    queryFn: getAllRecurringAvailability,
+  });
+}
+
+export function useCreateRecurringAvailability() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: RecurringAvailabilityInput) => createRecurringAvailability(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "recurring-availability"] });
+      qc.invalidateQueries({ queryKey: ["recurringAvailability"] });
+      qc.invalidateQueries({ queryKey: ["bookedSlots"] });
+    },
+  });
+}
+
+export function useUpdateRecurringAvailability() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<RecurringAvailabilityInput> }) =>
+      updateRecurringAvailability(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "recurring-availability"] });
+      qc.invalidateQueries({ queryKey: ["recurringAvailability"] });
+      qc.invalidateQueries({ queryKey: ["bookedSlots"] });
+    },
+  });
+}
+
+export function useDeleteRecurringAvailability() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteRecurringAvailability(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "recurring-availability"] });
+      qc.invalidateQueries({ queryKey: ["recurringAvailability"] });
+      qc.invalidateQueries({ queryKey: ["bookedSlots"] });
+    },
+  });
+}
+
+// --- Store settings (delivery charge) ---
+// The read side lives in `useShop.ts` (`useStoreSettings`) so the public
+// storefront never imports an admin-only hook module.
+
+export function useUpdateStoreSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Parameters<typeof updateStoreSettings>[0]) => updateStoreSettings(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["store-settings"] }),
+  });
+}
+
+// --- Product delivery charge on a single order ---
+
+export function useUpdateOrderDeliveryCharge(onDone?: () => void) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, deliveryCharge }: { id: string; deliveryCharge: number }) =>
+      updateOrderDeliveryCharge(id, deliveryCharge),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "orders"] });
+      onDone?.();
+    },
+  });
+}
+
+export function useDeliveryAreas() {
+  return useQuery<DeliveryArea[]>({
+    queryKey: ["delivery-areas"],
+    queryFn: getAllDeliveryAreas,
+    staleTime: 1000 * 60,
+  });
+}
+
+export function useCreateDeliveryArea() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createDeliveryArea,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["delivery-areas"] });
+      qc.invalidateQueries({ queryKey: ["active-delivery-areas"] });
+    },
+  });
+}
+
+export function useUpdateDeliveryArea() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof updateDeliveryArea>[1] }) =>
+      updateDeliveryArea(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["delivery-areas"] });
+      qc.invalidateQueries({ queryKey: ["active-delivery-areas"] });
+    },
+  });
+}
+
+export function useDeleteDeliveryArea() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: deleteDeliveryArea,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["delivery-areas"] });
+      qc.invalidateQueries({ queryKey: ["active-delivery-areas"] });
     },
   });
 }

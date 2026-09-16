@@ -45,6 +45,7 @@ import {
   formatTimeDisplay,
   getAvailability,
   getCustomAvailability,
+  getRecurringAvailability,
   getBookedSlots,
   generateTimeSlots,
 } from "@/lib/bookings";
@@ -240,8 +241,13 @@ function RescheduleDialog({
     }
     let cancelled = false;
     setLoading(true);
-    Promise.all([getAvailability(), getCustomAvailability(), getBookedSlots(date)])
-      .then(([availability, customAvailability, booked]) => {
+    Promise.all([
+      getAvailability(),
+      getCustomAvailability(),
+      getRecurringAvailability(),
+      getBookedSlots(date),
+    ])
+      .then(([availability, customAvailability, recurringAvailability, booked]) => {
         if (cancelled) return;
         const times = generateTimeSlots(
           availability,
@@ -251,6 +257,7 @@ function RescheduleDialog({
           todayInClinic(),
           nowTimeInClinic(),
           customAvailability,
+          recurringAvailability,
         );
         setAvailableTimes(times);
         setTime((cur) => (times.includes(cur) ? cur : (times[0] ?? "")));

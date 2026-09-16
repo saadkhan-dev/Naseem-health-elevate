@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { format } from "date-fns";
 import {
   Loader2,
@@ -14,6 +14,9 @@ import {
   Search,
   X,
   FileImage,
+  Truck,
+  Save,
+  ArrowRight,
 } from "lucide-react";
 import {
   useAdminOrders,
@@ -21,7 +24,9 @@ import {
   useAdminOrderRequests,
   useUpdateOrderRequest,
 } from "@/hooks/queries/useAdminExtra";
-import { useSetOrderPaymentStatus } from "@/hooks/queries/useShop";
+import { useSetOrderPaymentStatus, useStoreSettings } from "@/hooks/queries/useShop";
+import { useUpdateOrderDeliveryCharge } from "@/hooks/queries/useAdmin";
+import { DEFAULT_STORE_SETTINGS, deliveryChargeLabel } from "@/lib/delivery";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -50,8 +55,9 @@ export const Route = createFileRoute("/admin/orders")({
 });
 
 const statusStyles: Record<string, string> = {
+  pending_payment: "bg-amber-100 text-amber-800",
   pending: "bg-blue-100 text-blue-700",
-  confirmed: "bg-amber-100 text-amber-700",
+  confirmed: "bg-teal-100 text-teal-800",
   shipped: "bg-purple-100 text-purple-700",
   delivered: "bg-green-100 text-green-700",
   cancelled: "bg-red-100 text-red-700",
@@ -109,6 +115,22 @@ function AdminOrders() {
   const [receiptOrder, setReceiptOrder] = useState<AdminOrder | null>(null);
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [receiptLoading, setReceiptLoading] = useState(false);
+
+  // ---- Store delivery charge settings ----
+  // Read-only here: the store configuration is edited on /admin/settings and
+  // only a single order's own charge is adjusted from this page.
+  const { data: storeSettings } = useStoreSettings();
+  const settings = storeSettings ?? DEFAULT_STORE_SETTINGS;
+  const updateDelivery = useUpdateOrderDeliveryCharge();
+  const [deliveryDrafts, setDeliveryDrafts] = useState<Record<string, string>>({});
+
+  async function handleSaveOrderDelivery(o: AdminOrder) {
+    setMessage("");
+    const draft = deliveryDrafts[o.id];
+    const value = draft == null ? Number(o.delivery_charge ?? 0) : Math.max(0, Number(draft) || 0);
+    const result = await updateDelivery.mutateAsync({ id: o.id, deliveryCharge: value });
+    if (result.error) setMessage(result.error);
+  }
 
   const filteredOrders = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -207,6 +229,35 @@ function AdminOrders() {
           {message}
         </div>
       )}
+
+      {/* Store delivery charges */}
+      {/* Delivery charges — status summary; the value itself is set on the
+          dedicated Delivery Charges page. */}
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-5 py-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Truck className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-foreground">Delivery Charges</div>
+            <div className="text-xs text-muted-foreground">
+              {settings.delivery_is_active
+                ? `${deliveryChargeLabel(settings.delivery_charge)} per new order${
+                    settings.free_delivery_threshold != null
+                      ? ` · free over Rs. ${settings.free_delivery_threshold.toLocaleString()}`
+                      : ""
+                  }`
+                : "No delivery charge is added to new orders"}
+            </div>
+          </div>
+        </div>
+        <Link
+          to="/admin/settings"
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-border px-3.5 text-xs font-semibold text-foreground transition hover:border-primary/40 hover:text-primary"
+        >
+          Manage <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
 
       {/* Patient order requests */}
       <section className="mt-6">
@@ -399,9 +450,9 @@ function AdminOrders() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {["pending", "confirmed", "shipped", "delivered", "cancelled"].map((s) => (
+                        {["pending_payment", "pending", "confirmed", "shipped", "delivered", "cancelled"].map((s) => (
                           <SelectItem key={s} value={s}>
-                            {s}
+                            {s.replace("_", " ")}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -428,12 +479,66 @@ function AdminOrders() {
                     </div>
                   ))}
                 </div>
-                <div className="mt-2 flex items-center justify-between border-t border-border pt-2 text-sm">
-                  <span className="text-muted-foreground">Total</span>
-                  <span className="font-bold text-foreground">
-                    Rs. {Number(o.total).toLocaleString()}
-                  </span>
+                <div className="mt-2 space-y-1.5 border-t border-border pt-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Product Price</span>
+                    <span className="font-medium text-foreground">
+                      Rs. {orderSubtotal(o).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground inline-flex items-center gap-1.5">
+                      Delivery Charges {o.delivery_area_name ? `— ${o.delivery_area_name}` : ""}
+                      {o.delivery_charge_override != null ? (
+                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                          Adjusted
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="font-medium text-foreground">
+                      {deliveryChargeLabel(Number(o.delivery_charge ?? 0) || 0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-border pt-1.5">
+                    <span className="font-semibold text-foreground">Grand Total</span>
+                    <span className="font-bold text-foreground">
+                      Rs. {Number(o.total).toLocaleString()}
+                    </span>
+                  </div>
                 </div>
+                {canEditDelivery(o) && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-muted/30 px-3 py-2">
+                    <span className="text-xs text-muted-foreground">
+                      Adjust delivery charge (Rs.)
+                    </span>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={deliveryDrafts[o.id] ?? String(Number(o.delivery_charge ?? 0) || 0)}
+                      onChange={(e) =>
+                        setDeliveryDrafts((prev) => ({ ...prev, [o.id]: e.target.value }))
+                      }
+                      className="h-8 w-28 text-xs"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1.5"
+                      onClick={() => handleSaveOrderDelivery(o)}
+                      disabled={updateDelivery.isPending}
+                    >
+                      {updateDelivery.isPending ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Save className="h-3 w-3" />
+                      )}
+                      Save
+                    </Button>
+                    <span className="text-[11px] text-muted-foreground">
+                      Recalculates the grand total. Available while payment is pending or awaiting verification.
+                    </span>
+                  </div>
+                )}
                 <OrderPaymentBlock
                   order={o}
                   onStatus={handlePaymentStatus}
@@ -497,6 +602,23 @@ function AdminOrders() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/** Product subtotal of an order — legacy rows store no subtotal, so fall back
+ *  to (total - delivery charge) which is exactly the product price for them. */
+function orderSubtotal(o: AdminOrder): number {
+  const delivery = Number(o.delivery_charge ?? 0) || 0;
+  if (o.subtotal != null) return Number(o.subtotal);
+  return Math.max(0, Number(o.total ?? 0) - delivery);
+}
+
+/** Delivery charge can only be adjusted while payment is pending or awaiting verification. */
+function canEditDelivery(o: AdminOrder): boolean {
+  return (
+    o.payment_status === "payment_pending" ||
+    o.payment_status === "payment_submitted" ||
+    o.payment_status === "payment_failed"
   );
 }
 

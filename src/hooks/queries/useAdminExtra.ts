@@ -6,6 +6,7 @@ import {
   deleteFaqAdmin,
   getSupportMessagesAdmin,
   updateSupportMessageAdmin,
+  replySupportMessageAdmin,
   getDoctorProfileAdmin,
   updateDoctorProfileAdmin,
   getDocumentsAdmin,
@@ -99,6 +100,15 @@ export function useUpdateSupportMessage() {
   });
 }
 
+export function useReplySupportMessage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reply }: { id: string; reply: string }) =>
+      replySupportMessageAdmin(id, reply),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["support", "admin"] }),
+  });
+}
+
 // --- Doctor profile ---
 
 export function useAdminDoctorProfile() {
@@ -163,8 +173,13 @@ export function useAdminOrders() {
 export function useUpdateOrderStatus() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: AdminOrder["status"] }) =>
-      updateOrderStatusAdmin(id, status),
+    mutationFn: ({
+      id,
+      status,
+    }: {
+      id: string;
+      status: "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
+    }) => updateOrderStatusAdmin(id, status),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "orders"] }),
   });
 }
@@ -232,10 +247,10 @@ export function useSendDueReminders() {
 
 // --- Analytics ---
 
-export function useAnalytics() {
+export function useAnalytics(range: "today" | "7d" | "30d" | "90d" = "30d") {
   return useQuery<AnalyticsStats>({
-    queryKey: ["admin", "analytics"],
-    queryFn: getAnalyticsAdmin,
+    queryKey: ["admin", "analytics", range],
+    queryFn: () => getAnalyticsAdmin(range),
     refetchInterval: 60000,
   });
 }

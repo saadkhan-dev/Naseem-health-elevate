@@ -55,10 +55,21 @@ export async function createPatientNotification(
     title: string;
     body: string;
     link?: string | null;
+    /** Optional dedup key; the helper skips the insert when this row already exists. */
+    dedupKey?: string | null;
   },
 ): Promise<void> {
   if (!input.userId) return;
   try {
+    if (input.dedupKey) {
+      const { data: existing } = await admin
+        .from("patient_notifications")
+        .select("id")
+        .eq("user_id", input.userId)
+        .eq("dedup_key", input.dedupKey)
+        .maybeSingle();
+      if (existing) return; // already notified for this event
+    }
     await admin.from("patient_notifications").insert({
       user_id: input.userId,
       type: input.type,
@@ -66,6 +77,7 @@ export async function createPatientNotification(
       body: input.body.slice(0, 1000),
       link: input.link ?? null,
       read_at: null,
+      dedup_key: input.dedupKey ?? null,
     });
   } catch {
     // Best-effort: never break the primary flow when a notification fails.

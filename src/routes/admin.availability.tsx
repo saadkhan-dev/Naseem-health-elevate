@@ -10,6 +10,7 @@ import {
   CalendarPlus,
   Sparkles,
   CalendarClock,
+  Repeat,
 } from "lucide-react";
 import {
   useAdminAvailability,
@@ -18,6 +19,10 @@ import {
   useCreateCustomAvailability,
   useUpdateCustomAvailability,
   useDeleteCustomAvailability,
+  useAdminRecurringAvailability,
+  useCreateRecurringAvailability,
+  useUpdateRecurringAvailability,
+  useDeleteRecurringAvailability,
   useStaffMembers,
 } from "@/hooks/queries/useAdmin";
 import { Button } from "@/components/ui/button";
@@ -32,7 +37,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { QueryError } from "@/components/admin/QueryError";
-import { formatTimeDisplay, type CustomAvailabilitySlot } from "@/lib/bookings";
+import {
+  formatTimeDisplay,
+  type CustomAvailabilitySlot,
+  type RecurringAvailabilitySlot,
+} from "@/lib/bookings";
 import { toMinutes } from "@/lib/clinic";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -61,6 +70,26 @@ const EMPTY_FORM: CustomSlotForm = {
   isAvailable: true,
 };
 
+interface RecurringSlotForm {
+  id: string | null;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  doctorId: string;
+  notes: string;
+  isAvailable: boolean;
+}
+
+const EMPTY_RECURRING_FORM: RecurringSlotForm = {
+  id: null,
+  dayOfWeek: 1,
+  startTime: "",
+  endTime: "",
+  doctorId: "",
+  notes: "",
+  isAvailable: true,
+};
+
 /** Select sentinel for "no specific provider (clinic-wide)" — Radix Select
  *  mangles an empty-string item value in some versions, so we map it. */
 const NO_PROVIDER = "__clinic_wide__";
@@ -69,16 +98,23 @@ function AdminAvailability() {
   const { data: slots, isLoading, isError, error } = useAdminAvailability();
   const updateAvail = useUpdateAvailability();
   const { data: customSlots, isLoading: customSlotsLoading } = useAdminCustomAvailability();
+  const { data: recurringSlots, isLoading: recurringSlotsLoading } =
+    useAdminRecurringAvailability();
   const { data: staff, isLoading: staffLoading } = useStaffMembers();
   const createCustom = useCreateCustomAvailability();
   const updateCustom = useUpdateCustomAvailability();
   const deleteCustom = useDeleteCustomAvailability();
+  const createRecurring = useCreateRecurringAvailability();
+  const updateRecurring = useUpdateRecurringAvailability();
+  const deleteRecurring = useDeleteRecurringAvailability();
   const [editState, setEditState] = useState<
     Record<string, { start_time: string; end_time: string }>
   >({});
   const [message, setMessage] = useState("");
   const [customMessage, setCustomMessage] = useState("");
   const [customForm, setCustomForm] = useState<CustomSlotForm>(EMPTY_FORM);
+  const [recurringMessage, setRecurringMessage] = useState("");
+  const [recurringForm, setRecurringForm] = useState<RecurringSlotForm>(EMPTY_RECURRING_FORM);
 
   if (isLoading) {
     return (
@@ -221,11 +257,99 @@ function AdminAvailability() {
 
   const customBusy = createCustom.isPending || updateCustom.isPending || deleteCustom.isPending;
 
+  // ---- Recurring (weekly) extra availability ----
+
+  /** Mirrors the server check: same weekday + same doctor scope + overlap. */
+  function conflictWithRecurring(form: RecurringSlotForm): string | null {
+    if (toMinutes(form.endTime) <= toMinutes(form.startTime)) {
+      return "End time must be after the start time.";
+    }
+    const candidateDoctor = form.doctorId || null;
+    const clash = (recurringSlots ?? []).some((slot) => {
+      if (form.id && slot.id === form.id) return false;
+      if (slot.day_of_week !== form.dayOfWeek) return false;
+      if ((slot.doctor_id ?? null) !== candidateDoctor) return false;
+      return (
+        toMinutes(form.startTime) < toMinutes(slot.end_time) &&
+        toMinutes(slot.start_time) < toMinutes(form.endTime)
+      );
+    });
+    if (clash) {
+      return "That time overlaps another recurring slot for the same weekday and provider. Pick a different time.";
+    }
+    return null;
+  }
+
+  async function handleRecurringSubmit() {
+    setRecurringMessage("");
+    if (!recurringForm.startTime || !recurringForm.endTime) {
+      setRecurringMessage("Please choose a start and end time.");
+      return;
+    }
+    const conflict = conflictWithRecurring(recurringForm);
+    if (conflict) {
+      setRecurringMessage(conflict);
+      return;
+    }
+
+    const payload = {
+      doctor_id: recurringForm.doctorId || null,
+      day_of_week: recurringForm.dayOfWeek,
+      start_time: recurringForm.startTime,
+      end_time: recurringForm.endTime,
+      is_available: recurringForm.isAvailable,
+      notes: recurringForm.notes.trim() || null,
+    };
+
+    const result = recurringForm.id
+      ? await updateRecurring.mutateAsync({ id: recurringForm.id, data: payload })
+      : await createRecurring.mutateAsync(payload);
+    if (result.error) {
+      setRecurringMessage(result.error);
+      return;
+    }
+    setRecurringForm(EMPTY_RECURRING_FORM);
+  }
+
+  function startRecurringEdit(slot: RecurringAvailabilitySlot) {
+    setRecurringMessage("");
+    setRecurringForm({
+      id: slot.id,
+      dayOfWeek: slot.day_of_week,
+      startTime: slot.start_time.slice(0, 5),
+      endTime: slot.end_time.slice(0, 5),
+      doctorId: slot.doctor_id ?? "",
+      notes: slot.notes ?? "",
+      isAvailable: slot.is_available,
+    });
+  }
+
+  async function handleRecurringToggle(slot: RecurringAvailabilitySlot, current: boolean) {
+    setRecurringMessage("");
+    const result = await updateRecurring.mutateAsync({
+      id: slot.id,
+      data: { is_available: !current },
+    });
+    if (result.error) setRecurringMessage(result.error);
+  }
+
+  async function handleRecurringDelete(slot: RecurringAvailabilitySlot) {
+    setRecurringMessage("");
+    if (!window.confirm("Delete this recurring weekly slot? Future dates will no longer offer it."))
+      return;
+    const result = await deleteRecurring.mutateAsync(slot.id);
+    if (result.error) setRecurringMessage(result.error);
+  }
+
+  const recurringBusy =
+    createRecurring.isPending || updateRecurring.isPending || deleteRecurring.isPending;
+
   return (
     <div>
       <h1 className="text-2xl font-semibold text-foreground">Availability</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        Manage your regular weekly hours, plus one-time extra slots for specific dates.
+        Manage your regular weekly hours, plus recurring weekly extra slots and one-time slots for
+        specific dates.
       </p>
 
       {isError && (
@@ -246,20 +370,26 @@ function AdminAvailability() {
         </div>
       )}
 
+      {recurringMessage && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {recurringMessage}
+        </div>
+      )}
+
       {/* ============ Regular / weekly availability ============ */}
       <section className="mt-6 rounded-2xl border border-border bg-card p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold text-foreground">Regular Availability</h2>
+              <h2 className="text-lg font-semibold text-foreground">Regular Weekly Availability</h2>
               <Badge variant="secondary" className="gap-1">
                 <CalendarClock className="h-3 w-3" />
-                Repeats weekly
+                Regular Weekly
               </Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              Clinic hours that apply every week, unchanged. Use the section below for one-time
-              extras.
+              Clinic hours that apply every week, unchanged. Use the sections below for recurring
+              and one-time extras.
             </p>
           </div>
         </div>
@@ -324,7 +454,245 @@ function AdminAvailability() {
         </div>
       </section>
 
-      {/* ============ Extra / custom availability ============ */}
+      {/* ============ Recurring (weekly) extra availability ============ */}
+      <section className="mt-6 rounded-2xl border border-border bg-card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-semibold text-foreground">Recurring Extra Slot</h2>
+              <Badge variant="secondary" className="gap-1">
+                <Repeat className="h-3 w-3" />
+                Repeats every week
+              </Badge>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Open the same time window every week without adding it manually each time — e.g.
+              Monday 5:00 PM–7:00 PM. Every future matching weekday offers it on patient booking;
+              editing or deleting it only changes future availability (existing appointments are
+              never touched).
+            </p>
+          </div>
+        </div>
+
+        {/* Add / edit form */}
+        <div className="mt-5 rounded-xl border border-border bg-card p-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            {recurringForm.id ? (
+              <Pencil className="h-4 w-4 text-primary" />
+            ) : (
+              <Repeat className="h-4 w-4 text-primary" />
+            )}
+            {recurringForm.id ? "Edit Recurring Slot" : "Add a Recurring Slot"}
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                Weekday <span className="text-destructive">*</span>
+              </label>
+              <Select
+                value={String(recurringForm.dayOfWeek)}
+                onValueChange={(v) =>
+                  setRecurringForm((prev) => ({ ...prev, dayOfWeek: Number(v) }))
+                }
+              >
+                <SelectTrigger className="h-9 w-full text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DAY_NAMES.map((name, i) => (
+                    <SelectItem key={name} value={String(i)}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                Provider <span className="text-muted-foreground/70">(optional — clinic-wide)</span>
+              </label>
+              <Select
+                value={recurringForm.doctorId || NO_PROVIDER}
+                onValueChange={(v) =>
+                  setRecurringForm((prev) => ({
+                    ...prev,
+                    doctorId: v === NO_PROVIDER ? "" : v,
+                  }))
+                }
+                disabled={staffLoading}
+              >
+                <SelectTrigger className="h-9 w-full text-sm">
+                  <SelectValue
+                    placeholder={staffLoading ? "Loading..." : "No specific provider (clinic-wide)"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_PROVIDER}>No specific provider (clinic-wide)</SelectItem>
+                  {(staff ?? []).map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      {member.full_name || "Provider"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                Start Time <span className="text-destructive">*</span>
+              </label>
+              <Input
+                type="time"
+                value={recurringForm.startTime}
+                onChange={(e) =>
+                  setRecurringForm((prev) => ({ ...prev, startTime: e.target.value }))
+                }
+                className="h-9 w-full text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                End Time <span className="text-destructive">*</span>
+              </label>
+              <Input
+                type="time"
+                value={recurringForm.endTime}
+                onChange={(e) => setRecurringForm((prev) => ({ ...prev, endTime: e.target.value }))}
+                className="h-9 w-full text-sm"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                Notes <span className="text-muted-foreground/70">(optional)</span>
+              </label>
+              <Input
+                value={recurringForm.notes}
+                onChange={(e) => setRecurringForm((prev) => ({ ...prev, notes: e.target.value }))}
+                placeholder="e.g. Every Monday evening clinic"
+                className="h-9 w-full text-sm"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4 sm:col-span-2">
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <span className="text-xs font-medium text-muted-foreground">Active</span>
+                <Switch
+                  checked={recurringForm.isAvailable}
+                  onCheckedChange={(v) => setRecurringForm((prev) => ({ ...prev, isAvailable: v }))}
+                />
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={handleRecurringSubmit}
+                  disabled={recurringBusy}
+                  className="h-9"
+                >
+                  {recurringBusy ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : recurringForm.id ? (
+                    <Save className="h-3 w-3" />
+                  ) : (
+                    <Plus className="h-3 w-3" />
+                  )}
+                  {recurringForm.id ? "Save Changes" : "Add Recurring Slot"}
+                </Button>
+                {recurringForm.id && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9"
+                    onClick={() => {
+                      setRecurringForm(EMPTY_RECURRING_FORM);
+                      setRecurringMessage("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* List of recurring slots */}
+        <div className="mt-5">
+          <div className="text-sm font-semibold text-foreground">
+            Existing Recurring Slots
+            {recurringSlotsLoading && (
+              <Loader2 className="ml-2 inline h-3.5 w-3.5 animate-spin text-muted-foreground" />
+            )}
+          </div>
+
+          {!recurringSlotsLoading && (recurringSlots?.length ?? 0) === 0 ? (
+            <p className="mt-3 rounded-lg border border-dashed border-border bg-background/60 px-4 py-5 text-center text-sm text-muted-foreground">
+              No recurring slots yet. Add one above to open the same weekday window every week.
+            </p>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {(recurringSlots ?? []).map((slot) => (
+                <div
+                  key={slot.id}
+                  className="flex flex-wrap items-center gap-3 rounded-xl border bg-card px-4 py-3"
+                >
+                  <Switch
+                    checked={slot.is_available}
+                    onCheckedChange={() => handleRecurringToggle(slot, slot.is_available)}
+                    disabled={recurringBusy}
+                  />
+                  <div className="min-w-[150px]">
+                    <div className="text-sm font-semibold text-foreground">
+                      Every {DAY_NAMES[slot.day_of_week] ?? "—"}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {formatTimeDisplay(slot.start_time)} – {formatTimeDisplay(slot.end_time)}
+                    </div>
+                  </div>
+                  <Badge variant="secondary" className="gap-1">
+                    <Repeat className="h-3 w-3" /> Recurring Extra Slot
+                  </Badge>
+                  <div className="min-w-[120px] text-sm text-muted-foreground">
+                    {slot.doctor_id ? staffName(slot.doctor_id) : "Clinic-wide"}
+                  </div>
+                  {slot.notes && (
+                    <div className="min-w-[120px] max-w-[200px] text-xs text-muted-foreground">
+                      {slot.notes}
+                    </div>
+                  )}
+                  <div className="ml-auto flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8"
+                      onClick={() => startRecurringEdit(slot)}
+                      disabled={recurringBusy}
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-destructive hover:text-destructive"
+                      onClick={() => handleRecurringDelete(slot)}
+                      disabled={recurringBusy}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ============ One-time extra availability (specific date) ============ */}
       <section className="mt-6 rounded-2xl border border-primary/25 bg-primary-soft/40 p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -332,11 +700,11 @@ function AdminAvailability() {
               <h2 className="text-lg font-semibold text-foreground">Extra / Custom Availability</h2>
               <Badge variant="secondary" className="gap-1">
                 <Sparkles className="h-3 w-3" />
-                One-time slots
+                One-Time Extra Slot
               </Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              Add an extra slot for a specific date without changing the regular schedule — e.g. a
+              Add an extra slot for one specific date without changing the regular schedule — e.g. a
               special Sunday clinic, or a second provider&apos;s extra hours. These appear live on
               patient booking.
             </p>
@@ -363,9 +731,7 @@ function AdminAvailability() {
                 type="date"
                 value={customForm.date}
                 min={new Date().toISOString().split("T")[0]}
-                onChange={(e) =>
-                  setCustomForm((prev) => ({ ...prev, date: e.target.value }))
-                }
+                onChange={(e) => setCustomForm((prev) => ({ ...prev, date: e.target.value }))}
                 className="h-9 w-full sm:w-56"
               />
             </div>
@@ -377,9 +743,7 @@ function AdminAvailability() {
               <Input
                 type="time"
                 value={customForm.startTime}
-                onChange={(e) =>
-                  setCustomForm((prev) => ({ ...prev, startTime: e.target.value }))
-                }
+                onChange={(e) => setCustomForm((prev) => ({ ...prev, startTime: e.target.value }))}
                 className="h-9 w-full text-sm"
               />
             </div>
@@ -391,16 +755,17 @@ function AdminAvailability() {
               <Input
                 type="time"
                 value={customForm.endTime}
-                onChange={(e) =>
-                  setCustomForm((prev) => ({ ...prev, endTime: e.target.value }))
-                }
+                onChange={(e) => setCustomForm((prev) => ({ ...prev, endTime: e.target.value }))}
                 className="h-9 w-full text-sm"
               />
             </div>
 
             <div className="sm:col-span-2">
               <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                Provider <span className="text-muted-foreground/70">(optional — leave empty for clinic-wide)</span>
+                Provider{" "}
+                <span className="text-muted-foreground/70">
+                  (optional — leave empty for clinic-wide)
+                </span>
               </label>
               <Select
                 value={customForm.doctorId || NO_PROVIDER}
@@ -418,9 +783,7 @@ function AdminAvailability() {
                   />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NO_PROVIDER}>
-                    No specific provider (clinic-wide)
-                  </SelectItem>
+                  <SelectItem value={NO_PROVIDER}>No specific provider (clinic-wide)</SelectItem>
                   {(staff ?? []).map((member) => (
                     <SelectItem key={member.id} value={member.id}>
                       {member.full_name || "Provider"}
@@ -451,7 +814,12 @@ function AdminAvailability() {
                 />
               </label>
               <div className="flex flex-wrap items-center gap-2">
-                <Button size="sm" onClick={handleCustomSubmit} disabled={customBusy} className="h-9">
+                <Button
+                  size="sm"
+                  onClick={handleCustomSubmit}
+                  disabled={customBusy}
+                  className="h-9"
+                >
                   {customBusy ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
                   ) : customForm.id ? (

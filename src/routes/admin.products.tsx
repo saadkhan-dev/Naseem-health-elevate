@@ -38,6 +38,7 @@ import {
   productDiscountPercent,
   isProductOfferActive,
 } from "@/lib/product-offer-types";
+import { DELIVERY_ESTIMATE_OPTIONS } from "@/lib/delivery";
 import { getProductImages, type Product } from "@/lib/admin-data";
 import { uploadProductImage, deleteStoredProductImages } from "@/lib/product-images";
 import { QueryError } from "@/components/admin/QueryError";
@@ -84,6 +85,10 @@ function isPackPreset(value: string) {
   return PACK_SIZE_OPTIONS.includes(value);
 }
 
+function isDeliveryPreset(value: string) {
+  return (DELIVERY_ESTIMATE_OPTIONS as readonly string[]).includes(value);
+}
+
 function AdminProducts() {
   const { data: products, isLoading, isError, error } = useAdminProducts();
   const createProduct = useCreateProduct();
@@ -101,6 +106,9 @@ function AdminProducts() {
   const [packSizeOther, setPackSizeOther] = useState("");
   const [condition, setCondition] = useState("");
   const [conditionOther, setConditionOther] = useState("");
+  // Optional estimated delivery time — preset, "Other" (custom) or none.
+  const [deliveryEstimate, setDeliveryEstimate] = useState("");
+  const [deliveryEstimateOther, setDeliveryEstimateOther] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const today = todayInClinic();
@@ -115,6 +123,8 @@ function AdminProducts() {
     setPackSizeOther("");
     setCondition("Fresh Condition");
     setConditionOther("");
+    setDeliveryEstimate("");
+    setDeliveryEstimateOther("");
     setSaveError(null);
     setDialogOpen(true);
   }
@@ -160,6 +170,15 @@ function AdminProducts() {
     } else {
       setCondition(cond ? OTHER : "");
       setConditionOther(cond);
+    }
+
+    const estimate = p.delivery_estimate?.trim() ?? "";
+    if (estimate && isDeliveryPreset(estimate)) {
+      setDeliveryEstimate(estimate);
+      setDeliveryEstimateOther("");
+    } else {
+      setDeliveryEstimate(estimate ? OTHER : "");
+      setDeliveryEstimateOther(estimate);
     }
 
     setSaveError(null);
@@ -225,6 +244,8 @@ function AdminProducts() {
   async function handleSave() {
     const packSizeValue = packSize === OTHER ? packSizeOther.trim() : packSize.trim();
     const conditionValue = condition === OTHER ? conditionOther.trim() : condition.trim();
+    const deliveryEstimateValue =
+      deliveryEstimate === OTHER ? deliveryEstimateOther.trim() : deliveryEstimate.trim();
 
     const data = {
       ...form,
@@ -232,6 +253,7 @@ function AdminProducts() {
       offer_end_date: form.offer_end_date || null,
       pack_size: packSizeValue || null,
       product_condition: conditionValue || null,
+      delivery_estimate: deliveryEstimateValue || null,
       images,
     };
 
@@ -315,6 +337,9 @@ function AdminProducts() {
                       {offerActive && <span className="ml-1 line-through">Rs. {p.price}</span>}
                       {p.category && <span className="ml-1 capitalize">· {p.category}</span>}
                       {p.pack_size && <span className="ml-1">· {p.pack_size}</span>}
+                      {p.delivery_estimate && (
+                        <span className="ml-1">· Delivery: {p.delivery_estimate}</span>
+                      )}
                       {typeof p.stock_quantity === "number" && (
                         <span className="ml-1">· {p.stock_quantity} in stock</span>
                       )}
@@ -589,6 +614,39 @@ function AdminProducts() {
                     onChange={(e) => setConditionOther(e.target.value)}
                   />
                 )}
+              </div>
+
+              {/* Estimated delivery time — shown to patients on shop/product/cart */}
+              <div>
+                <label className="text-sm font-medium text-foreground">
+                  Estimated Delivery{" "}
+                  <span className="font-normal text-muted-foreground">(optional)</span>
+                </label>
+                <select
+                  value={deliveryEstimate}
+                  onChange={(e) => setDeliveryEstimate(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground outline-none transition focus:border-primary/50"
+                >
+                  <option value="">None</option>
+                  {DELIVERY_ESTIMATE_OPTIONS.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                  <option value={OTHER}>Custom</option>
+                </select>
+                {deliveryEstimate === OTHER && (
+                  <Input
+                    className="mt-2"
+                    value={deliveryEstimateOther}
+                    placeholder="e.g. Within 24 hours"
+                    onChange={(e) => setDeliveryEstimateOther(e.target.value)}
+                  />
+                )}
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Shown to patients on the product page, shop cards, cart and checkout — leave empty
+                  to hide it for this product.
+                </p>
               </div>
             </div>
 

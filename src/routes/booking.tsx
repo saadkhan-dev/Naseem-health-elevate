@@ -19,6 +19,7 @@ import {
   useServices,
   useAvailability,
   useCustomAvailability,
+  useRecurringAvailability,
   useTimeSlots,
   useCreateAppointment,
 } from "@/hooks/queries/useBookings";
@@ -85,6 +86,7 @@ function BookingPage() {
   const { data: services, isLoading: servicesLoading } = useServices();
   const { data: availability } = useAvailability();
   const { data: customAvailability } = useCustomAvailability();
+  const { data: recurringAvailability } = useRecurringAvailability();
   const { slots, isLoading: slotsLoading } = useTimeSlots(date, serviceId, services);
   const createAppointment = useCreateAppointment();
   const { data: videoOffers } = usePublicVideoOffers();
@@ -115,9 +117,16 @@ function BookingPage() {
     if (user?.email && !email && !emailTouched.current) setEmail(user.email);
   }, [profile, user, name, phone, email]);
 
+  // Weekdays that offer bookable times = regular weekly schedule + recurring
+  // weekly extra slots (so a recurring slot on a normally-closed weekday still
+  // opens that weekday in the calendar).
   const openDays = React.useMemo(
-    () => new Set(availability?.map((a) => a.day_of_week) ?? []),
-    [availability],
+    () =>
+      new Set([
+        ...(availability?.map((a) => a.day_of_week) ?? []),
+        ...(recurringAvailability?.map((r) => r.day_of_week) ?? []),
+      ]),
+    [availability, recurringAvailability],
   );
 
   // Calendar dates that have a one-time extra/custom slot (e.g. a special
@@ -268,9 +277,7 @@ function BookingPage() {
                   }}
                   disabled={(d) =>
                     isDateBeforeTodayClinic(d) ||
-                    (!isHomeVisit &&
-                      !openDays.has(d.getDay()) &&
-                      !customDates.has(toClinicDate(d)))
+                    (!isHomeVisit && !openDays.has(d.getDay()) && !customDates.has(toClinicDate(d)))
                   }
                   initialFocus
                   className="mx-auto [--cell-size:1.75rem] min-[360px]:[--cell-size:2rem]"

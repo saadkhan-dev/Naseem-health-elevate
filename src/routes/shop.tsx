@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Loader2, ShoppingCart, Star, Zap, PackageX, Check, Ban } from "lucide-react";
+import { Loader2, ShoppingCart, Star, Zap, PackageX, Check, Ban, Truck } from "lucide-react";
 import { Nav } from "@/components/site/Nav";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   isProductOfferActive,
   isProductOrderable,
 } from "@/lib/product-offer-types";
+import { productDeliveryLabel } from "@/lib/delivery";
 import type { Product } from "@/lib/admin-data";
 
 export const Route = createFileRoute("/shop")({
@@ -193,6 +194,12 @@ function ShopPage() {
                         {productOfferLabel(p) && (
                           <div className="mt-1 inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
                             {productOfferLabel(p)}
+                          </div>
+                        )}
+                        {productDeliveryLabel(p) && (
+                          <div className="mt-1 flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                            <Truck className="h-3 w-3" />
+                            {productDeliveryLabel(p)}
                           </div>
                         )}
                       </div>

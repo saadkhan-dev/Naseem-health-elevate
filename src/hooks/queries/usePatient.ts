@@ -17,11 +17,14 @@ import {
   getMyOrders,
   getMyOrderDetail,
   submitOrderRequest,
+  getMySupportMessages,
+  submitSupportTicket,
   type PatientAppointment,
   type PatientNotification,
   type PatientDocument,
   type PatientTestRecommendation,
   type PatientOrder,
+  type PatientSupportMessage,
 } from "@/lib/patient-data";
 
 // --- Appointments ---
@@ -198,6 +201,28 @@ export function useSubmitOrderRequest() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["patient", "orders"] });
       qc.invalidateQueries({ queryKey: ["patient", "order"] });
+    },
+  });
+}
+
+// --- Support ---
+
+export function useMySupportMessages(enabled = true) {
+  return useQuery<{ error: string | null; messages: PatientSupportMessage[] }>({
+    queryKey: ["patient", "support"],
+    queryFn: getMySupportMessages,
+    enabled,
+    refetchInterval: 60000,
+  });
+}
+
+export function useSubmitSupportTicket() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { subject?: string; message: string }) => submitSupportTicket(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["patient", "support"] });
+      qc.invalidateQueries({ queryKey: ["patient", "notifications"] });
     },
   });
 }

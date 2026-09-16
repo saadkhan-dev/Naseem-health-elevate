@@ -1,6 +1,13 @@
 import { useMemo, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Loader2, Search as SearchIcon, ArrowRight, SearchX, AlertTriangle } from "lucide-react";
+import {
+  Loader2,
+  Search as SearchIcon,
+  ArrowRight,
+  SearchX,
+  AlertTriangle,
+  Truck,
+} from "lucide-react";
 import { Nav } from "@/components/site/Nav";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { Input } from "@/components/ui/input";
@@ -8,6 +15,7 @@ import { QueryError } from "@/components/admin/QueryError";
 import { usePublishedProducts } from "@/hooks/queries/useContent";
 import type { Product } from "@/lib/admin-data";
 import { productEffectivePrice, productOfferLabel } from "@/lib/product-offer-types";
+import { productDeliveryLabel } from "@/lib/delivery";
 import { todayInClinic } from "@/lib/clinic";
 import { z } from "zod";
 
@@ -47,13 +55,7 @@ function SearchPage() {
     const all = products ?? [];
     if (!hasQuery) return all;
     return all.filter((p) =>
-      [
-        p.name,
-        p.category,
-        p.description,
-        p.pack_size,
-        p.product_condition,
-      ]
+      [p.name, p.category, p.description, p.pack_size, p.product_condition]
         .filter((v): v is string => typeof v === "string")
         .some((v) => v.toLowerCase().includes(queryLower)),
     );
@@ -267,6 +269,12 @@ function ProductCard({ product, today }: { product: Product; today: string }) {
         {product.description && (
           <div className="mt-1.5 line-clamp-2 text-[13px] text-muted-foreground sm:text-xs">
             {product.description}
+          </div>
+        )}
+        {productDeliveryLabel(product) && (
+          <div className="mt-1.5 flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+            <Truck className="h-3 w-3" />
+            {productDeliveryLabel(product)}
           </div>
         )}
         <div className="mt-auto flex items-baseline justify-between gap-2 pt-3">

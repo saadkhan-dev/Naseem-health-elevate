@@ -17,6 +17,7 @@ import {
   buildAppointmentMessages,
   buildRescheduleMessages,
   buildStatusChangeMessages,
+  buildSupportReplyMessages,
   buildVideoReadyMessages,
   getNotificationConfig,
   normalizeE164Phone,
@@ -29,6 +30,7 @@ import {
   type NotificationResult,
   type RescheduleNotificationDetails,
   type StatusChangeNotificationDetails,
+  type SupportReplyNotificationDetails,
   type VideoReadyNotificationDetails,
   type WhatsAppTemplateId,
 } from "@/lib/notifications";
@@ -261,6 +263,38 @@ export async function sendRescheduleNotifications(
   });
 }
 
+/**
+ * Send the clinic's reply to a public support-form message.
+ *
+ * Delivers only to channels the sender actually provided (email and/or SMS).
+ * WhatsApp is intentionally excluded here because out-of-session WhatsApp
+ * requires an approved content template that does not exist for support
+ * replies; email + SMS cover the contact details captured on the form. Same
+ * best-effort + `not_configured` reporting rules as every other sender.
+ */
+export async function sendSupportReplyNotifications(
+  details: SupportReplyNotificationDetails,
+  env: NotificationEnv = getServerNotificationEnv(),
+  options?: NotificationDeliveryOptions,
+): Promise<NotificationResult[]> {
+  return deliverToChannels({
+    env,
+    details,
+    messages: buildSupportReplyMessages(details),
+    options: {
+      defaultCountryCode: env.PHONE_COUNTRY_CODE ?? "+92",
+      ...options,
+      // Only email + SMS (see note above), capped to the channels the sender
+      // actually provided by the channel resolver.
+      only: [
+        ...(details.email ? (["email"] as const) : []),
+        ...(details.phone ? (["sms"] as const) : []),
+      ],
+      phoneChannel: "sms",
+    },
+  });
+}
+
 /** Log a provider failure so failures are visible server-side, not just in the UI. */
 function logDeliveryError(result: NotificationResult): void {
   console.error(
@@ -285,7 +319,7 @@ async function deliverToChannels({
     whatsappText: string;
     whatsappContentVariables: string[];
   };
-  template: WhatsAppTemplateId;
+  template?: WhatsAppTemplateId;
   options?: NotificationDeliveryOptions;
 }): Promise<NotificationResult[]> {
   const config = getNotificationConfig(env);
@@ -336,7 +370,7 @@ async function deliverToChannels({
       result =
         channel === "whatsapp"
           ? await sendTwilioMessage(env, channel, twilioTo, messages.whatsappText, {
-              contentSid: env[WHATSAPP_CONTENT_SID_ENV[template]],
+              contentSid: template ? env[WHATSAPP_CONTENT_SID_ENV[template]] : undefined,
               contentVariables: messages.whatsappContentVariables,
             })
           : await sendTwilioMessage(env, channel, twilioTo, messages.smsText);
@@ -349,4 +383,8 @@ async function deliverToChannels({
   return results;
 }
 
-export type { NotificationChannel, NotificationResult } from "@/lib/notifications";
+export type {
+  NotificationChannel,
+  NotificationResult,
+  SupportReplyNotificationDetails,
+} from "@/lib/notifications";

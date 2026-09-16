@@ -5,6 +5,7 @@ import {
   adminDeleteFaq,
   adminGetSupportMessages,
   adminUpdateSupportMessage,
+  adminReplySupportMessage,
   adminGetDoctorProfile,
   adminUpdateDoctorProfile,
   adminGetDocuments,
@@ -23,6 +24,7 @@ import {
 } from "@/lib/actions.functions";
 import type { Faq, DoctorProfile } from "@/lib/site-extra";
 import type { AnalyticsStats } from "@/lib/server/analytics";
+import type { NotificationResult } from "@/lib/notifications";
 
 export type { Faq, DoctorProfile, AnalyticsStats };
 
@@ -37,6 +39,19 @@ export interface SupportMessage {
   admin_notes: string;
   created_at: string;
   resolved_at: string | null;
+  /**
+   * The clinic's reply to the sender (set by `adminReplySupportMessage`).
+   * Optional so the admin page keeps working if the `support-replies.sql`
+   * migration has not been applied to the database yet.
+   */
+  admin_reply?: string | null;
+  replied_at?: string | null;
+  /**
+   * The signed-in patient account this message belongs to (set when a patient
+   * submits from the patient portal). Optional so the admin page keeps working
+   * until the `0082_patient_support_activity.sql` migration is applied.
+   */
+  patient_id?: string | null;
 }
 
 export interface AdminDocument {
@@ -72,8 +87,16 @@ export interface AdminOrder {
   phone: string;
   email: string | null;
   address: string;
+  /** Product subtotal (null on legacy orders — fall back to the items/total). */
+  subtotal: number | null;
+  /** Delivery charge stored separately from the product subtotal (0 = none). */
+  delivery_charge: number;
+  delivery_area_id?: string | null;
+  delivery_area_name?: string | null;
+  delivery_charge_override?: number | null;
   total: number;
-  status: "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
+  status:
+    "pending_payment" | "pending" | "confirmed" | "shipped" | "delivered" | "cancelled" | string;
   payment_status: string;
   payment_method: string | null;
   payment_reference: string | null;
@@ -176,6 +199,19 @@ export async function updateSupportMessageAdmin(
   return adminUpdateSupportMessage({ data: { id, ...data } });
 }
 
+export interface SupportReplyResult {
+  error: string | null;
+  notifications: NotificationResult[];
+  inAppNotified: boolean;
+}
+
+export async function replySupportMessageAdmin(
+  id: string,
+  reply: string,
+): Promise<SupportReplyResult> {
+  return adminReplySupportMessage({ data: { id, reply } });
+}
+
 export async function getDoctorProfileAdmin(): Promise<DoctorProfile | null> {
   const result = await adminGetDoctorProfile({ data: undefined });
   return (result.profile ?? null) as DoctorProfile | null;
@@ -216,7 +252,7 @@ export async function getOrdersAdmin(): Promise<AdminOrder[]> {
 
 export async function updateOrderStatusAdmin(
   id: string,
-  status: AdminOrder["status"],
+  status: "pending" | "confirmed" | "shipped" | "delivered" | "cancelled",
   note?: string,
 ): Promise<{ error: string | null }> {
   return adminUpdateOrderStatus({ data: { id, status, note } });
@@ -263,6 +299,8 @@ export async function sendDueRemindersAdmin(): Promise<{
   return adminSendDueReminders({ data: undefined });
 }
 
-export async function getAnalyticsAdmin(): Promise<AnalyticsStats> {
-  return adminGetAnalytics({ data: undefined });
+export async function getAnalyticsAdmin(
+  range: "today" | "7d" | "30d" | "90d" = "30d",
+): Promise<AnalyticsStats> {
+  return adminGetAnalytics({ data: { range } });
 }

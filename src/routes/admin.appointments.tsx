@@ -19,6 +19,7 @@ import {
   useSetVideoPaymentStatus,
   useAdminAvailability,
   useAdminCustomAvailability,
+  useAdminRecurringAvailability,
 } from "@/hooks/queries/useAdmin";
 import { useCreateVideoSession } from "@/hooks/queries/useVideo";
 import type { AppointmentWithDetails } from "@/lib/admin-data";
@@ -289,6 +290,7 @@ function AdminAppointments() {
   const { data: appointments, isLoading, isError, error } = useAppointments();
   const { data: availability } = useAdminAvailability();
   const { data: customAvailability } = useAdminCustomAvailability();
+  const { data: recurringAvailability } = useAdminRecurringAvailability();
   const updateStatus = useUpdateAppointmentStatus();
   const reschedule = useRescheduleAppointment();
   const applyReschedule = useApplyReschedule();
@@ -428,6 +430,7 @@ function AdminAppointments() {
           today,
           nowTimeInClinic(),
           customAvailability ?? [],
+          recurringAvailability ?? [],
         );
         setAvailableTimes(times);
         setRescheduleTime((cur) => (times.includes(cur) ? cur : (times[0] ?? "")));
@@ -444,7 +447,14 @@ function AdminAppointments() {
     return () => {
       cancelled = true;
     };
-  }, [rescheduleTarget, rescheduleDate, availability, customAvailability, today]);
+  }, [
+    rescheduleTarget,
+    rescheduleDate,
+    availability,
+    customAvailability,
+    recurringAvailability,
+    today,
+  ]);
 
   const busy =
     updateStatus.isPending ||

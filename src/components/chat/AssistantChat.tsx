@@ -1,9 +1,21 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowDown, Bot, Check, Copy, Loader2, Send, Sparkles, Trash2, X } from "lucide-react";
+import {
+  ArrowDown,
+  Bot,
+  Check,
+  Copy,
+  Loader2,
+  RefreshCw,
+  Send,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
 import { chatWithAssistant, type ChatTurn } from "@/lib/chat.functions";
 import { cn } from "@/lib/utils";
 import { useFloatingControls } from "@/hooks/useFloatingControls";
 import { useFloatingDismiss } from "@/hooks/useFloatingDismiss";
+import { Link } from "@tanstack/react-router";
 
 const WELCOME_MESSAGE =
   "Hello! I'm the Naseem AI Assistant. I can help you book an appointment, explore our services, or answer questions about the clinic. How can I help today?";
@@ -289,12 +301,39 @@ export function AssistantChat() {
     setConfirmClear(false);
   }
 
-  async function sendMessage(text: string) {
+  /** Re-send the last user message (used by the "Try again" action on errors). */
+  async function retryLast() {
+    if (isTyping) return;
+    const lastUser = [...messages].reverse().find((m) => m.kind === "user");
+    if (!lastUser) return;
+    // Drop the failed assistant bubble and resend the question from that point.
+    const failed = messages[messages.length - 1];
+    const base = failed && failed.kind !== "user" ? messages.slice(0, -1) : messages;
+    setMessages(base);
+    await sendMessage(lastUser.content, base);
+  }
+
+  function handoffToHuman() {
+    const msg =
+      "No problem — a member of the clinic staff will be glad to help you personally.\n\n" +
+      "You can reach us through the Support page (the fastest option), or when you are in your patient portal use the Support link under your dashboard. We typically reply within clinic hours.";
+    setMessages((prev) => [
+      ...prev,
+      { role: "assistant", content: msg, kind: "assistant", t: nowTime() },
+    ]);
+    setTimeout(() => {
+      const container = scrollRef.current;
+      if (container) container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    }, 60);
+  }
+
+  async function sendMessage(text: string, base?: LocalTurn[]) {
     const trimmed = text.trim().slice(0, MAX_LENGTH);
     if (!trimmed || isTyping) return;
 
+    const from = base ?? messages;
     const next: LocalTurn[] = [
-      ...messages,
+      ...from,
       { role: "user", content: trimmed, kind: "user", t: nowTime() },
     ];
     setMessages(next);
@@ -461,6 +500,7 @@ export function AssistantChat() {
                   message={m}
                   copied={copied === `${i}`}
                   onCopy={(content) => copyMessage(content, `${i}`)}
+                  onRetry={retryLast}
                 />
               ))}
 
@@ -514,6 +554,21 @@ export function AssistantChat() {
           <div className="border-t border-border px-4 py-2 text-center text-[10px] text-muted-foreground">
             {MEDICAL_NOTE}
           </div>
+          {!isTyping && (
+            <div className="flex justify-center gap-2 border-t border-border px-4 py-2">
+              <Link
+                to="/support"
+                onClick={() => {
+                  handoffToHuman();
+                  setTimeout(closeChat, 250);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1.5 text-[11px] font-semibold text-sky-700 transition hover:bg-sky-100 active:scale-95"
+              >
+                <Bot className="h-3.5 w-3.5" />
+                Talk to a human · Contact us
+              </Link>
+            </div>
+          )}
 
           {/* Input */}
           <form onSubmit={onSubmit} className="border-t border-border p-3">
@@ -562,10 +617,12 @@ function MessageBubble({
   message,
   copied,
   onCopy,
+  onRetry,
 }: {
   message: LocalTurn;
   copied: boolean;
   onCopy: (content: string) => void;
+  onRetry: () => void;
 }) {
   const isUser = message.kind === "user";
   return (
@@ -594,11 +651,20 @@ function MessageBubble({
         )}
         <div
           className={cn(
-            "mt-1.5 flex items-center justify-end gap-2 text-[10px]",
+            "mt-1.5 flex flex-wrap items-center justify-end gap-2 text-[10px]",
             isUser ? "text-primary-foreground/70" : "text-slate-400",
           )}
         >
           <span>{message.t}</span>
+          {(message.kind === "error" || message.kind === "blocked") && !isUser && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="flex h-6 items-center gap-1 rounded-full bg-red-100 px-2 text-[10px] font-semibold text-red-700 transition hover:bg-red-200 active:scale-95"
+            >
+              <RefreshCw className="h-3 w-3" /> Try again
+            </button>
+          )}
           {!isUser && (
             <button
               type="button"

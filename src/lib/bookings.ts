@@ -68,6 +68,23 @@ export interface CustomAvailabilitySlot {
   created_at: string;
 }
 
+/**
+ * Recurring (weekly) EXTRA availability — repeats on the same weekday every
+ * week, on top of the regular weekly schedule and the one-time custom slots.
+ */
+export interface RecurringAvailabilitySlot {
+  id: string;
+  /** Optional doctor/provider; null = clinic-wide. */
+  doctor_id: string | null;
+  /** 0 = Sunday, 1 = Monday … 6 = Saturday. */
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  is_available: boolean;
+  notes: string | null;
+  created_at: string;
+}
+
 export interface Appointment {
   id: string;
   patient_id: string;
@@ -121,6 +138,20 @@ export async function getCustomAvailability(): Promise<CustomAvailabilitySlot[]>
   return data ?? [];
 }
 
+/**
+ * Recurring weekly extra slots. They apply to every matching weekday, so (like
+ * the regular schedule) no date filter is needed.
+ */
+export async function getRecurringAvailability(): Promise<RecurringAvailabilitySlot[]> {
+  const { data } = await supabase
+    .from("recurring_availability")
+    .select("*")
+    .eq("is_available", true)
+    .order("day_of_week")
+    .order("start_time");
+  return data ?? [];
+}
+
 export interface BookedSlotInterval {
   /** "HH:mm" start time. */
   slot: string;
@@ -155,6 +186,7 @@ export function generateTimeSlots(
   todayStr = "",
   nowTime = "00:00",
   customAvailability: CustomAvailabilitySlot[] = [],
+  recurringAvailability: RecurringAvailabilitySlot[] = [],
 ): string[] {
   // Flexible services (e.g. Home Visit) have no fixed slots — the doctor
   // confirms the time after booking.
@@ -162,13 +194,18 @@ export function generateTimeSlots(
 
   const dateStr = toClinicDate(date);
   const dayOfWeek = date.getDay();
-  // Regular weekly windows for this weekday + any one-time custom windows for
-  // this exact date (custom slots ADD to the schedule, they never replace it).
+  // Regular weekly windows for this weekday + recurring weekly extra windows
+  // for this weekday + any one-time custom windows for this exact date. Extra
+  // slots ADD to the schedule, they never replace it, and the `seen` set below
+  // deduplicates any overlapping windows so a patient never sees a slot twice.
   const regularSlots = availability.filter((a) => a.day_of_week === dayOfWeek);
+  const recurringSlots = recurringAvailability.filter(
+    (r) => r.day_of_week === dayOfWeek && r.is_available,
+  );
   const customSlots = customAvailability.filter(
     (c) => c.specific_date === dateStr && c.is_available,
   );
-  const slots = [...regularSlots, ...customSlots];
+  const slots = [...regularSlots, ...recurringSlots, ...customSlots];
   if (slots.length === 0) return [];
 
   const bookedStartTimes = new Set(bookedSlots.map((b) => b.slot));

@@ -16,6 +16,8 @@ import {
   patientGetMyOrders,
   patientGetOrderDetail,
   patientSubmitOrderRequest,
+  patientListMySupportMessages,
+  patientSubmitSupportMessage,
   type PatientAppointment,
 } from "@/lib/actions.functions";
 
@@ -89,6 +91,10 @@ export interface PatientOrder {
   phone: string;
   email: string | null;
   address: string;
+  /** Product subtotal (null on legacy orders — fall back to the items/total). */
+  subtotal: number | null;
+  /** Delivery charge stored separately from the product subtotal (0 = none). */
+  delivery_charge: number;
   total: number;
   payment_status: string;
   payment_method: string | null;
@@ -203,4 +209,34 @@ export async function submitOrderRequest(data: {
   message: string;
 }): Promise<{ error: string | null }> {
   return patientSubmitOrderRequest({ data });
+}
+
+export interface PatientSupportMessage {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  subject: string;
+  message: string;
+  status: "new" | "in_progress" | "resolved" | "closed";
+  admin_reply: string | null;
+  admin_notes: string | null;
+  created_at: string;
+  replied_at: string | null;
+  resolved_at: string | null;
+  patient_id: string | null;
+}
+
+export async function getMySupportMessages(): Promise<{
+  error: string | null;
+  messages: PatientSupportMessage[];
+}> {
+  return patientListMySupportMessages({ data: undefined });
+}
+
+export async function submitSupportTicket(data: {
+  subject?: string;
+  message: string;
+}): Promise<{ error: string | null }> {
+  return patientSubmitSupportMessage({ data });
 }
