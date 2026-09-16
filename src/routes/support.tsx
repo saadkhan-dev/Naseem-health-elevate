@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Loader2, MessageSquare, CheckCircle2 } from "lucide-react";
+import { Loader2, MessageSquare, CheckCircle2, Save, X } from "lucide-react";
 import { Nav } from "@/components/site/Nav";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useSubmitSupportMessage } from "@/hooks/queries/useSiteExtra";
+import { useFormDraft } from "@/hooks/useFormDraft";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 
 export const Route = createFileRoute("/support")({
   head: () => ({
@@ -26,12 +28,16 @@ export const Route = createFileRoute("/support")({
 const empty = { name: "", email: "", phone: "", subject: "", message: "" };
 
 function SupportPage() {
-  const [form, setForm] = useState(empty);
+  const draft = useFormDraft("support:public", empty);
+  const form = draft.value;
+  const setForm = draft.update;
   const [formError, setFormError] = useState("");
   const [done, setDone] = useState(false);
   const submit = useSubmitSupportMessage();
+  useUnsavedChangesGuard(draft.dirty && !done);
 
   async function handleSubmit() {
+    if (submit.isPending) return;
     setFormError("");
     if (!form.name.trim()) {
       setFormError("Please enter your name.");
@@ -46,6 +52,7 @@ function SupportPage() {
       if (result.error) {
         setFormError(result.error);
       } else {
+        draft.clearDraft();
         setDone(true);
       }
     } catch {
@@ -80,6 +87,24 @@ function SupportPage() {
             </div>
           ) : (
             <div className="mt-8 rounded-3xl border border-border bg-card p-6 shadow-soft">
+              {draft.restored && (
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3">
+                  <span className="flex items-center gap-2 text-[15px] font-medium text-foreground sm:text-sm">
+                    <Save className="h-4 w-4 text-primary" />
+                    We saved your unfinished message.
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 gap-1 text-muted-foreground"
+                    onClick={draft.clearDraft}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Clear draft
+                  </Button>
+                </div>
+              )}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="text-[15px] font-medium text-foreground sm:text-sm">

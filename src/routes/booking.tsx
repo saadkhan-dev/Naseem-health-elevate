@@ -2,7 +2,17 @@ import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { z } from "zod";
 import { format } from "date-fns";
-import { ArrowLeft, AlertTriangle, Clock, Loader2, Video, Home, CalendarClock } from "lucide-react";
+import {
+  ArrowLeft,
+  AlertTriangle,
+  Clock,
+  Loader2,
+  Video,
+  Home,
+  CalendarClock,
+  Save,
+  X,
+} from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Select,
@@ -40,6 +50,28 @@ import { usePublicVideoOffers } from "@/hooks/queries/useContent";
 import { useAuth } from "@/hooks/useAuth";
 import { useScrollToSuccess } from "@/hooks/useScrollToSuccess";
 import type { NotificationResult } from "@/lib/notifications";
+import { useFormDraft } from "@/hooks/useFormDraft";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
+
+interface BookingDraft {
+  serviceId?: string;
+  date?: string;
+  time?: string;
+  preferredTime: string;
+  name: string;
+  phone: string;
+  email: string;
+}
+
+const EMPTY_BOOKING_DRAFT: BookingDraft = {
+  serviceId: undefined,
+  date: undefined,
+  time: undefined,
+  preferredTime: "",
+  name: "",
+  phone: "",
+  email: "",
+};
 
 export const Route = createFileRoute("/booking")({
   validateSearch: z.object({
@@ -82,6 +114,67 @@ function BookingPage() {
   const [chargedAmount, setChargedAmount] = React.useState<number | null>(null);
   const [offerTitle, setOfferTitle] = React.useState<string | null>(null);
   const [isWaived, setIsWaived] = React.useState(false);
+
+  // Persist the in-progress booking so a refresh/reload never loses the chosen
+  // service, date, slot or contact details. Disabled once the booking is placed.
+  const bookingDraft = useFormDraft<BookingDraft>("booking:appointment", EMPTY_BOOKING_DRAFT, {
+    isMeaningful: (v) =>
+      Boolean(
+        v.serviceId ||
+        v.date ||
+        v.time ||
+        v.preferredTime.trim() ||
+        v.name.trim() ||
+        v.phone.trim() ||
+        v.email.trim(),
+      ),
+    enabled: !confirmed,
+  });
+  const restoredBooking = React.useRef(false);
+  const skipDraftWrite = React.useRef(true);
+
+  // Restore the saved draft into the individual booking fields once.
+  React.useEffect(() => {
+    if (restoredBooking.current || !bookingDraft.restored) return;
+    restoredBooking.current = true;
+    const d = bookingDraft.value;
+    if (d.serviceId) setServiceId(d.serviceId);
+    if (d.date) setDate(new Date(d.date));
+    if (d.time) setTime(d.time);
+    if (d.preferredTime) setPreferredTime(d.preferredTime);
+    if (d.name) {
+      setName(d.name);
+      nameTouched.current = true;
+    }
+    if (d.phone) {
+      setPhone(d.phone);
+      phoneTouched.current = true;
+    }
+    if (d.email) {
+      setEmail(d.email);
+      emailTouched.current = true;
+    }
+  }, [bookingDraft.restored, bookingDraft.value]);
+
+  React.useEffect(() => {
+    if (skipDraftWrite.current) {
+      skipDraftWrite.current = false;
+      return;
+    }
+    if (confirmed) return;
+    bookingDraft.setValue({
+      serviceId,
+      date: date ? format(date, "yyyy-MM-dd") : undefined,
+      time,
+      preferredTime,
+      name,
+      phone,
+      email,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serviceId, date, time, preferredTime, name, phone, email, confirmed]);
+
+  useUnsavedChangesGuard(bookingDraft.dirty && !confirmed);
 
   const { data: services, isLoading: servicesLoading } = useServices();
   const { data: availability } = useAvailability();
@@ -173,6 +266,7 @@ function BookingPage() {
         setOfferTitle(result.offerTitle);
         setIsWaived(result.paymentStatus === "waived");
         setConfirmed(true);
+        bookingDraft.clearDraft();
 
         if (result.appointmentNo) {
           saveRecentAppointment({
@@ -206,6 +300,18 @@ function BookingPage() {
     setChargedAmount(null);
     setOfferTitle(null);
     setIsWaived(false);
+  }
+
+  function clearBookingDraft() {
+    bookingDraft.clearDraft();
+    setServiceId(undefined);
+    setDate(undefined);
+    setTime(undefined);
+    setPreferredTime("");
+    setName("");
+    setPhone("");
+    setEmail("");
+    setFormError("");
   }
 
   const bookingReady =
@@ -294,6 +400,22 @@ function BookingPage() {
               ref={confirmationRef}
               className="min-w-0 rounded-3xl border border-border bg-card p-5 shadow-soft md:p-6"
             >
+              {bookingDraft.restored && !bookingReady && (
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3">
+                  <span className="flex items-center gap-2 text-[15px] font-medium text-foreground sm:text-sm">
+                    <Save className="h-4 w-4 text-primary" />
+                    We saved your unfinished booking.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={clearBookingDraft}
+                    className="inline-flex items-center gap-1 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground sm:text-xs"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Clear draft
+                  </button>
+                </div>
+              )}
               {isVideoMode && (
                 <VideoOfferCards
                   offers={videoOffers ?? []}

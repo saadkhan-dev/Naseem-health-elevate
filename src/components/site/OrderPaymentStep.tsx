@@ -9,6 +9,7 @@ import {
   useSubmitGuestOrderReceipt,
 } from "@/hooks/queries/useShop";
 import { PAYMENT_STATUS_LABELS } from "@/lib/payment";
+import { useFormDraft } from "@/hooks/useFormDraft";
 
 interface OrderPaymentStepProps {
   /** Internal order id (signed-in patient path). */
@@ -61,15 +62,38 @@ export function OrderPaymentStep({
   const [verificationMode, setVerificationMode] = React.useState<"transaction" | "receipt">(
     "transaction",
   );
-  const [methodId, setMethodId] = React.useState<string>();
+  // Persist only non-sensitive payer contact + chosen method so a refresh mid-way
+  // doesn't force re-entry. Never store the transaction reference or receipt file.
+  const payDraft = useFormDraft(
+    `order-payment:${orderId ?? orderNo ?? "order"}`,
+    {
+      payerName: "",
+      payerPhone: phone ?? "",
+      payerEmail: email ?? "",
+      methodId: undefined as string | undefined,
+      guestId: orderNo ?? "",
+    },
+    {
+      isMeaningful: (v) =>
+        Boolean(
+          v.payerName.trim() ||
+          v.payerPhone.trim() ||
+          v.payerEmail.trim() ||
+          v.methodId ||
+          (v.guestId && v.guestId !== (orderNo ?? "")),
+        ),
+    },
+  );
+  const { payerName, payerPhone, payerEmail, methodId, guestId } = payDraft.value;
+  const setPayerName = (value: string) => payDraft.update({ payerName: value });
+  const setPayerPhone = (value: string) => payDraft.update({ payerPhone: value });
+  const setPayerEmail = (value: string) => payDraft.update({ payerEmail: value });
+  const setMethodId = (value: string) => payDraft.update({ methodId: value });
+  const setGuestId = (value: string) => payDraft.update({ guestId: value });
   const [reference, setReference] = React.useState("");
-  const [payerName, setPayerName] = React.useState("");
-  const [payerPhone, setPayerPhone] = React.useState(phone ?? "");
-  const [payerEmail, setPayerEmail] = React.useState(email ?? "");
   const [formError, setFormError] = React.useState("");
   const [done, setDone] = React.useState(false);
 
-  const [guestId, setGuestId] = React.useState(orderNo ?? "");
   const [guestFile, setGuestFile] = React.useState<File>();
   const [guestPreview, setGuestPreview] = React.useState<string>();
   const [guestError, setGuestError] = React.useState("");
@@ -159,6 +183,7 @@ export function OrderPaymentStep({
         return;
       }
       setDone(true);
+      payDraft.clearDraft();
       onPaymentSubmitted?.();
     } catch (e) {
       setFormError(e instanceof Error ? e.message : "Could not submit your payment. Try again.");
@@ -199,6 +224,7 @@ export function OrderPaymentStep({
         return;
       }
       setDone(true);
+      payDraft.clearDraft();
       onPaymentSubmitted?.();
     } catch (err) {
       setGuestError(err instanceof Error ? err.message : "Could not upload your receipt.");

@@ -130,7 +130,7 @@ function AdminAnalytics() {
           <h1 className="text-2xl font-semibold text-foreground">Analytics</h1>
           <p className="mt-1 text-sm text-muted-foreground">Clinic performance overview</p>
         </div>
-        <div className="flex items-center gap-1 rounded-xl border border-border bg-card p-1">
+        <div className="flex flex-wrap items-center gap-1 rounded-xl border border-border bg-card p-1">
           {RANGES.map((r) => (
             <button
               key={r.key}

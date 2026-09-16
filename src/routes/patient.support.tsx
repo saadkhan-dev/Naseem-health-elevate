@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { Loader2, MessageSquare, Send, CheckCircle2, LifeBuoy } from "lucide-react";
+import { Loader2, MessageSquare, Send, CheckCircle2, LifeBuoy, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useMySupportMessages, useSubmitSupportTicket } from "@/hooks/queries/usePatient";
 import { usePageFocus, useFocusHighlight } from "@/hooks/usePageFocus";
+import { useFormDraft } from "@/hooks/useFormDraft";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 
 export const Route = createFileRoute("/patient/support")({
   head: () => ({
@@ -26,17 +28,20 @@ const statusStyles: Record<string, string> = {
 function PatientSupportPage() {
   const { data, isLoading } = useMySupportMessages();
   const submit = useSubmitSupportTicket();
-  const [subject, setSubject] = useState("");
-  const [message, setMessage] = useState("");
+  const draft = useFormDraft("support:patient", { subject: "", message: "" });
+  const subject = draft.value.subject;
+  const message = draft.value.message;
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
   const focus = usePageFocus();
   useFocusHighlight({ focus, ready: !isLoading });
+  useUnsavedChangesGuard(draft.dirty && !done);
 
   const messages = data?.messages ?? [];
   const unread = messages.filter((m) => m.status === "new" || m.status === "in_progress");
 
   async function handleSubmit() {
+    if (submit.isPending) return;
     setError("");
     if (message.trim().length < 10) {
       setError("Please describe your question (at least 10 characters).");
@@ -50,8 +55,7 @@ function PatientSupportPage() {
       if (result.error) {
         setError(result.error);
       } else {
-        setSubject("");
-        setMessage("");
+        draft.clearDraft();
         setDone(true);
       }
     } catch {
@@ -95,16 +99,34 @@ function PatientSupportPage() {
             </div>
           ) : (
             <div className="mt-3 grid gap-3">
+              {draft.restored && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2">
+                  <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <Save className="h-4 w-4 text-primary" />
+                    We saved your unfinished message.
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 gap-1 text-muted-foreground"
+                    onClick={draft.clearDraft}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Clear draft
+                  </Button>
+                </div>
+              )}
               <Input
                 value={subject}
-                onChange={(e) => setSubject(e.target.value)}
+                onChange={(e) => draft.update({ subject: e.target.value })}
                 placeholder="Subject (optional) — e.g. Appointment question"
                 maxLength={200}
               />
               <Textarea
                 rows={4}
                 value={message}
-                onChange={(e) => setMessage(e.target.value)}
+                onChange={(e) => draft.update({ message: e.target.value })}
                 placeholder="How can we help?"
                 maxLength={4000}
               />

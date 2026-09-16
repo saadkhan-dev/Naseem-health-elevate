@@ -42,6 +42,7 @@ import type { PatientAppointment, PatientOrder } from "@/lib/patient-data";
 import { APPOINTMENT_STATUS_LABELS } from "@/lib/notifications";
 import { todayInClinic } from "@/lib/clinic";
 import { useScrollToSuccess } from "@/hooks/useScrollToSuccess";
+import { useFormDraft } from "@/hooks/useFormDraft";
 
 export const Route = createFileRoute("/appointment-status")({
   validateSearch: z.object({
@@ -281,18 +282,27 @@ function GuestAppointmentLookup({
   setMode: (m: ManualMode) => void;
   onBackToAuto?: () => void;
 }) {
-  const [appointmentId, setAppointmentId] = React.useState("");
-  const [phone, setPhone] = React.useState("");
-  const [email, setEmail] = React.useState("");
+  const lookupDraft = useFormDraft("lookup:appointment", {
+    appointmentId: "",
+    phone: "",
+    email: "",
+    rName: "",
+    rPhone: "",
+    rEmail: "",
+  });
+  const { appointmentId, phone, email, rName, rPhone, rEmail } = lookupDraft.value;
+  const setAppointmentId = (v: string) => lookupDraft.update({ appointmentId: v });
+  const setPhone = (v: string) => lookupDraft.update({ phone: v });
+  const setEmail = (v: string) => lookupDraft.update({ email: v });
   const [formError, setFormError] = React.useState("");
   const [result, setResult] = React.useState<{
     found: boolean;
     appointment: AppointmentStatus | null;
   } | null>(null);
 
-  const [rName, setRName] = React.useState("");
-  const [rPhone, setRPhone] = React.useState("");
-  const [rEmail, setREmail] = React.useState("");
+  const setRName = (v: string) => lookupDraft.update({ rName: v });
+  const setRPhone = (v: string) => lookupDraft.update({ rPhone: v });
+  const setREmail = (v: string) => lookupDraft.update({ rEmail: v });
   const [rError, setRError] = React.useState("");
   const [recoverResult, setRecoverResult] = React.useState<RecoveredAppointment[] | null>(null);
   const [copiedNo, setCopiedNo] = React.useState<string | null>(null);
@@ -934,9 +944,18 @@ function VideoConsultationBox({
 
 function GuestOrderLookup({ onBackToMine }: { onBackToMine?: () => void }) {
   const [mode, setMode] = React.useState<ManualMode>("id");
-  const [orderNo, setOrderNo] = React.useState("");
-  const [phone, setPhone] = React.useState("");
-  const [email, setEmail] = React.useState("");
+  const lookupDraft = useFormDraft("lookup:order", {
+    orderNo: "",
+    phone: "",
+    email: "",
+    rName: "",
+    rPhone: "",
+    rEmail: "",
+  });
+  const { orderNo, phone, email, rName, rPhone, rEmail } = lookupDraft.value;
+  const setOrderNo = (v: string) => lookupDraft.update({ orderNo: v });
+  const setPhone = (v: string) => lookupDraft.update({ phone: v });
+  const setEmail = (v: string) => lookupDraft.update({ email: v });
   const [formError, setFormError] = React.useState("");
   const [result, setResult] = React.useState<{
     found: boolean;
@@ -944,9 +963,9 @@ function GuestOrderLookup({ onBackToMine }: { onBackToMine?: () => void }) {
   } | null>(null);
   const [copiedNo, setCopiedNo] = React.useState<string | null>(null);
 
-  const [rName, setRName] = React.useState("");
-  const [rPhone, setRPhone] = React.useState("");
-  const [rEmail, setREmail] = React.useState("");
+  const setRName = (v: string) => lookupDraft.update({ rName: v });
+  const setRPhone = (v: string) => lookupDraft.update({ rPhone: v });
+  const setREmail = (v: string) => lookupDraft.update({ rEmail: v });
   const [rError, setRError] = React.useState("");
   const [recoverResult, setRecoverResult] = React.useState<RecoveredOrder[] | null>(null);
 

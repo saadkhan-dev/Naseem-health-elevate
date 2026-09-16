@@ -38,6 +38,7 @@ import {
   useRespondRescheduleRequest,
   useMyTestRecommendations,
   useMarkTestRecommendationCompleted,
+  useMyOrders,
 } from "@/hooks/queries/usePatient";
 import { usePatientConsultationHistory } from "@/hooks/useConsultation";
 import { ensureConsultationConversation } from "@/lib/consultation-data";
@@ -65,6 +66,7 @@ import { VideoPaymentStep } from "@/components/site/VideoPaymentStep";
 import { useAuth } from "@/hooks/useAuth";
 import { PAYMENT_STATUS_LABELS, type PaymentStatus } from "@/lib/payment";
 import { usePageFocus, useFocusHighlight } from "@/hooks/usePageFocus";
+import { hasFormDraft } from "@/hooks/useFormDraft";
 
 export const Route = createFileRoute("/patient/")({
   validateSearch: z.object({
@@ -418,6 +420,145 @@ function JoinVideoDialog({
   );
 }
 
+/**
+ * "Continue where you left off" — surfaces anything the patient didn't finish:
+ * unpaid orders, unpaid video consultations, and locally-saved form drafts.
+ * Every action deep-links into the existing flow; nothing is submitted from here.
+ */
+function ContinueWhereYouLeftOff({
+  onPayAppointment,
+}: {
+  onPayAppointment: (a: import("@/lib/patient-data").PatientAppointment) => void;
+}) {
+  const { data: orders } = useMyOrders();
+  const { data: appointments } = useMyAppointments();
+  const [drafts, setDrafts] = useState({ booking: false, support: false });
+
+  useEffect(() => {
+    setDrafts({
+      booking: hasFormDraft("booking:appointment"),
+      support: hasFormDraft("support:patient"),
+    });
+  }, []);
+
+  const unpaidOrders = (orders ?? []).filter(
+    (o) =>
+      (o.payment_status === "payment_pending" || o.payment_status === "payment_failed") &&
+      o.status !== "cancelled",
+  );
+  const unpaidVideo = (appointments ?? []).filter(
+    (a) =>
+      a.isVideo &&
+      (a.paymentStatus === "payment_pending" || a.paymentStatus === "payment_failed") &&
+      a.status !== "cancelled" &&
+      a.status !== "rejected" &&
+      a.status !== "no_show",
+  );
+
+  const hasAny =
+    unpaidOrders.length > 0 || unpaidVideo.length > 0 || drafts.booking || drafts.support;
+  if (!hasAny) return null;
+
+  const rowClass =
+    "flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-card p-3 text-left transition hover:border-primary/40 hover:bg-muted";
+
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5 shadow-soft">
+      <div className="flex items-center gap-2">
+        <Calendar className="h-5 w-5 text-amber-700" />
+        <h2 className="font-display font-semibold text-foreground">Continue where you left off</h2>
+      </div>
+      <div className="mt-3 space-y-2">
+        {unpaidOrders.map((o) => (
+          <Link
+            key={o.id}
+            to="/patient/orders"
+            search={{ focus: "order", id: o.id }}
+            className={rowClass}
+          >
+            <span className="flex min-w-0 items-center gap-3">
+              <Package className="h-5 w-5 shrink-0 text-amber-700" />
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-medium text-foreground">
+                  Order {o.order_no ?? o.id} — payment pending
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  Rs. {Number(o.total).toLocaleString()} ·{" "}
+                  {o.payment_status === "payment_failed"
+                    ? "Your payment was not accepted — resubmit your proof."
+                    : "Complete your payment so the clinic can confirm it."}
+                </span>
+              </span>
+            </span>
+            <span className="shrink-0 text-sm font-semibold text-primary">
+              {o.payment_status === "payment_failed" ? "Resubmit" : "Pay Now"} →
+            </span>
+          </Link>
+        ))}
+
+        {unpaidVideo.map((a) => (
+          <button key={a.id} type="button" onClick={() => onPayAppointment(a)} className={rowClass}>
+            <span className="flex min-w-0 items-center gap-3">
+              <Video className="h-5 w-5 shrink-0 text-amber-700" />
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-medium text-foreground">
+                  Video consultation {a.appointmentNo ?? ""} — payment required
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  {format(new Date(`${a.date}T00:00:00`), "MMM d, yyyy")}
+                  {a.paymentAmount != null
+                    ? ` · Rs. ${Number(a.paymentAmount).toLocaleString()}`
+                    : ""}
+                  {a.paymentStatus === "payment_failed"
+                    ? " · Resubmit your payment proof."
+                    : " · Complete your prepaid payment."}
+                </span>
+              </span>
+            </span>
+            <span className="shrink-0 text-sm font-semibold text-primary">
+              {a.paymentStatus === "payment_failed" ? "Resubmit" : "Submit Payment"} →
+            </span>
+          </button>
+        ))}
+
+        {drafts.booking && (
+          <Link to="/booking" className={rowClass}>
+            <span className="flex min-w-0 items-center gap-3">
+              <Calendar className="h-5 w-5 shrink-0 text-amber-700" />
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-foreground">
+                  Unfinished booking
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  We saved the service, date and details you started — continue where you left off.
+                </span>
+              </span>
+            </span>
+            <span className="shrink-0 text-sm font-semibold text-primary">Continue →</span>
+          </Link>
+        )}
+
+        {drafts.support && (
+          <Link to="/patient/support" className={rowClass}>
+            <span className="flex min-w-0 items-center gap-3">
+              <MessageSquare className="h-5 w-5 shrink-0 text-amber-700" />
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-foreground">
+                  Unfinished support message
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  We saved your draft message — continue writing or send it.
+                </span>
+              </span>
+            </span>
+            <span className="shrink-0 text-sm font-semibold text-primary">Continue →</span>
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PatientDashboard() {
   const router = useRouter();
   const navigate = useNavigate();
@@ -539,6 +680,8 @@ function PatientDashboard() {
           </Link>
         </div>
       </div>
+
+      <ContinueWhereYouLeftOff onPayAppointment={setPaymentAppointment} />
 
       {isError && <QueryError error={error} />}
 

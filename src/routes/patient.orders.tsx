@@ -45,11 +45,21 @@ export const Route = createFileRoute("/patient/orders")({
 });
 
 const statusStyles: Record<string, string> = {
+  pending_payment: "bg-amber-100 text-amber-700",
   pending: "bg-blue-100 text-blue-700",
   confirmed: "bg-amber-100 text-amber-700",
   shipped: "bg-purple-100 text-purple-700",
   delivered: "bg-green-100 text-green-700",
   cancelled: "bg-red-100 text-red-700",
+};
+
+const statusLabels: Record<string, string> = {
+  pending_payment: "Awaiting payment",
+  pending: "Pending",
+  confirmed: "Confirmed",
+  shipped: "Shipped",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
 };
 
 const paymentStatusStyles: Record<string, string> = {
@@ -300,7 +310,7 @@ function OrderCard({
         </div>
         <div className="flex items-center gap-2">
           <Badge className={`capitalize ${statusStyles[order.status] ?? statusStyles.pending}`}>
-            {order.status}
+            {statusLabels[order.status] ?? order.status.replace(/_/g, " ")}
           </Badge>
           <Badge
             className={`capitalize ${

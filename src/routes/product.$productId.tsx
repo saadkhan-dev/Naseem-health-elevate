@@ -1,4 +1,6 @@
 import { useCallback, useRef, useState } from "react";
+import { useFormDraft } from "@/hooks/useFormDraft";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import {
   Loader2,
@@ -182,10 +184,16 @@ function ProductDetail() {
 
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
-  const [rating, setRating] = useState(5);
-  const [comment, setComment] = useState("");
+  const reviewDraft = useFormDraft(
+    `review:product:${productId}`,
+    { rating: 5, comment: "" },
+    { isMeaningful: (v) => v.comment.trim().length > 0 },
+  );
+  const rating = reviewDraft.value.rating;
+  const comment = reviewDraft.value.comment;
   const [reviewError, setReviewError] = useState("");
   const [reviewDone, setReviewDone] = useState(false);
+  useUnsavedChangesGuard(reviewDraft.dirty && !reviewDone);
 
   const price = product ? productEffectivePrice(product, today) : 0;
   const hasDiscount = product != null && isProductOfferActive(product, today);
@@ -223,7 +231,7 @@ function ProductDetail() {
         return;
       }
       setReviewDone(true);
-      setComment("");
+      reviewDraft.clearDraft();
     } catch (err) {
       setReviewError(err instanceof Error ? err.message : "Could not submit your review.");
     }
@@ -492,6 +500,20 @@ function ProductDetail() {
                     </div>
                   ) : (
                     <form onSubmit={handleReviewSubmit} className="mt-4 space-y-4">
+                      {reviewDraft.restored && (
+                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
+                          <span className="font-medium text-foreground">
+                            We saved your unfinished review.
+                          </span>
+                          <button
+                            type="button"
+                            className="text-xs font-medium text-muted-foreground hover:text-foreground"
+                            onClick={reviewDraft.clearDraft}
+                          >
+                            Clear draft
+                          </button>
+                        </div>
+                      )}
                       <div>
                         <label className="mb-1.5 block text-sm font-medium text-foreground">
                           Rating
@@ -501,7 +523,7 @@ function ProductDetail() {
                             <button
                               key={i}
                               type="button"
-                              onClick={() => setRating(i + 1)}
+                              onClick={() => reviewDraft.update({ rating: i + 1 })}
                               aria-label={`Rate ${i + 1} star${i === 0 ? "" : "s"}`}
                               className="p-0.5"
                             >
@@ -522,7 +544,7 @@ function ProductDetail() {
                         </label>
                         <Input
                           value={comment}
-                          onChange={(e) => setComment(e.target.value)}
+                          onChange={(e) => reviewDraft.update({ comment: e.target.value })}
                           placeholder="Share your experience with this product…"
                         />
                       </div>

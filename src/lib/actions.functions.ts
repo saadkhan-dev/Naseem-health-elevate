@@ -2027,15 +2027,6 @@ export const submitOrderPayment = createServerFn({ method: "POST" })
     if (order.patient_id !== context.patientId) return { error: "Forbidden" };
 
     const result = await submitOrderPaymentForOrder(admin, data);
-    if (!result.error && order.patient_id) {
-      await createPatientNotification(admin, {
-        userId: order.patient_id,
-        type: "payment",
-        title: "Payment proof received",
-        body: "Your order payment was submitted. The clinic will verify it.",
-        link: buildAdminFocusLink("/patient/orders", "order", order.id),
-      });
-    }
     return { error: result.error };
   });
 

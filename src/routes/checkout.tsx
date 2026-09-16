@@ -1,6 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, createFileRoute, useRouter } from "@tanstack/react-router";
-import { Loader2, ArrowLeft, CheckCircle2, ShoppingBag, PackageX } from "lucide-react";
+import {
+  Loader2,
+  ArrowLeft,
+  CheckCircle2,
+  ShoppingBag,
+  PackageX,
+  AlertTriangle,
+} from "lucide-react";
 import { Nav } from "@/components/site/Nav";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { Button } from "@/components/ui/button";
@@ -20,7 +27,16 @@ import {
 } from "@/lib/delivery";
 import { OrderPaymentStep } from "@/components/site/OrderPaymentStep";
 import { useScrollToSuccess } from "@/hooks/useScrollToSuccess";
+import { useMyOrders } from "@/hooks/queries/usePatient";
+import { useFormDraft } from "@/hooks/useFormDraft";
+import {
+  clearPendingOrderHint,
+  loadPendingOrderHint,
+  savePendingOrderHint,
+  type PendingOrderHint,
+} from "@/lib/pending-order";
 import { placeOrder } from "@/lib/admin-data";
+import type { PatientOrder } from "@/lib/patient-data";
 import type { Product } from "@/lib/admin-data";
 
 export const Route = createFileRoute("/checkout")({
@@ -33,6 +49,35 @@ export const Route = createFileRoute("/checkout")({
   component: CheckoutPage,
 });
 
+function isDeliveryDraftMeaningful(v: {
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  notes: string;
+  areaId: string | null;
+}): boolean {
+  return (
+    v.areaId != null ||
+    [v.name, v.phone, v.email, v.address, v.notes].some((s) => s.trim().length > 0)
+  );
+}
+
+/** An order still needs the patient to complete payment (server-side status). */
+function isOrderAwaitingPayment(o: PatientOrder): boolean {
+  return (
+    (o.payment_status === "payment_pending" || o.payment_status === "payment_failed") &&
+    o.status !== "cancelled"
+  );
+}
+
+function matchesHint(o: PatientOrder, hint: PendingOrderHint | null): boolean {
+  if (!hint) return true;
+  if (hint.orderNo && o.order_no) return o.order_no === hint.orderNo;
+  if (hint.orderId) return o.id === hint.orderId;
+  return true;
+}
+
 function CheckoutPage() {
   const cart = useCart();
   const router = useRouter();
@@ -42,15 +87,37 @@ function CheckoutPage() {
   const { data: deliveryAreas } = useActiveDeliveryAreas();
   const today = todayInClinic();
 
-  const [name, setName] = useState(profile?.full_name ?? "");
-  const [phone, setPhone] = useState(profile?.phone ?? "");
-  const [email, setEmail] = useState("");
-  const [address, setAddress] = useState("");
-  const [notes, setNotes] = useState("");
-  const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
+  const deliveryDraft = useFormDraft(
+    "checkout:delivery",
+    {
+      name: profile?.full_name ?? "",
+      phone: profile?.phone ?? "",
+      email: "",
+      address: "",
+      notes: "",
+      areaId: null as string | null,
+    },
+    { isMeaningful: (v) => isDeliveryDraftMeaningful(v) },
+  );
+  const { name, phone, email, address, notes } = deliveryDraft.value;
+  const selectedAreaId = deliveryDraft.value.areaId;
   const selectedArea = deliveryAreas?.find((a) => a.id === selectedAreaId) ?? null;
+
+  // Prefill the contact fields from the signed-in patient's profile, but never
+  // overwrite a restored draft or anything the patient has typed.
+  useEffect(() => {
+    if (profile?.full_name && !deliveryDraft.value.name) {
+      deliveryDraft.update({ name: profile.full_name });
+    }
+    if (profile?.phone && !deliveryDraft.value.phone) {
+      deliveryDraft.update({ phone: profile.phone });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.full_name, profile?.phone]);
+
   const [formError, setFormError] = useState("");
   const [placing, setPlacing] = useState(false);
+  const [orderHint, setOrderHint] = useState<PendingOrderHint | null>(null);
 
   const [placed, setPlaced] = useState<{
     orderId: string | null;
@@ -62,6 +129,29 @@ function CheckoutPage() {
   } | null>(null);
   const [paymentSubmitted, setPaymentSubmitted] = useState(false);
   const successRef = useScrollToSuccess<HTMLDivElement>(!!placed);
+
+  // Recovery after a refresh: find any order the patient still needs to pay for.
+  const { data: myOrders } = useMyOrders(!!user);
+
+  useEffect(() => {
+    setOrderHint(loadPendingOrderHint());
+  }, []);
+
+  const signedInPendingOrder: PatientOrder | undefined = user
+    ? ((orderHint?.orderId ? myOrders?.find((o) => o.id === orderHint.orderId) : undefined) ??
+      myOrders?.find((o) => isOrderAwaitingPayment(o) && matchesHint(o, orderHint)))
+    : undefined;
+  const recoveredOrder = user
+    ? (myOrders?.find(isOrderAwaitingPayment) ?? signedInPendingOrder)
+    : undefined;
+
+  // Drop the local hint once the clinic no longer has an unpaid order.
+  useEffect(() => {
+    if (user && orderHint && myOrders && !myOrders.some(isOrderAwaitingPayment)) {
+      clearPendingOrderHint();
+      setOrderHint(null);
+    }
+  }, [user, orderHint, myOrders]);
 
   const byId = new Map((products ?? []).map((p) => [p.id, p]));
   const lines = cart.items
@@ -133,6 +223,13 @@ function CheckoutPage() {
         deliveryCharge: orderDelivery,
         total: typeof result.total === "number" ? result.total : total,
         deliveryAreaName: result.deliveryAreaName ?? null,
+      });
+      // Remember the order so a refresh can send the patient straight back to
+      // this same payment step instead of creating a duplicate order.
+      savePendingOrderHint({
+        orderId: result.orderId ?? null,
+        orderNo: result.orderNo ?? null,
+        total: typeof result.total === "number" ? result.total : total,
       });
       setPaymentSubmitted(false);
       // The cart stays intact until the payment proof is submitted, so a
@@ -215,6 +312,8 @@ function CheckoutPage() {
                 email={email}
                 onPaymentSubmitted={() => {
                   cart.clear();
+                  clearPendingOrderHint();
+                  deliveryDraft.clearDraft();
                   setPaymentSubmitted(true);
                 }}
                 onClose={() => router.navigate({ to: "/shop" })}
@@ -226,6 +325,11 @@ function CheckoutPage() {
       </div>
     );
   }
+
+  const guestRecovery = !user && orderHint?.orderNo ? orderHint : null;
+  const recoveryOrderNo = recoveredOrder?.order_no ?? guestRecovery?.orderNo ?? null;
+  const recoveryAmount = recoveredOrder?.total ?? guestRecovery?.total ?? 0;
+  const showRecovery = !placed && (!!recoveredOrder || !!guestRecovery);
 
   return (
     <div className="min-h-screen bg-background">
@@ -240,6 +344,46 @@ function CheckoutPage() {
           </Link>
 
           <h1 className="mt-3 font-display text-3xl font-bold text-foreground">Checkout</h1>
+
+          {showRecovery && (
+            <div className="mt-6 rounded-3xl border border-amber-200 bg-amber-50 p-6">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="font-display text-lg font-semibold text-foreground">
+                    You have an order awaiting payment
+                  </h2>
+                  <p className="mt-1 text-[15px] leading-relaxed text-muted-foreground sm:text-sm">
+                    Order{" "}
+                    <span className="font-mono font-semibold text-foreground">
+                      {recoveryOrderNo ?? "—"}
+                    </span>{" "}
+                    is still waiting for your payment — no need to place it again. Complete the
+                    payment proof below to continue.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 rounded-2xl border border-amber-200 bg-card p-4">
+                <OrderPaymentStep
+                  orderId={recoveredOrder?.id}
+                  orderNo={recoveryOrderNo}
+                  amount={recoveryAmount}
+                  signedIn={!!user}
+                  phone={phone}
+                  email={email}
+                  onPaymentSubmitted={() => {
+                    cart.clear();
+                    clearPendingOrderHint();
+                    deliveryDraft.clearDraft();
+                    setOrderHint(null);
+                  }}
+                  onClose={() => router.navigate({ to: "/shop" })}
+                />
+              </div>
+            </div>
+          )}
 
           {isLoading ? (
             <div className="flex justify-center p-16">
@@ -270,7 +414,7 @@ function CheckoutPage() {
                   <Input
                     value={name}
                     autoComplete="name"
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => deliveryDraft.update({ name: e.target.value })}
                     required
                   />
                 </div>
@@ -283,7 +427,7 @@ function CheckoutPage() {
                       type="tel"
                       autoComplete="tel"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      onChange={(e) => deliveryDraft.update({ phone: e.target.value })}
                       placeholder="03xx-xxxxxxx"
                       required
                     />
@@ -296,7 +440,7 @@ function CheckoutPage() {
                       type="email"
                       autoComplete="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => deliveryDraft.update({ email: e.target.value })}
                       placeholder="you@email.com"
                     />
                   </div>
@@ -308,7 +452,7 @@ function CheckoutPage() {
                   <Textarea
                     rows={3}
                     value={address}
-                    onChange={(e) => setAddress(e.target.value)}
+                    onChange={(e) => deliveryDraft.update({ address: e.target.value })}
                     placeholder="House, street, area, city…"
                     required
                   />
@@ -320,7 +464,7 @@ function CheckoutPage() {
                   <div className="flex flex-col gap-1.5">
                     <select
                       value={selectedAreaId ?? ""}
-                      onChange={(e) => setSelectedAreaId(e.target.value || null)}
+                      onChange={(e) => deliveryDraft.update({ areaId: e.target.value || null })}
                       disabled={placing}
                       className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary"
                     >
@@ -348,7 +492,7 @@ function CheckoutPage() {
                   <Textarea
                     rows={2}
                     value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
+                    onChange={(e) => deliveryDraft.update({ notes: e.target.value })}
                     placeholder="Anything we should know about the delivery…"
                   />
                 </div>
