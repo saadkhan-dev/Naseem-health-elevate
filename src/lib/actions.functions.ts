@@ -27,6 +27,11 @@ import {
 } from "./server/video-sessions";
 import { getLiveKitUsageSnapshot } from "./server/livekit-usage";
 import {
+  getVideoTranslationState as getVideoTranslationStateServer,
+  setVideoTranslationState as setVideoTranslationStateServer,
+  grantVideoTranslationToken,
+} from "./server/voice-translation";
+import {
   createPatientNotification,
   createAdminNotification,
   buildAdminNotificationDedupKey,
@@ -4901,3 +4906,65 @@ export const adminGetAnalytics = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     return getAnalytics(getSupabaseAdmin(), data.range ?? "30d");
   });
+
+// ---------------------------------------------------------------------------
+// Real-time voice translation ("interpreter") for active video consultations
+//
+// The doctor's browser translates the patient's audio into Urdu, and the
+// patient's browser translates the doctor's Urdu back into the patient's
+// language. Azure speech access tokens are minted server-side so the API key
+// never reaches the browser (same architecture as the LiveKit join JWT above).
+// Depends on AZURE_SPEECH_KEY + AZURE_SPEECH_REGION — see README.
+// ---------------------------------------------------------------------------
+
+export const getVoiceTranslationToken = createServerFn({ method: "POST" })
+  .middleware([anyAuthMiddleware])
+  .validator(
+    z.object({
+      vcNo: z
+        .string()
+        .trim()
+        .toUpperCase()
+        .regex(/^VC-[A-Z0-9]{6}$/, "Invalid video consultation code"),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    return grantVideoTranslationToken(getSupabaseAdmin(), data.vcNo, context?.staffToken);
+  });
+
+/** Doctor/admin only: turn the interpreter on/off for a consultation. */
+export const setVideoTranslationState = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .validator(
+    z.object({
+      vcNo: z
+        .string()
+        .trim()
+        .toUpperCase()
+        .regex(/^VC-[A-Z0-9]{6}$/, "Invalid video consultation code"),
+      enabled: z.boolean(),
+      patientLanguage: z.string().min(2).max(32),
+    }),
+  )
+  .handler(async ({ data }) => {
+    return setVideoTranslationStateServer(
+      getSupabaseAdmin(),
+      data.vcNo,
+      data.enabled,
+      data.patientLanguage,
+    );
+  });
+
+/** Any participant (including a patient who joined late) can read the active state. */
+export const getVideoTranslationState = createServerFn({ method: "POST" })
+  .middleware([anyAuthMiddleware])
+  .validator(
+    z.object({
+      vcNo: z
+        .string()
+        .trim()
+        .toUpperCase()
+        .regex(/^VC-[A-Z0-9]{6}$/, "Invalid video consultation code"),
+    }),
+  )
+  .handler(async ({ data }) => getVideoTranslationStateServer(getSupabaseAdmin(), data.vcNo));

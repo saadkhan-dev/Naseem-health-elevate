@@ -1,3 +1,12 @@
+// Secrets required at deploy time. Do NOT put values here — set them with:
+//   npx wrangler secret put LIVEKIT_API_SECRET
+//   npx wrangler secret put LIVEKIT_API_KEY
+//   npx wrangler secret put LIVEKIT_URL
+//   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+//   npx wrangler secret put RESEND_API_KEY
+//   npx wrangler secret put GEMINI_API_KEY
+// (also: AZURE_SPEECH_KEY, AZURE_SPEECH_REGION when voice translation is configured)
+// VITE_* values (Supabase URL/anon key) are baked into the client build, not set here.
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "tanstack-start-app",

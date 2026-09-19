@@ -1,13 +1,11 @@
 import { useEffect } from "react";
 import "@livekit/components-styles";
-import {
-  ControlBar,
-  LiveKitRoom,
-  useRoomContext,
-  VideoConference,
-} from "@livekit/components-react";
+import { ControlBar, LiveKitRoom, useRoomContext } from "@livekit/components-react";
 import { RoomEvent } from "livekit-client";
 import { reportVideoSessionEventClient } from "@/lib/video-call";
+import { ConferenceLayout } from "@/components/video/ConferenceLayout";
+import { ConsultationTools } from "@/components/video/ConsultationTools";
+import { TranslationPatientIndicator } from "@/components/video/TranslationPatientIndicator";
 
 /**
  * Embedded LiveKit room for a video consultation. This replaced the old Jitsi
@@ -71,13 +69,25 @@ export function LiveKitVideoRoom({
       audio
       options={{ adaptiveStream: true, dynacast: true }}
       onDisconnected={onDisconnected}
-      className="livekit-room-root flex min-h-dvh w-full flex-col bg-background"
+      className="vc-room-root flex w-full flex-col bg-background"
     >
       <LiveKitRoomActivity vcNo={vcNo} isStaff={isStaff} />
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <VideoConference />
+      <div className="vc-room-stage relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        <ConferenceLayout />
+        {isStaff ? (
+          <ConsultationTools
+            vcNo={vcNo}
+            className="absolute right-3 top-3 z-30 w-72 max-w-[calc(100%-1.5rem)]"
+          />
+        ) : (
+          <TranslationPatientIndicator
+            vcNo={vcNo}
+            className="absolute left-1/2 top-3 z-30 -translate-x-1/2"
+          />
+        )}
         <ControlBar
           variation="minimal"
+          className="vc-room-controlbar"
           controls={{ camera: true, microphone: true, screenShare: true, chat: false, leave: true }}
         />
       </div>
