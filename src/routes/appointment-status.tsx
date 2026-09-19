@@ -291,7 +291,11 @@ function GuestAppointmentLookup({
     rEmail: "",
   });
   const { appointmentId, phone, email, rName, rPhone, rEmail } = lookupDraft.value;
-  const setAppointmentId = (v: string) => lookupDraft.update({ appointmentId: v });
+  const setAppointmentId = React.useCallback(
+    (v: string) => lookupDraft.update({ appointmentId: v }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- lookupDraft.update is stable
+    [lookupDraft.update],
+  );
   const setPhone = (v: string) => lookupDraft.update({ phone: v });
   const setEmail = (v: string) => lookupDraft.update({ email: v });
   const [formError, setFormError] = React.useState("");
@@ -319,7 +323,7 @@ function GuestAppointmentLookup({
       setResult(null);
       setRecoverResult(null);
     }
-  }, [apt]);
+  }, [apt, setAppointmentId]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -387,12 +391,41 @@ function GuestAppointmentLookup({
     }
   }
 
-  function viewStatus(no: string) {
+  async function viewStatus(no: string) {
+    // "Check Status" on a recovered card must show the APPOINTMENT status
+    // immediately. The guest already verified with phone/email in the recovery
+    // form — carry that contact into the ID lookup instead of dropping them
+    // back to an empty form (which left the two sections looking cross-wired).
+    if (checkStatus.isPending) return;
+    const verifyPhone = (phone || rPhone).trim();
+    const verifyEmail = (email || rEmail).trim();
     setMode("id");
-    setAppointmentId(no);
     setResult(null);
     setRecoverResult(null);
     setFormError("");
+    lookupDraft.update({
+      appointmentId: no.trim(),
+      phone: verifyPhone,
+      email: verifyEmail,
+    });
+    if (!verifyPhone && !verifyEmail) {
+      setFormError("Enter your phone number or email to verify this appointment.");
+      return;
+    }
+    try {
+      const res = await checkStatus.mutateAsync({
+        appointmentId: no.trim(),
+        phone: verifyPhone,
+        email: verifyEmail,
+      });
+      if (res.error) {
+        setFormError(res.error);
+        return;
+      }
+      setResult({ found: res.found, appointment: res.appointment });
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Could not check your appointment.");
+    }
   }
 
   return (
@@ -646,8 +679,18 @@ function GuestAppointmentLookup({
                     )}
                     {copiedNo === a.appointmentNo ? "Copied" : "Copy ID"}
                   </Button>
-                  <Button type="button" size="sm" onClick={() => viewStatus(a.appointmentNo)}>
-                    <CalendarCheck className="h-4 w-4" /> Check Status
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => viewStatus(a.appointmentNo)}
+                    disabled={checkStatus.isPending}
+                  >
+                    {checkStatus.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CalendarCheck className="h-4 w-4" />
+                    )}{" "}
+                    Check Appointment Status
                   </Button>
                 </div>
               </div>
@@ -1042,12 +1085,40 @@ function GuestOrderLookup({ onBackToMine }: { onBackToMine?: () => void }) {
     }
   }
 
-  function viewStatus(no: string) {
+  async function viewStatus(no: string) {
+    // "Check Status" on a recovered ORDER card must show the ORDER status
+    // immediately, carrying over the phone/email the guest already verified
+    // with in the recovery form.
+    if (checkOrderStatus.isPending) return;
+    const verifyPhone = (phone || rPhone).trim();
+    const verifyEmail = (email || rEmail).trim();
     setMode("id");
-    setOrderNo(no);
     setResult(null);
     setRecoverResult(null);
     setFormError("");
+    lookupDraft.update({
+      orderNo: no.trim(),
+      phone: verifyPhone,
+      email: verifyEmail,
+    });
+    if (!verifyPhone && !verifyEmail) {
+      setFormError("Enter your phone number or email to verify this order.");
+      return;
+    }
+    try {
+      const res = await checkOrderStatus.mutateAsync({
+        orderNo: no.trim(),
+        phone: verifyPhone,
+        email: verifyEmail,
+      });
+      if (res.error) {
+        setFormError(res.error);
+        return;
+      }
+      setResult({ found: res.found, order: res.order });
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Could not check your order.");
+    }
   }
 
   return (
@@ -1284,8 +1355,18 @@ function GuestOrderLookup({ onBackToMine }: { onBackToMine?: () => void }) {
                     )}
                     {copiedNo === o.orderNo ? "Copied" : "Copy ID"}
                   </Button>
-                  <Button type="button" size="sm" onClick={() => viewStatus(o.orderNo)}>
-                    <Package className="h-4 w-4" /> Check Status
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => viewStatus(o.orderNo)}
+                    disabled={checkOrderStatus.isPending}
+                  >
+                    {checkOrderStatus.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Package className="h-4 w-4" />
+                    )}{" "}
+                    Check Order Status
                   </Button>
                 </div>
               </div>
