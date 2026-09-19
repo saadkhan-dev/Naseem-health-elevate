@@ -10,7 +10,6 @@ import {
   Video,
   HeartPulse,
   User,
-  LogIn,
   Youtube,
 } from "lucide-react";
 import { SectionLink } from "@/components/site/SectionLink";
@@ -146,13 +145,6 @@ export function LandingHero() {
             <HeartPulse className="h-4 w-4 text-emerald-400" />
             Conditions We Treat
           </SectionLink>
-          <Link
-            to="/patient"
-            className="animate-signin-blink inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500 px-7 py-3 text-sm font-bold text-black shadow-soft transition-all hover:brightness-[1.05] active:scale-95"
-          >
-            <LogIn className="h-4 w-4" />
-            Sign Up / Sign In
-          </Link>
           <Link
             to="/patient"
             className="liquid-glass inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-medium text-white transition-all hover:bg-white/10 hover:shadow-glass"

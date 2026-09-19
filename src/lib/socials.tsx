@@ -1,12 +1,11 @@
 import type { ComponentType } from "react";
 
 /**
- * Safe placeholders for the clinic's public Google & YouTube pages.
- * Replace the "#" with the real page URLs (e.g. a YouTube channel link) when
- * they become available. The icons render as normal links until then.
+ * Public links for the clinic's pages. Google is still a placeholder until the
+ * real business listing is available; YouTube now points to the clinic channel.
  */
 export const GOOGLE_PLACEHOLDER = "#";
-export const YOUTUBE_PLACEHOLDER = "#";
+export const YOUTUBE_PLACEHOLDER = "https://youtube.com/@naseemkhan-u2t?si=jAG4ZZk8AkuP1Dcn";
 
 /** Icons used by the social link groups (single source of truth for both the Home hero and footer). */
 export type SocialIcon = ComponentType<{ className?: string }>;

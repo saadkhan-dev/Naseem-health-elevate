@@ -260,6 +260,17 @@ export function AssistantChat() {
     return unSubscribe;
   }, [router]);
 
+  // Failsafe: if the mobile browser restores this page (back gesture /
+  // bfcache) while the chat is still open, close it so the floating button
+  // always comes back. A full refresh also lands in a clean state anyway.
+  useEffect(() => {
+    function onShow() {
+      if (openRef.current) closeChat();
+    }
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+  }, []);
+
   // True when the viewport is a phone/tablet portrait (< sm breakpoint).
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 639px)");
@@ -452,7 +463,7 @@ export function AssistantChat() {
         data-floating-control="true"
         className={cn(
           "fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+5.25rem)] z-50 transition-opacity duration-300 sm:right-5 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.25rem)]",
-          (mounted || hidden || naseemDismissed) && "pointer-events-none opacity-0",
+          (open || hidden || naseemDismissed) && "pointer-events-none opacity-0",
         )}
       >
         <div className="relative">
