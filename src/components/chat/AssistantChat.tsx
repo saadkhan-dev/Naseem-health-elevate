@@ -220,7 +220,6 @@ export function AssistantChat() {
   const [mounted, setMounted] = useState(false);
   const { hidden } = useFloatingControls();
   const { naseemDismissed, dismissNaseem } = useFloatingDismiss();
-  const chatMaxHeight = "max(200px, calc(100dvh - 9.5rem - env(safe-area-inset-bottom, 0px)))";
   const [messages, setMessages] = useState<LocalTurn[]>(
     () =>
       loadConversation() ?? [
@@ -232,9 +231,39 @@ export function AssistantChat() {
   const [atBottom, setAtBottom] = useState(true);
   const [copied, setCopied] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [kbOffset, setKbOffset] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const closeTimer = useRef<number | undefined>(undefined);
+
+  // True when the viewport is a phone/tablet portrait (< sm breakpoint).
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
+  // Track the on-screen keyboard height (visual viewport) so the composer
+  // stays visible above it on mobile, exactly like a native chat app.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    function onResize() {
+      const current = window.visualViewport;
+      if (!current) return;
+      const offset = Math.max(0, window.innerHeight - current.height - current.offsetTop);
+      setKbOffset(offset);
+    }
+    vv.addEventListener("resize", onResize);
+    vv.addEventListener("scroll", onResize);
+    return () => {
+      vv.removeEventListener("resize", onResize);
+      vv.removeEventListener("scroll", onResize);
+    };
+  }, []);
 
   // Persist the conversation so a refresh never loses the chat.
   useEffect(() => {
@@ -434,14 +463,19 @@ export function AssistantChat() {
         <div
           role="dialog"
           aria-label="Naseem AI Assistant"
+          aria-modal="true"
           className={cn(
-            "fixed right-4 left-4 z-50 flex h-[min(80dvh,680px)] flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-soft transition-[transform,opacity] duration-300 ease-out sm:right-5 sm:left-auto sm:w-[450px] sm:max-w-[calc(100vw_-_2.5rem)] lg:w-[480px]",
-            "bottom-[calc(env(safe-area-inset-bottom,0px)+5.25rem)] sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.25rem)]",
+            "fixed left-0 right-0 z-50 flex h-[min(84dvh,720px)] flex-col overflow-hidden rounded-t-3xl border border-border bg-card shadow-soft transition-[transform,opacity] duration-300 ease-out sm:left-auto sm:right-5 sm:h-[min(80dvh,680px)] sm:w-[450px] sm:max-w-[calc(100vw_-_2.5rem)] sm:rounded-3xl sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.25rem)] lg:w-[480px]",
             open
               ? "translate-y-0 scale-100 opacity-100"
               : "pointer-events-none translate-y-4 scale-[0.97] opacity-0",
           )}
-          style={{ maxHeight: chatMaxHeight }}
+          style={{
+            bottom: isMobile && kbOffset > 0 ? `${kbOffset}px` : undefined,
+            maxHeight: isMobile
+              ? `max(240px, calc(100dvh - ${kbOffset}px - env(safe-area-inset-bottom, 0px)))`
+              : "max(200px, calc(100dvh - 9.5rem - env(safe-area-inset-bottom, 0px)))",
+          }}
           data-floating-control="true"
         >
           {/* Header */}
@@ -572,7 +606,10 @@ export function AssistantChat() {
           )}
 
           {/* Input */}
-          <form onSubmit={onSubmit} className="border-t border-border p-3">
+          <form
+            onSubmit={onSubmit}
+            className="border-t border-border p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] sm:pb-3"
+          >
             <div className="flex items-end gap-2">
               <textarea
                 ref={inputRef}
