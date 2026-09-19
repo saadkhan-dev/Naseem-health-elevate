@@ -21,9 +21,3 @@
 
 /sitemap.xml
   Cache-Control: public, max-age=3600
-
-/*.html
-  Cache-Control: no-cache, must-revalidate
-
-/*
-  Cache-Control: no-cache
