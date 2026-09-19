@@ -449,7 +449,7 @@ function GuestAppointmentLookup({
                 id="appointmentId"
                 value={appointmentId}
                 onChange={(e) => setAppointmentId(e.target.value)}
-                placeholder="Enter your Appointment ID, e.g. APT-7K4M92"
+                placeholder="Enter your Appointment ID, e.g. APT-482193"
                 className="h-11 rounded-xl"
               />
             </div>
@@ -1142,7 +1142,7 @@ function GuestOrderLookup({ onBackToMine }: { onBackToMine?: () => void }) {
                 id="orderNo"
                 value={orderNo}
                 onChange={(e) => setOrderNo(e.target.value)}
-                placeholder="Enter your Order ID, e.g. ORD-2T7H4J"
+                placeholder="Enter your Order ID, e.g. ORD-482193"
                 className="h-11 rounded-xl"
               />
             </div>

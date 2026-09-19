@@ -537,7 +537,7 @@ export function VideoPaymentStep({
               <Input
                 value={upId}
                 onChange={(e) => setUpId(e.target.value)}
-                placeholder="Appointment ID (APT-7K4M92)"
+                placeholder="Appointment ID (APT-482193)"
                 className="h-11 rounded-xl"
               />
             </div>
