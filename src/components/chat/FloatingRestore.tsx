@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bot, LayoutGrid, MessageCircle, Plus, X } from "lucide-react";
+import { Bot, LayoutGrid, MessageCircle, Plus, UserRound, X } from "lucide-react";
 import { useFloatingControls } from "@/hooks/useFloatingControls";
 import { useFloatingDismiss } from "@/hooks/useFloatingDismiss";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ const MENU_ITEMS = [
     iconClass: "text-[color:var(--whatsapp)]",
   },
   { key: "naseem", label: "Show Naseem AI", Icon: Bot, iconClass: "text-primary" },
+  { key: "signin", label: "Show Sign In", Icon: UserRound, iconClass: "text-emerald-500" },
   { key: "both", label: "Show Both", Icon: Plus, iconClass: "text-muted-foreground" },
   { key: "dock", label: "Show Quick Actions", Icon: LayoutGrid, iconClass: "text-emerald-500" },
 ] as const;
@@ -43,9 +44,11 @@ export function FloatingRestore() {
     whatsappDismissed,
     naseemDismissed,
     dockDismissed,
+    signinDismissed,
     restoreWhatsapp,
     restoreNaseem,
     restoreDock,
+    restoreSignin,
   } = useFloatingDismiss();
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -53,7 +56,8 @@ export function FloatingRestore() {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  const showRestore = !hidden && (whatsappDismissed || naseemDismissed || dockDismissed);
+  const showRestore =
+    !hidden && (whatsappDismissed || naseemDismissed || dockDismissed || signinDismissed);
 
   useEffect(() => {
     if (!showRestore) setOpen(false);
@@ -101,10 +105,12 @@ export function FloatingRestore() {
   function handleRestore(key: MenuItemKey) {
     if (key === "whatsapp") restoreWhatsapp();
     else if (key === "naseem") restoreNaseem();
+    else if (key === "signin") restoreSignin();
     else if (key === "dock") restoreDock();
     else {
       restoreWhatsapp();
       restoreNaseem();
+      restoreSignin();
     }
     setOpen(false);
     triggerRef.current?.focus();

@@ -18,10 +18,11 @@ import { useEffect, useSyncExternalStore } from "react";
 const WHATSAPP_KEY = "naseem_floating_whatsapp_dismissed";
 const NASEEM_KEY = "naseem_floating_naseem_dismissed";
 const DOCK_KEY = "naseem_floating_dock_dismissed";
+const SIGNIN_KEY = "naseem_floating_signin_dismissed";
 
-type DismissState = { whatsapp: boolean; naseem: boolean; dock: boolean };
+type DismissState = { whatsapp: boolean; naseem: boolean; dock: boolean; signin: boolean };
 
-const DEFAULT_STATE: DismissState = { whatsapp: false, naseem: false, dock: false };
+const DEFAULT_STATE: DismissState = { whatsapp: false, naseem: false, dock: false, signin: false };
 
 let current: DismissState = readFlags();
 const listeners = new Set<() => void>();
@@ -33,6 +34,7 @@ function readFlags(): DismissState {
       whatsapp: window.localStorage.getItem(WHATSAPP_KEY) === "1",
       naseem: window.localStorage.getItem(NASEEM_KEY) === "1",
       dock: window.localStorage.getItem(DOCK_KEY) === "1",
+      signin: window.localStorage.getItem(SIGNIN_KEY) === "1",
     };
   } catch {
     return DEFAULT_STATE;
@@ -74,7 +76,12 @@ export function useFloatingDismiss() {
   // Keep the module store in sync when dismissal happens in another tab.
   useEffect(() => {
     function onStorage(e: StorageEvent) {
-      if (e.key === WHATSAPP_KEY || e.key === NASEEM_KEY || e.key === DOCK_KEY) {
+      if (
+        e.key === WHATSAPP_KEY ||
+        e.key === NASEEM_KEY ||
+        e.key === DOCK_KEY ||
+        e.key === SIGNIN_KEY
+      ) {
         current = readFlags();
         listeners.forEach((l) => l());
       }
@@ -83,7 +90,7 @@ export function useFloatingDismiss() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  const { whatsapp, naseem, dock } = useSyncExternalStore(
+  const { whatsapp, naseem, dock, signin } = useSyncExternalStore(
     subscribe,
     getSnapshot,
     getServerSnapshot,
@@ -93,11 +100,14 @@ export function useFloatingDismiss() {
     whatsappDismissed: whatsapp,
     naseemDismissed: naseem,
     dockDismissed: dock,
+    signinDismissed: signin,
     dismissWhatsapp: () => setFlag(WHATSAPP_KEY, true),
     dismissNaseem: () => setFlag(NASEEM_KEY, true),
     dismissDock: () => setFlag(DOCK_KEY, true),
+    dismissSignin: () => setFlag(SIGNIN_KEY, true),
     restoreWhatsapp: () => setFlag(WHATSAPP_KEY, false),
     restoreNaseem: () => setFlag(NASEEM_KEY, false),
     restoreDock: () => setFlag(DOCK_KEY, false),
+    restoreSignin: () => setFlag(SIGNIN_KEY, false),
   };
 }
