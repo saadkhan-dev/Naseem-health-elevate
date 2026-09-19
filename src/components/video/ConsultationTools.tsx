@@ -73,6 +73,7 @@ export function ConsultationTools({ vcNo, className }: ConsultationToolsProps) {
   const entryIdRef = useRef(0);
   const enabledRef = useRef(false);
   const remoteAudioTrackRef = useRef<RemoteAudioTrack | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   // Sender-side publishing: while the interpreter actually runs (enabled + a
   // concrete non-Urdu patient language) the raw mic is never on the wire — a
@@ -206,12 +207,15 @@ export function ConsultationTools({ vcNo, className }: ConsultationToolsProps) {
     });
     engineRef.current = engine;
     void engine.start(captureRawMic(), remoteAudioTrackRef.current);
+    // Best-effort within the toggle's transient-activation window (mobile
+    // autoplay); the global pointer/key unlock effect covers every later tap.
+    void engine.userGesture();
     return () => {
       engine.dispose();
       engineRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, vcNo, onOwnSegment, setTtsTrack, captureRawMic]);
+  }, [enabled, vcNo, retryKey, onOwnSegment, setTtsTrack, captureRawMic]);
 
   // Mid-call language change: re-target the running engine live and persist the
   // new selection (the broadcast effect below sends it to the patient).
@@ -290,46 +294,59 @@ export function ConsultationTools({ vcNo, className }: ConsultationToolsProps) {
     setPatientLanguage((prev) => (prev === code ? prev : code));
   }
 
-  async function handleToggle(next: boolean) {
+  /**
+   * Toggle the interpreter. OFF is applied IMMEDIATELY (raw mic swapped back +
+   * engine disposed, synchronously) so the audio path can never depend on the
+   * network; the server persistence is a fire-and-forget that only rolls back
+   * the ON side when it errors. No LiveKit reconnect, no new publication.
+   */
+  function handleToggle(next: boolean) {
     setLastError(null);
     if (next && !languageByCode(patientLanguage)) {
       setLastError("Choose the patient's language to start voice translation.");
       return;
     }
     setEnabled(next);
-    enabledRef.current = next;
-    void engineRef.current?.userGesture();
-    try {
-      const res = await setVideoTranslationState(vcNo, next, patientLanguage);
-      if (res.error) {
-        setLastError(res.error);
-        setEnabled(false);
-        enabledRef.current = false;
-        restoreMic();
-        engineRef.current?.dispose();
-        setEngineState("off");
-        broadcast(false, patientLanguage, "Off");
-        return;
-      }
-    } catch {
-      setLastError("Could not update the interpreter setting. Please try again.");
-      setEnabled(false);
-      enabledRef.current = false;
-      restoreMic();
-      engineRef.current?.dispose();
-      setEngineState("off");
-      broadcast(false, patientLanguage, "Off");
-      return;
-    }
-    if (!next) {
-      restoreMic();
-      engineRef.current?.dispose();
-      setEngineState("off");
-      broadcast(false, patientLanguage, "Off");
-    } else {
+    if (next) {
       setEngineState("starting");
       broadcast(true, patientLanguage, "Starting");
+    } else {
+      restoreMic();
+      engineRef.current?.dispose();
+      engineRef.current = null;
+      setEngineState("off");
+      broadcast(false, patientLanguage, "Off");
     }
+    void engineRef.current?.userGesture();
+    void setVideoTranslationState(vcNo, next, patientLanguage)
+      .then((res) => {
+        if (!next || res.error === null) return;
+        setLastError(res.error);
+        setEnabled(false);
+        engineRef.current?.dispose();
+        engineRef.current = null;
+        restoreMic();
+        setEngineState("off");
+        broadcast(false, patientLanguage, "Off");
+      })
+      .catch(() => {
+        if (!next) return;
+        setLastError("Could not update the interpreter setting. Please try again.");
+        setEnabled(false);
+        engineRef.current?.dispose();
+        engineRef.current = null;
+        restoreMic();
+        setEngineState("off");
+        broadcast(false, patientLanguage, "Off");
+      });
+  }
+
+  /** Recreate the engine after a transient failure (Azure hiccup etc.). */
+  function retry() {
+    setLastError(null);
+    setRetryKey((k) => k + 1);
+    setEngineState("starting");
+    broadcast(true, patientLanguage, "Starting");
   }
 
   const selected = languageByCode(patientLanguage);
@@ -411,6 +428,11 @@ export function ConsultationTools({ vcNo, className }: ConsultationToolsProps) {
                 </Badge>
               )}
               {selected && !bypass && <Badge variant="outline">Patient: {selected.label}</Badge>}
+              {enabled && engineState === "error" && (
+                <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={retry}>
+                  Retry
+                </Button>
+              )}
             </div>
           )}
 

@@ -150,6 +150,7 @@ export function TranslationPatientIndicator({ vcNo, className }: TranslationPati
       });
       engineRef.current = engine;
       void engine.start(captureRawMic(), remoteAudioTrackRef.current);
+      void engine.userGesture();
     } else {
       engineRef.current.setPatientLanguage(patientLanguage);
     }
@@ -181,10 +182,18 @@ export function TranslationPatientIndicator({ vcNo, className }: TranslationPati
 
   const bypass = isUrduCode(patientLanguage);
   const lang = languageByCode(patientLanguage);
+  const unavailable = /unavailable|error/i.test(status);
+  const paused = /paused/i.test(status);
 
   return (
     <div
-      className={`pointer-events-none inline-flex max-w-[90vw] items-center gap-2 rounded-full border border-primary/30 bg-background/95 py-1.5 pl-2.5 pr-3 shadow-md backdrop-blur ${className ?? ""}`}
+      className={`pointer-events-none inline-flex max-w-[90vw] items-center gap-2 rounded-full border bg-background/95 py-1.5 pl-2.5 pr-3 shadow-md backdrop-blur ${
+        unavailable
+          ? "border-red-300 text-red-700"
+          : paused
+            ? "border-amber-200 text-amber-700"
+            : "border-primary/30"
+      } ${className ?? ""}`}
     >
       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10">
         {bypass ? (
@@ -202,7 +211,15 @@ export function TranslationPatientIndicator({ vcNo, className }: TranslationPati
               : "Voice translation ON"}
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-emerald-500" />
+          <span
+            className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+              unavailable
+                ? "bg-red-500"
+                : paused
+                  ? "animate-pulse bg-amber-500"
+                  : "animate-pulse bg-emerald-500"
+            }`}
+          />
           <span className="text-[11px] text-muted-foreground">{status}</span>
           <span className="text-[11px] text-muted-foreground/70">
             · AI translation may contain errors

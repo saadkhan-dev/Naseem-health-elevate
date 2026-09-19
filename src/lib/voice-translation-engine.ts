@@ -12,6 +12,7 @@ import {
 } from "@/lib/voice-translation";
 import { AZURE_SPEECH_TOKEN_REFRESH_SECONDS } from "@/lib/speech-token-constants";
 import type { VoiceTranslationTokenResult } from "@/lib/voice-translation-client";
+import { SegmentAssembler } from "@/lib/voice-translation-segment";
 import { toRomanUrdu } from "@/lib/roman-urdu";
 
 /**
@@ -238,6 +239,7 @@ class VoiceTranslationOutput extends AudioWorkletProcessor {
         this.pos = 0;
       }
     };
+    this.port.postMessage({ type: "ready" });
   }
   process(inputs, outputs) {
     const out = outputs && outputs[0] && outputs[0][0];
@@ -378,6 +380,17 @@ export class VoiceTranslationEngine {
   private disposed = false;
   private synthesizing = false;
   private attachGen = 0;
+  /** Recognizer generation — stale events from an obsolete recognizer are dropped. */
+  private recognizeGen = 0;
+  /** True while Azure continuous recognition is running (session started). */
+  private recognitionActive = false;
+  /** Guards against concurrent `startContinuousRecognitionAsync` calls. */
+  private startingRecognition = false;
+  /** FIFO of finalized utterance texts awaiting synthesis (see `enqueueTts`). */
+  private ttsQueue: string[] = [];
+  private queuePending = false;
+  /** Sentence/phrase boundary assembler for THIS recognizer/language. */
+  private assembler: SegmentAssembler | null = null;
   /** Monotonic id for the newest synthesis request — stale completions/drains are ignored. */
   private speechSeq = 0;
   private bootPromise: Promise<void> | null = null;
@@ -440,23 +453,14 @@ export class VoiceTranslationEngine {
     if (!this.started || !this.sdk || !this.token) return;
 
     this.setEngineState("starting");
-    // Drop any in-flight synthesis in the old language/voice.
-    this.speechSeq++;
-    this.synthesizing = false;
-    this.outputWorklet?.port.postMessage({ type: "clear" });
-
+    this.clearPipeline();
+    this.recognitionActive = false;
     try {
       this.recognizer?.stopContinuousRecognitionAsync();
     } catch {
       /* best effort */
     }
     this.recognizer = null;
-    try {
-      this.synthesizer?.close();
-    } catch {
-      /* best effort */
-    }
-    this.synthesizer = null;
 
     if (!this.createRecognizer(this.sdk, this.token, this.region)) {
       this.disableTransiently();
@@ -467,15 +471,23 @@ export class VoiceTranslationEngine {
     this.setEngineState("listening");
   }
 
+  /** Discard every pending utterance, partial segment and in-flight synthesis (old language / teardown). */
+  private clearPipeline(): void {
+    this.speechSeq++;
+    this.synthesizing = false;
+    this.ttsQueue.length = 0;
+    this.assembler?.reset();
+    this.outputWorklet?.port.postMessage({ type: "clear" });
+  }
+
   /** Stop the engine and tear the whole graph down. */
   stop(): void {
     this.disposed = true;
     this.started = false;
     this.bootPromise = null;
+    this.recognitionActive = false;
     this.tokenTimer = clearTimer(this.tokenTimer);
-    this.synthesizing = false;
-    this.speechSeq++;
-    this.outputWorklet?.port.postMessage({ type: "clear" });
+    this.clearPipeline();
 
     try {
       this.recognizer?.stopContinuousRecognitionAsync();
@@ -509,10 +521,9 @@ export class VoiceTranslationEngine {
   private disableTransiently(): void {
     this.started = false;
     this.bootPromise = null;
+    this.recognitionActive = false;
     this.tokenTimer = clearTimer(this.tokenTimer);
-    this.synthesizing = false;
-    this.speechSeq++;
-    this.outputWorklet?.port.postMessage({ type: "clear" });
+    this.clearPipeline();
 
     try {
       this.recognizer?.stopContinuousRecognitionAsync();
@@ -533,8 +544,23 @@ export class VoiceTranslationEngine {
 
   /** Called from within a user gesture so mobile autoplay permits input/output audio. */
   async userGesture(): Promise<void> {
+    const ctx = this.ctx;
+    if (!ctx) return;
     try {
-      await this.ctx?.resume();
+      const state = String(ctx.state);
+      if (state !== "running") {
+        await ctx.resume();
+        console.debug("[vt-debug] userGesture resumed AudioContext to " + String(ctx.state));
+        if (String(ctx.state) === "running" && this.started) {
+          // The graph now processes: make sure recognition is (re)started and
+          // the state reflects a LIVE engine, not a hung "starting".
+          if (!this.recognitionActive) {
+            this.startContinuousRecognition(this.recognizeGen);
+          } else {
+            this.setEngineState("listening");
+          }
+        }
+      }
     } catch {
       /* best effort */
     }
@@ -564,20 +590,26 @@ export class VoiceTranslationEngine {
     this.setEngineState("starting");
     try {
       this.sdk = await loadSpeechSdk();
-    } catch {
+    } catch (e) {
+      console.error("[vt-debug] boot failed: speech-sdk load error", e);
       this.disableTransiently();
       this.setEngineState("error");
       return;
     }
     if (this.disposed) return;
 
-    const granted = await this.opts.getToken().catch(() => null);
+    const granted = await this.opts.getToken().catch((e: unknown) => {
+      console.error("[voice-translation] token request failed", e);
+      return null;
+    });
     if (!granted?.token || granted.error) {
+      console.error("[voice-translation] token request failed", granted?.error ?? "token empty");
       this.disableTransiently();
       this.setEngineState("error");
       return;
     }
     if (this.disposed) return;
+    console.debug("[vt-debug] Azure token granted (region=" + granted.region + ")");
     this.token = granted.token;
     this.region = granted.region;
 
@@ -589,6 +621,7 @@ export class VoiceTranslationEngine {
     }
 
     if (!(await this.createAudioGraph())) {
+      console.error("[vt-debug] boot failed: audio graph");
       this.disableTransiently();
       this.setEngineState("error");
       return;
@@ -596,6 +629,7 @@ export class VoiceTranslationEngine {
     if (this.disposed) return;
 
     if (!this.createRecognizer(sdk, granted.token, granted.region)) {
+      console.error("[vt-debug] boot failed: recognizer");
       this.disableTransiently();
       this.setEngineState("error");
       return;
@@ -609,6 +643,22 @@ export class VoiceTranslationEngine {
     this.started = true;
     await this.attachInputGraph();
     if (this.disposed) return;
+    // Recognizer was built while `started` was still false (so the guarded
+    // start in `createRecognizer` deferred); start continuous recognition now.
+    this.startContinuousRecognition(this.recognizeGen);
+    // Hand the REAL TTS track to the publisher only once the whole pipeline is
+    // live — until then the components keep the guaranteed-SILENT bridge on the
+    // wire, so a mid-boot failure can never leak raw audio (nor publish a dead
+    // track). The dest track outputs silence until the first synthesis lands.
+    this.notifyOutputTrack();
+    console.debug(
+      "[vt-debug] engine ready; ctx.state=" +
+        (this.ctx?.state ?? "none") +
+        " mic=" +
+        (this.localMicTrack?.readyState ?? "none") +
+        " remote=" +
+        (this.remoteAudioTrack?.mediaStreamTrack?.readyState ?? "none"),
+    );
 
     this.tokenTimer = setTimeout(
       () => void this.refreshToken(),
@@ -616,7 +666,17 @@ export class VoiceTranslationEngine {
     );
 
     this.inputWorklet?.port.postMessage({ type: "gate", on: false });
-    onStateChange("listening");
+    // Hold "starting" (not "listening") until the AudioContext is actually
+    // processing — a suspended context would otherwise fake a healthy engine.
+    if (String(this.ctx?.state) === "running") {
+      onStateChange("listening");
+    } else {
+      console.debug(
+        "[vt-debug] engine booted but context " +
+          String(this.ctx?.state) +
+          " — waiting for a gesture",
+      );
+    }
   }
 
   /**
@@ -673,6 +733,10 @@ export class VoiceTranslationEngine {
       muteGain.connect(ctx.destination);
 
       const outputWorklet = new AudioWorkletNode(ctx, VOICE_TRANSLATION_OUTPUT_WORKLET_ID);
+      outputWorklet.port.onmessage = (event: MessageEvent) => {
+        const data = event.data as { type?: string } | null;
+        if (data?.type === "ready") console.debug("[vt-debug] output worklet ready");
+      };
       const dest = ctx.createMediaStreamDestination();
       outputWorklet.connect(dest);
 
@@ -680,8 +744,17 @@ export class VoiceTranslationEngine {
       this.inputWorklet = inputWorklet;
       this.outputWorklet = outputWorklet;
       this.mediaStreamDest = dest;
-      this.notifyOutputTrack();
-      await ctx.resume();
+      try {
+        await ctx.resume();
+      } catch (e) {
+        console.error("[vt-debug] AudioContext.resume() rejected (autoplay policy?)", e);
+      }
+      console.debug("[vt-debug] audio graph created; ctx.state=" + ctx.state);
+      if (ctx.state !== "running") {
+        console.debug(
+          "[vt-debug] ctx NOT running — worklets will not process until a gesture resumes it",
+        );
+      }
       return true;
     } catch (e) {
       console.error("[voice-translation] audio graph failed", e);
@@ -704,6 +777,7 @@ export class VoiceTranslationEngine {
     const track = this.mediaStreamDest.stream.getAudioTracks()[0];
     if (!track) return;
     this.outputTrackNotified = true;
+    console.debug("[vt-debug] output track notified (TTS track handed to publisher)");
     try {
       this.opts.onOutputTrack?.(track);
     } catch {
@@ -717,6 +791,8 @@ export class VoiceTranslationEngine {
     region: string,
   ): boolean {
     try {
+      const gen = ++this.recognizeGen;
+      this.assembler = new SegmentAssembler();
       const config = sdk.SpeechTranslationConfig.fromAuthorizationToken(token, region);
       const sourceLanguage = roleSpeechSource(this.opts.role, this.patientLanguage);
       const targetLanguage = roleTranslationTarget(this.opts.role, this.patientLanguage);
@@ -730,19 +806,39 @@ export class VoiceTranslationEngine {
       const recognizer = new sdk.TranslationRecognizer(config, audioConfig);
 
       recognizer.recognizing = (_sender, e) => {
+        if (gen !== this.recognizeGen || !this.started) return;
         if (e.result.reason === sdk.ResultReason.TranslatingSpeech) {
+          const partial = e.result.translations?.get?.(targetLanguage) ?? "";
+          console.debug(
+            "[vt-debug] STT interim: " +
+              (e.result.text?.slice(0, 40) ?? "") +
+              " -> " +
+              String(partial).slice(0, 40),
+          );
           this.emitSegment(e.result, true);
           this.setEngineState("translating");
         }
       };
 
       recognizer.recognized = (_sender, e) => {
+        if (gen !== this.recognizeGen || !this.started) return;
         if (e.result.reason === sdk.ResultReason.TranslatedSpeech) {
+          const final = e.result.translations?.get?.(targetLanguage) ?? "";
+          console.debug(
+            "[vt-debug] STT final: " +
+              (e.result.text?.slice(0, 40) ?? "") +
+              " -> " +
+              String(final).slice(0, 40) +
+              " | target=" +
+              targetLanguage,
+          );
           this.handleFinalResult(e.result);
         }
       };
 
       recognizer.canceled = (_sender, e) => {
+        if (gen !== this.recognizeGen) return;
+        this.recognitionActive = false;
         console.error("[voice-translation] recognizer canceled", e.errorDetails ?? "");
         // Interpreter is still ENABLED → the raw mic must stay un-published.
         this.disableTransiently();
@@ -750,19 +846,72 @@ export class VoiceTranslationEngine {
       };
 
       recognizer.sessionStarted = () => {
-        if (this.started) this.setEngineState("listening");
+        if (gen !== this.recognizeGen || !this.started) return;
+        this.recognitionActive = true;
+        if (String(this.ctx?.state) === "running") this.setEngineState("listening");
       };
       recognizer.sessionStopped = () => {
-        if (this.started) this.setEngineState("paused");
+        if (gen !== this.recognizeGen || !this.started) return;
+        this.recognitionActive = false;
+        if (this.started) {
+          this.setEngineState("paused");
+          // The push stream goes dry when the echo gate closes the mic; Azure
+          // then ends the session. It is re-armed by `onWorkletMessage` as soon
+          // as PCM flows again (gate re-opened) — no busy polling while gated.
+        }
       };
 
       this.recognizer = recognizer;
-      this.recognizer.startContinuousRecognitionAsync();
+      console.debug(
+        "[vt-debug] recognizer built source=" +
+          sourceLanguage +
+          " target=" +
+          targetLanguage +
+          "; starting continuous recognition",
+      );
+      this.startContinuousRecognition(gen);
       return true;
     } catch (e) {
       console.error("[voice-translation] failed to create recognizer", e);
       return false;
     }
+  }
+
+  /** Start continuous recognition; guarded so a single recognizer never double-starts. */
+  private startContinuousRecognition(gen: number, attempt = 0): void {
+    const rec = this.recognizer;
+    if (!rec || !this.started || gen !== this.recognizeGen) return;
+    if (this.recognitionActive || this.startingRecognition) return;
+    this.startingRecognition = true;
+    try {
+      rec.startContinuousRecognitionAsync(
+        () => {
+          this.startingRecognition = false;
+          if (gen !== this.recognizeGen || !this.started) return;
+          this.recognitionActive = true;
+        },
+        (err) => {
+          this.startingRecognition = false;
+          if (gen !== this.recognizeGen || !this.started) return;
+          console.error("[voice-translation] recognition start failed", err);
+          // Retry briefly (transient network) without breaking the engine.
+          if (attempt < 2) {
+            setTimeout(() => this.startContinuousRecognition(gen, attempt + 1), 800);
+          } else {
+            this.disableTransiently();
+            this.setEngineState("error");
+          }
+        },
+      );
+    } catch {
+      /* best effort */
+    }
+  }
+
+  /** Re-open a session that Azure closed (idle/silent push stream). */
+  private scheduleRecognitionRestart(gen: number): void {
+    if (!this.started || gen !== this.recognizeGen) return;
+    setTimeout(() => this.startContinuousRecognition(gen), 500);
   }
 
   private createSynthesizer(
@@ -776,6 +925,7 @@ export class VoiceTranslationEngine {
       // output worklet — no container headers to strip.
       config.speechSynthesisOutputFormat = sdk.SpeechSynthesisOutputFormat.Raw24Khz16BitMonoPcm;
       config.speechSynthesisVoiceName = roleTtsVoice(this.opts.role, this.patientLanguage);
+      console.debug("[vt-debug] synthesizer built voice=" + config.speechSynthesisVoiceName);
       this.synthesizer = new sdk.SpeechSynthesizer(config);
     } catch (e) {
       console.error("[voice-translation] failed to create synthesizer", e);
@@ -814,11 +964,20 @@ export class VoiceTranslationEngine {
     this.emitSegment(result, false, spoken);
 
     if (!spoken.trim()) {
+      if (this.started)
+        console.debug("[vt-debug] final segment had EMPTY translation (nothing to speak)");
       this.setEngineState("listening");
       return;
     }
 
-    this.speak(spoken);
+    // Sentence/phrase segmentation: only a finalized, complete utterance reaches
+    // the TTS — never a half sentence. Interim results stay in the transcript.
+    const toSpeak = this.assembler ? this.assembler.push(spoken) : spoken;
+    if (toSpeak) {
+      this.enqueueTts(toSpeak);
+    } else {
+      this.setEngineState("listening");
+    }
   }
 
   private emitSegment(
@@ -845,37 +1004,61 @@ export class VoiceTranslationEngine {
     });
   }
 
-  private speak(text: string): void {
+  /**
+   * FIFO TTS queue. Utterances are always spoken ONE at a time, in arrival
+   * order, never overlapping and never dropping a finalized segment. Stale
+   * sequences are invalidated wholesale by `clearPipeline()` (language change /
+   * disable / failure), so old-language audio can never leak into a new
+   * language.
+   */
+  private enqueueTts(text: string): void {
+    if (!this.started || !this.synthesizer) return;
+    this.ttsQueue.push(text);
+    void this.drainQueue();
+  }
+
+  private async drainQueue(): Promise<void> {
+    if (this.queuePending) return;
+    this.queuePending = true;
+    try {
+      while (this.started && this.ttsQueue.length > 0) {
+        const text = this.ttsQueue.shift() as string;
+        if (!this.started) return;
+        await this.speakOne(text);
+      }
+    } catch {
+      /* a failed utterance must never kill the engine */
+    } finally {
+      this.queuePending = false;
+      if (this.started && this.ttsQueue.length > 0) void this.drainQueue();
+    }
+  }
+
+  private async speakOne(text: string): Promise<void> {
     const sdk = this.sdk;
     const synth = this.synthesizer;
     if (!sdk || !synth || !this.started) return;
-    // Queue discipline: a new segment landing while synthesis streams is NOT
-    // queued into TTS (the transcript still records it) — this keeps latency
-    // low and guarantees stale utterances never stack behind the live one.
-    if (this.synthesizing) return;
     const id = ++this.speechSeq;
     this.synthesizing = true;
     this.setEngineState("speaking");
+    console.debug("[vt-debug] speak(" + id + "): " + text.slice(0, 60));
 
     const stream = sdk.AudioOutputStream.createPullStream();
-    synth.speakTextAsync(
-      text,
-      () => {
-        /* audio flows through the drain loop below */
-      },
-      (err) => {
-        // TTS failure is NON-fatal: live audio continues and the transcript
-        // still shows the translation.
-        if (id !== this.speechSeq) return;
-        console.error("[voice-translation] synthesis failed", err);
-        this.synthesizing = false;
-        if (this.started) {
-          this.setEngineState("listening");
-        }
-      },
-      stream,
-    );
-    void this.drainOutput(stream, id);
+    await new Promise<void>((resolve) => {
+      synth.speakTextAsync(
+        text,
+        () => {
+          /* audio flows through the drain loop below */
+        },
+        (err) => {
+          if (id !== this.speechSeq) return;
+          console.error("[voice-translation] synthesis failed", err);
+          resolve();
+        },
+        stream,
+      );
+      void this.drainOutput(stream, id).then(() => resolve());
+    });
   }
 
   /**
@@ -886,18 +1069,24 @@ export class VoiceTranslationEngine {
    */
   private async drainOutput(stream: speechsdk.PullAudioOutputStream, id: number): Promise<void> {
     const buf = new ArrayBuffer(VT_TTS_READ_BYTES);
+    let firstBytes = true;
     try {
       for (;;) {
         const n = await stream.read(buf);
         if (id !== this.speechSeq) return;
         if (n <= 0) break;
         const copy = buf.slice(0, n);
+        if (firstBytes) {
+          firstBytes = false;
+          console.debug("[vt-debug] TTS PCM flowing (" + n + " bytes per read) to output worklet");
+        }
         this.outputWorklet?.port.postMessage({ type: "pcm", id, buffer: copy }, [copy]);
       }
     } catch {
       return; // stream closed underneath us — a newer utterance or teardown
     }
     if (id !== this.speechSeq) return;
+    console.debug("[vt-debug] TTS stream ended; synthesizing=false");
     this.synthesizing = false;
     if (this.started) {
       this.setEngineState("listening");
@@ -945,6 +1134,12 @@ export class VoiceTranslationEngine {
         src.connect(inputWorklet, 0, 1);
         this.remoteSource = src;
       }
+      console.debug(
+        "[vt-debug] input graph attached; mic=" +
+          (this.micSource ? "connected" : "MISSING") +
+          " remote=" +
+          (this.remoteSource ? "connected" : "none"),
+      );
     } catch (e) {
       console.error("[voice-translation] attaching input graph failed", e);
       if (gen === this.attachGen && this.started) {
@@ -956,6 +1151,9 @@ export class VoiceTranslationEngine {
 
     if (gen === this.attachGen && this.started) {
       void ctx.resume().catch(() => undefined);
+      if (ctx.state === "running") {
+        this.setEngineState("listening");
+      }
     }
   }
 
@@ -968,12 +1166,21 @@ export class VoiceTranslationEngine {
       } catch {
         /* stream closed mid-write — ignore */
       }
+      if (this.started && !this.recognitionActive) {
+        // Mic audio is flowing again (echo gate re-opened): re-arm Azure
+        // recognition that idle time may have ended.
+        this.scheduleRecognitionRestart(this.recognizeGen);
+      }
     } else if (data.type === "speech") {
+      console.debug("[vt-debug] input worklet: SPEECH detected (mic audio reaching STT)");
       if (this.started) this.setEngineState("translating");
     } else if (data.type === "silence") {
+      console.debug("[vt-debug] input worklet: silence");
       if (this.started && !this.synthesizing) {
         this.setEngineState("listening");
       }
+    } else if (data.type === "ready") {
+      console.debug("[vt-debug] input worklet ready (audio graph processing)");
     }
   }
 

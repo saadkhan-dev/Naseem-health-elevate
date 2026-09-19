@@ -6,6 +6,8 @@ export default defineConfig({
   },
   vite: {
     build: {
+      chunkSizeWarningLimit: 900,
+      target: "es2022",
       rollupOptions: {
         output: {
           manualChunks(id) {
@@ -14,9 +16,7 @@ export default defineConfig({
             const rest = norm.split("node_modules/")[1] || norm;
             const firstSeg = rest.split("/")[0];
             const isScoped = firstSeg.startsWith("@");
-            const pkg = isScoped
-              ? `${firstSeg}/${rest.split("/")[1]}`
-              : firstSeg.split("_")[0];
+            const pkg = isScoped ? `${firstSeg}/${rest.split("/")[1]}` : firstSeg.split("_")[0];
             switch (pkg) {
               case "@supabase/supabase-js":
               case "@supabase/realtime-js":
