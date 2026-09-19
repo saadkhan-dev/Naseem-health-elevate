@@ -337,6 +337,12 @@ function GuestAppointmentLookup({
       setFormError("Please enter your phone number or email to verify.");
       return;
     }
+    if (/^ORD-/i.test(appointmentId.trim())) {
+      setFormError(
+        "This looks like an Order ID — you can check an order in the Order Status section below.",
+      );
+      return;
+    }
     try {
       const res = await checkStatus.mutateAsync({
         appointmentId: appointmentId.trim(),
@@ -1030,7 +1036,12 @@ function GuestOrderLookup({ onBackToMine }: { onBackToMine?: () => void }) {
       setFormError("Please enter your phone number or email to verify.");
       return;
     }
-
+    if (/^APT-/i.test(orderNo.trim()) || /^VC-/i.test(orderNo.trim())) {
+      setFormError(
+        "This looks like an Appointment ID — you can check an appointment in the Appointment Status section above.",
+      );
+      return;
+    }
     try {
       const res = await checkOrderStatus.mutateAsync({
         orderNo: orderNo.trim(),
