@@ -103,14 +103,17 @@ export async function getServices(): Promise<Service[]> {
       .select("*")
       .eq("is_active", true)
       .order("name");
-    // Empty/erroring database → show the live clinic's real service list
-    // instead of a broken booking form (display only; booking creation still
-    // requires a real DB connection via the server actions).
-    if (!error && data && data.length > 0) return data as Service[];
+    if (error) throw error;
+    // Database reachable: respect exactly what the admin configured. Empty /
+    // deactivated services must disappear — never resurrected from the
+    // snapshot. (Unreachable database falls through to the live list below.)
+    return (data ?? []) as Service[];
   } catch {
-    // ignore — fall through to snapshot below
+    // Database unreachable → show the live clinic's real service list instead
+    // of a broken booking form (display only; booking creation still requires
+    // a real DB connection via the server actions).
+    return FALLBACK_SERVICES;
   }
-  return FALLBACK_SERVICES;
 }
 
 export async function getAvailability(): Promise<AvailabilitySlot[]> {

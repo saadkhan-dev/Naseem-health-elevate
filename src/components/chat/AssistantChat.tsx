@@ -16,7 +16,7 @@ import { chatWithAssistant, type ChatTurn } from "@/lib/chat.functions";
 import { cn } from "@/lib/utils";
 import { useFloatingControls } from "@/hooks/useFloatingControls";
 import { useFloatingDismiss } from "@/hooks/useFloatingDismiss";
-import { Link, useRouter } from "@tanstack/react-router";
+import { Link, useLocation, useRouter } from "@tanstack/react-router";
 
 const WELCOME_MESSAGE =
   "Hello! I'm the Naseem AI Assistant. I can help you book an appointment, explore our services, or answer questions about the clinic. How can I help today?";
@@ -235,6 +235,7 @@ export function AssistantChat() {
   const [kbOffset, setKbOffset] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
   const router = useRouter();
+  const location = useLocation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const closeTimer = useRef<number | undefined>(undefined);
@@ -246,6 +247,28 @@ export function AssistantChat() {
   useEffect(() => {
     openRef.current = open;
   }, [open]);
+
+  // Guarantee #1 — native browser back (Android gesture, any webview). The
+  // router's history subscriber below is not reliable across every mobile
+  // webview, so bind straight to window.popstate as the hard guarantee that
+  // closing the chat (and restoring the floating button) always happens.
+  useEffect(() => {
+    function onPopState() {
+      if (openRef.current) closeChat();
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  // Guarantee #2 — any actual route navigation (back, forward, tapping a
+  // link) must close the chat so the floating button shows up again.
+  const pathnameRef = useRef(location.pathname);
+  useEffect(() => {
+    if (pathnameRef.current !== location.pathname) {
+      pathnameRef.current = location.pathname;
+      if (openRef.current) closeChat();
+    }
+  }, [location.pathname]);
 
   // Treat the browser/Android "back" gesture as "close the chat" while the
   // assistant is open. A sentinel entry is pushed (via the router's own

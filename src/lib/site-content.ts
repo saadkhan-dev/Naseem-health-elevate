@@ -47,11 +47,15 @@ export async function getConditions(category: ConditionCategory): Promise<Condit
       .eq("category", category)
       .eq("is_active", true)
       .order("sort_order");
-    if (!error && data && data.length > 0) return data;
+    if (error) throw error;
+    // Database reachable: respect exactly what the admin configured. Empty /
+    // deactivated rows must disappear — never resurrected from the snapshot.
+    return (data ?? []) as Condition[];
   } catch {
-    // ignore — fall through to snapshot below
+    // Database unreachable → fall back to the production snapshot so the
+    // "Diseases & Symptoms" section is never empty.
+    return fallbackConditionsFor(category);
   }
-  return fallbackConditionsFor(category);
 }
 
 /**
@@ -66,11 +70,15 @@ export async function getReviews(): Promise<Review[]> {
       .eq("is_active", true)
       .eq("status", "approved")
       .order("created_at", { ascending: false });
-    if (!error && data && data.length > 0) return data;
+    if (error) throw error;
+    // Database reachable: respect exactly what the admin configured. Empty /
+    // removed reviews must disappear — never resurrected from the snapshot.
+    return (data ?? []) as Review[];
   } catch {
-    // ignore — fall through to snapshot below
+    // Database unreachable → fall back to the approved reviews currently
+    // shown on the live site.
+    return FALLBACK_REVIEWS;
   }
-  return FALLBACK_REVIEWS;
 }
 
 // --- Admin: Conditions ---

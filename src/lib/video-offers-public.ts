@@ -23,14 +23,15 @@ export async function getPublicVideoOffers(): Promise<VideoOffer[]> {
       .or(`end_date.is.null,end_date.gte.${today}`)
       .order("created_at", { ascending: false });
 
-    if (!error && data && data.length > 0) {
-      return ((data ?? []) as VideoOffer[]).filter((o) => isOfferVisible(o, today));
-    }
-  } catch {
-    // ignore — fall through to snapshot below
-  }
+    if (error) throw error;
 
-  // Database not connected / no active offers → show the live site's current
-  // campaign so the offer card never disappears.
-  return FALLBACK_VIDEO_OFFERS.filter((o) => isOfferVisible(o, today));
+    // Database reachable: respect exactly what the admin configured. If every
+    // offer was deleted (or none are visible today) an empty list is returned
+    // so the offer cards disappear — never resurrected from the snapshot.
+    return ((data ?? []) as VideoOffer[]).filter((o) => isOfferVisible(o, today));
+  } catch {
+    // Database not connected / query failed → show the live site's current
+    // campaign so the offer card never disappears while the DB is unavailable.
+    return FALLBACK_VIDEO_OFFERS.filter((o) => isOfferVisible(o, today));
+  }
 }
