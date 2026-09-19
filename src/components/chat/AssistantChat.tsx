@@ -16,7 +16,7 @@ import { chatWithAssistant, type ChatTurn } from "@/lib/chat.functions";
 import { cn } from "@/lib/utils";
 import { useFloatingControls } from "@/hooks/useFloatingControls";
 import { useFloatingDismiss } from "@/hooks/useFloatingDismiss";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
 
 const WELCOME_MESSAGE =
   "Hello! I'm the Naseem AI Assistant. I can help you book an appointment, explore our services, or answer questions about the clinic. How can I help today?";
@@ -234,30 +234,31 @@ export function AssistantChat() {
   const [confirmClear, setConfirmClear] = useState(false);
   const [kbOffset, setKbOffset] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
+  const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const closeTimer = useRef<number | undefined>(undefined);
   const openRef = useRef(false);
+  const sentinelRef = useRef(false);
 
-  // Keep a ref in sync so the popstate handler can read the latest state
+  // Keep a ref in sync so the history handler can read the latest state
   // without re-binding itself on every render.
   useEffect(() => {
     openRef.current = open;
   }, [open]);
 
   // Treat the browser/Android "back" gesture as "close the chat" while the
-  // assistant is open, instead of navigating away and leaving the floating
-  // button stuck hidden. This is the standard history-sentinel pattern used
-  // by native-feeling bottom sheets.
+  // assistant is open. A sentinel entry is pushed (via the router's own
+  // history so it stays in sync) whenever the chat opens; pressing back pops
+  // it and simply closes the chat instead of navigating away.
   useEffect(() => {
-    function onPopState() {
-      if (!openRef.current) return;
-      closeChat();
-      window.history.pushState({ naseemChat: true }, "");
-    }
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, []);
+    const unSubscribe = router.history.subscribe(({ action }) => {
+      if (action.type !== "BACK") return;
+      sentinelRef.current = false;
+      if (openRef.current) closeChat();
+    });
+    return unSubscribe;
+  }, [router]);
 
   // True when the viewport is a phone/tablet portrait (< sm breakpoint).
   useEffect(() => {
@@ -337,10 +338,11 @@ export function AssistantChat() {
     window.clearTimeout(closeTimer.current);
     setMounted(true);
     setOpen(true);
-    // Sentinel history entry so the mobile back gesture closes the chat
-    // (handled by the popstate listener above) instead of leaving the page.
-    if (window.history.state?.naseemChat !== true) {
-      window.history.pushState({ naseemChat: true }, "");
+    // Sentinel history entry (router-aware) so the mobile back gesture closes
+    // the chat instead of leaving the page. Handled by the history subscriber.
+    if (!sentinelRef.current) {
+      sentinelRef.current = true;
+      router.history.push(window.location.href);
     }
   }
 
