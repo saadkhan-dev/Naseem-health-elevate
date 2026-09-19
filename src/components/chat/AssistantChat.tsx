@@ -342,7 +342,7 @@ export function AssistantChat() {
     // the chat instead of leaving the page. Handled by the history subscriber.
     if (!sentinelRef.current) {
       sentinelRef.current = true;
-      router.history.push(window.location.href);
+      router.history.push(router.history.location.href);
     }
   }
 
