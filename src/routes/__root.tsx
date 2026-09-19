@@ -14,6 +14,7 @@ import { StaffAuthProvider } from "@/hooks/useStaffAuth";
 import { AssistantChat } from "@/components/chat/AssistantChat";
 import { FloatingRestore } from "@/components/chat/FloatingRestore";
 import { PatientNotificationsRealtime } from "@/components/notifications/PatientNotificationsRealtime";
+import { SignInBlink } from "@/components/site/SignInBlink";
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -166,6 +167,7 @@ function RootComponent() {
           {!isAdminRoute && <AssistantChat />}
           {!isAdminRoute && <FloatingRestore />}
           {!isAdminRoute && <PatientNotificationsRealtime />}
+          {!isAdminRoute && <SignInBlink />}
         </AuthProvider>
       </StaffAuthProvider>
     </QueryClientProvider>

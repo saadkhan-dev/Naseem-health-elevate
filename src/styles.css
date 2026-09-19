@@ -390,6 +390,31 @@
     animation: float-slower 13s ease-in-out infinite;
   }
 
+  /* Pulsing attention blink for the patient Sign Up / Sign In call-to-action */
+  @keyframes signin-blink {
+    0%,
+    100% {
+      opacity: 1;
+      box-shadow:
+        0 0 0 0 rgba(16, 185, 129, 0.55),
+        0 10px 24px -8px rgba(16, 185, 129, 0.55);
+    }
+    50% {
+      opacity: 0.78;
+      box-shadow:
+        0 0 0 10px rgba(16, 185, 129, 0),
+        0 10px 24px -8px rgba(16, 185, 129, 0.55);
+    }
+  }
+  .animate-signin-blink {
+    animation: signin-blink 1.9s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-signin-blink {
+      animation: none;
+    }
+  }
+
   /* Shine sweep that runs once across a card on hover */
   .shine-sweep {
     overflow: hidden;
