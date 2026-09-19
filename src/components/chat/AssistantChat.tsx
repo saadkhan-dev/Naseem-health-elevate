@@ -393,7 +393,7 @@ export function AssistantChat() {
       <div
         data-floating-control="true"
         className={cn(
-          "fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] z-50 transition-opacity duration-300 sm:right-5 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.25rem)]",
+          "fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+5.25rem)] z-50 transition-opacity duration-300 sm:right-5 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.25rem)]",
           (mounted || hidden || naseemDismissed) && "pointer-events-none opacity-0",
         )}
       >
@@ -402,15 +402,16 @@ export function AssistantChat() {
             type="button"
             onClick={openChat}
             aria-label="Chat with Naseem AI Assistant"
-            className="group flex items-center gap-2 rounded-full bg-gradient-primary py-1 pl-1 pr-3 text-primary-foreground shadow-soft transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-glass active:scale-95 sm:gap-3 sm:py-2 sm:pl-2 sm:pr-5"
+            className="group flex items-center gap-1.5 rounded-full bg-gradient-primary py-0.5 pl-0.5 pr-2 text-primary-foreground shadow-soft transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-glass active:scale-95 sm:gap-3 sm:py-2 sm:pl-2 sm:pr-5"
           >
-            <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 shadow-inner transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105 sm:h-10 sm:w-10">
-              <Bot className="h-4 w-4 sm:h-5 sm:w-5" />
+            <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20 shadow-inner transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105 sm:h-10 sm:w-10">
+              <Bot className="h-3.5 w-3.5 sm:h-5 sm:w-5" />
               <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-white/60" />
             </span>
             <span className="text-left leading-tight">
-              <span className="block font-display text-xs font-semibold sm:text-sm">
-                Naseem AI Assistant
+              <span className="block font-display text-[11px] font-semibold sm:text-sm">
+                <span className="sm:hidden">AI</span>
+                <span className="hidden sm:inline">Naseem AI Assistant</span>
               </span>
               <span className="hidden text-[10px] text-primary-foreground/85 sm:block sm:text-[11px]">
                 How can we help you?
@@ -421,9 +422,9 @@ export function AssistantChat() {
             type="button"
             onClick={dismissNaseem}
             aria-label="Hide Naseem AI Assistant button"
-            className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-soft transition-all duration-300 hover:bg-background hover:text-foreground active:scale-90"
+            className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-soft transition-all duration-300 hover:bg-background hover:text-foreground active:scale-90 sm:h-6 sm:w-6"
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
           </button>
         </div>
       </div>
@@ -435,7 +436,7 @@ export function AssistantChat() {
           aria-label="Naseem AI Assistant"
           className={cn(
             "fixed right-4 left-4 z-50 flex h-[min(80dvh,680px)] flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-soft transition-[transform,opacity] duration-300 ease-out sm:right-5 sm:left-auto sm:w-[450px] sm:max-w-[calc(100vw_-_2.5rem)] lg:w-[480px]",
-            "bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.25rem)]",
+            "bottom-[calc(env(safe-area-inset-bottom,0px)+5.25rem)] sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.25rem)]",
             open
               ? "translate-y-0 scale-100 opacity-100"
               : "pointer-events-none translate-y-4 scale-[0.97] opacity-0",

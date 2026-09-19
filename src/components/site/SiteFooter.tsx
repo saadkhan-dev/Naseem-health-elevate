@@ -157,7 +157,7 @@ export function SiteFooter({ dark = false }: { dark?: boolean }) {
       {/* Floating WhatsApp */}
       <div
         data-floating-control="true"
-        className={`fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+5.25rem)] z-50 transition-[opacity] duration-300 sm:right-5 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] ${
+        className={`fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+8.5rem)] z-50 transition-[opacity] duration-300 sm:right-5 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] ${
           hidden || whatsappDismissed ? "pointer-events-none opacity-0" : "opacity-100"
         }`}
       >
@@ -167,13 +167,15 @@ export function SiteFooter({ dark = false }: { dark?: boolean }) {
             target="_blank"
             rel="noreferrer"
             aria-label="Chat on WhatsApp"
-            className={`group flex items-center gap-2 rounded-full bg-[color:var(--whatsapp)] py-1 pl-1 pr-3 text-white shadow-soft transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-glass active:scale-95 sm:gap-3 sm:py-2 sm:pl-2 sm:pr-5`}
+            className={`group flex items-center gap-1.5 rounded-full bg-[color:var(--whatsapp)] py-0.5 pl-0.5 pr-2 text-white shadow-soft transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-glass active:scale-95 sm:gap-3 sm:py-2 sm:pl-2 sm:pr-5`}
           >
-            <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 shadow-inner transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105 sm:h-10 sm:w-10">
-              <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5" />
+            <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20 shadow-inner transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105 sm:h-10 sm:w-10">
+              <MessageCircle className="h-3.5 w-3.5 sm:h-5 sm:w-5" />
             </span>
             <span className="text-left leading-tight">
-              <span className="block font-display text-xs font-semibold sm:text-sm">WhatsApp</span>
+              <span className="block font-display text-[11px] font-semibold sm:text-sm">
+                WhatsApp
+              </span>
               <span className="hidden text-[10px] text-white/85 sm:block sm:text-[11px]">
                 Chat with us
               </span>
@@ -183,9 +185,9 @@ export function SiteFooter({ dark = false }: { dark?: boolean }) {
             type="button"
             onClick={dismissWhatsapp}
             aria-label="Hide WhatsApp button"
-            className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-soft transition-all duration-300 hover:bg-background hover:text-foreground active:scale-90"
+            className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-soft transition-all duration-300 hover:bg-background hover:text-foreground active:scale-90 sm:h-6 sm:w-6"
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
           </button>
         </div>
       </div>
