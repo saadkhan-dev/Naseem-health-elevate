@@ -118,11 +118,18 @@ export function FloatingRestore() {
 
   if (!showRestore) return null;
 
-  // If WhatsApp is dismissed, sit in WhatsApp's old spot (bottom). Otherwise
-  // WhatsApp is still visible so sit above it (Naseem's old spot).
-  const bottomClass = whatsappDismissed
-    ? "bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)]"
-    : "bottom-[calc(env(safe-area-inset-bottom,0px)+5.25rem)] sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.25rem)]";
+  // Fill the lowest free lateral slot. On mobile the WhatsApp pill sits ABOVE
+  // the Naseem AI pill (bottom slot = Naseem, top slot = WhatsApp); on desktop
+  // the order is reversed (bottom slot = WhatsApp, top slot = Naseem). So the
+  // free slot differs per breakpoint.
+  const bottomClass = cn(
+    naseemDismissed
+      ? "bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)]"
+      : "bottom-[calc(env(safe-area-inset-bottom,0px)+5.75rem)]",
+    whatsappDismissed
+      ? "sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)]"
+      : "sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.25rem)]",
+  );
 
   return (
     <div

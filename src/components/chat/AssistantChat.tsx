@@ -393,7 +393,7 @@ export function AssistantChat() {
       <div
         data-floating-control="true"
         className={cn(
-          "fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+5.25rem)] z-50 transition-opacity duration-300 sm:right-5 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.25rem)]",
+          "fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] z-50 transition-opacity duration-300 sm:right-5 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.25rem)]",
           (mounted || hidden || naseemDismissed) && "pointer-events-none opacity-0",
         )}
       >
@@ -435,7 +435,7 @@ export function AssistantChat() {
           aria-label="Naseem AI Assistant"
           className={cn(
             "fixed right-4 left-4 z-50 flex h-[min(80dvh,680px)] flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-soft transition-[transform,opacity] duration-300 ease-out sm:right-5 sm:left-auto sm:w-[450px] sm:max-w-[calc(100vw_-_2.5rem)] lg:w-[480px]",
-            "bottom-[calc(env(safe-area-inset-bottom,0px)+5.25rem)] sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.25rem)]",
+            "bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.25rem)]",
             open
               ? "translate-y-0 scale-100 opacity-100"
               : "pointer-events-none translate-y-4 scale-[0.97] opacity-0",

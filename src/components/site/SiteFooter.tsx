@@ -157,7 +157,7 @@ export function SiteFooter({ dark = false }: { dark?: boolean }) {
       {/* Floating WhatsApp */}
       <div
         data-floating-control="true"
-        className={`fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] z-50 transition-[opacity] duration-300 sm:right-5 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] ${
+        className={`fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+5.25rem)] z-50 transition-[opacity] duration-300 sm:right-5 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] ${
           hidden || whatsappDismissed ? "pointer-events-none opacity-0" : "opacity-100"
         }`}
       >
