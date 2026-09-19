@@ -6,11 +6,12 @@ import { whatsappUrl, telUrl } from "@/lib/contact";
 import { SITE_CONFIG } from "@/lib/site-config";
 import { useFloatingControls } from "@/hooks/useFloatingControls";
 import { useFloatingDismiss } from "@/hooks/useFloatingDismiss";
+import { cn } from "@/lib/utils";
 
 export function FloatingDock() {
   const [showDock, setShowDock] = useState(false);
   const { hidden } = useFloatingControls();
-  const { dockDismissed, dismissDock } = useFloatingDismiss();
+  const { dockDismissed, dismissDock, whatsappDismissed, naseemDismissed } = useFloatingDismiss();
 
   useEffect(() => {
     function handleScroll() {
@@ -23,6 +24,14 @@ export function FloatingDock() {
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // The dock is centred at the bottom. When the WhatsApp / Naseem AI pills
+  // (bottom-right) or the Sign In prompt (bottom-left) are still visible we
+  // float the dock ABOVE them so nothing overlaps.
+  const othersVisible = !whatsappDismissed || !naseemDismissed;
+  const dockBottom = othersVisible
+    ? "bottom-[calc(env(safe-area-inset-bottom,0px)+8.5rem)] sm:bottom-[calc(env(safe-area-inset-bottom,0px)+10.25rem)]"
+    : "bottom-[calc(env(safe-area-inset-bottom,0px)+4.5rem)] sm:bottom-[calc(env(safe-area-inset-bottom,0px)+5.5rem)]";
 
   function scrollToTop() {
     window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
@@ -38,7 +47,10 @@ export function FloatingDock() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 20, scale: 0.95 }}
           transition={{ duration: 0.3 }}
-          className="fixed bottom-6 left-1/2 z-40 mx-auto w-[calc(100%-2.5rem)] max-w-fit -translate-x-1/2"
+          className={cn(
+            "fixed left-1/2 z-40 mx-auto w-[calc(100%-2.5rem)] max-w-[min(92vw,560px)] -translate-x-1/2 sm:left-1/2 sm:-translate-x-1/2",
+            dockBottom,
+          )}
         >
           <div className="relative">
             <div className="liquid-glass-glow flex items-center justify-center gap-1.5 rounded-full p-2 shadow-2xl backdrop-blur-2xl sm:gap-2 sm:px-2">
