@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowDown,
+  ArrowLeft,
   Bot,
   Check,
   Copy,
@@ -236,6 +237,27 @@ export function AssistantChat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const closeTimer = useRef<number | undefined>(undefined);
+  const openRef = useRef(false);
+
+  // Keep a ref in sync so the popstate handler can read the latest state
+  // without re-binding itself on every render.
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
+
+  // Treat the browser/Android "back" gesture as "close the chat" while the
+  // assistant is open, instead of navigating away and leaving the floating
+  // button stuck hidden. This is the standard history-sentinel pattern used
+  // by native-feeling bottom sheets.
+  useEffect(() => {
+    function onPopState() {
+      if (!openRef.current) return;
+      closeChat();
+      window.history.pushState({ naseemChat: true }, "");
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   // True when the viewport is a phone/tablet portrait (< sm breakpoint).
   useEffect(() => {
@@ -315,6 +337,11 @@ export function AssistantChat() {
     window.clearTimeout(closeTimer.current);
     setMounted(true);
     setOpen(true);
+    // Sentinel history entry so the mobile back gesture closes the chat
+    // (handled by the popstate listener above) instead of leaving the page.
+    if (window.history.state?.naseemChat !== true) {
+      window.history.pushState({ naseemChat: true }, "");
+    }
   }
 
   function closeChat() {
@@ -480,6 +507,14 @@ export function AssistantChat() {
         >
           {/* Header */}
           <div className="flex items-center gap-3 bg-gradient-primary px-4 py-3.5 text-primary-foreground">
+            <button
+              type="button"
+              onClick={closeChat}
+              aria-label="Back"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15 transition-all duration-300 hover:bg-white/25 active:scale-90 sm:hidden"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20 shadow-inner">
               <Bot className="h-5 w-5" />
             </div>
