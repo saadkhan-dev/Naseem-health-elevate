@@ -32,11 +32,16 @@ export interface SegmentAssemblerOptions {
   sentenceEnd?: RegExp;
 }
 
-// Terminators: `.` `?` `!` `।` (Devanagari danda), `۔` (Arabic-script full stop),
-// `؟` (Arabic question mark) and `…`.
+// Terminators: `.` `?` `!` `۔` (Arabic-script full stop), `؟` (Arabic question
+// mark) and `…`. `maxHoldMs` is tuned for clinical speech: Urdu consultation
+// sentences routinely run 6-10 seconds with several conjunct clauses before the
+// final terminator lands (e.g. "جب میں زیادہ دیر بیٹھتا ہوں تو درد بڑھ جاتا ہے
+// اور کبھی کبھی ٹانگ سن بھی ہو جاتی ہے۔"). Holding a little longer trades a
+// fraction of TTS latency for WHOLE-SENTENCE context — the engine never speaks
+// a half-formed clause that Azure was about to grow into the complete thought.
 const DEFAULTS: Required<SegmentAssemblerOptions> = {
   minChars: 8,
-  maxHoldMs: 2600,
+  maxHoldMs: 3600,
   hardMaxChars: 220,
   sentenceEnd: /[.!?।۔؟……]\s*$/u,
 };

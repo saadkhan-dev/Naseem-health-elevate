@@ -126,7 +126,7 @@ function VideoCallPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-dvh items-center justify-center px-4 py-8">
+      <div className="flex min-h-dvh items-center justify-center px-4 py-4 sm:py-8">
         {joinTimedOut ? (
           <div className="max-w-md text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
@@ -161,7 +161,7 @@ function VideoCallPage() {
 
   if (join?.error || !session) {
     return (
-      <div className="flex min-h-dvh items-center justify-center px-4 py-8">
+      <div className="flex min-h-dvh items-center justify-center px-4 py-4 sm:py-8">
         <div className="max-w-md text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-muted">
             <Clock className="h-8 w-8 text-muted-foreground" />
@@ -181,7 +181,7 @@ function VideoCallPage() {
 
   if (isDoctor && !doctorReady) {
     return (
-      <div className="flex min-h-dvh items-center justify-center px-4 py-8">
+      <div className="flex min-h-dvh items-center justify-center px-4 py-4 sm:py-8">
         <div className="max-w-md text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
             <ShieldAlert className="h-8 w-8 text-destructive" />
@@ -200,7 +200,7 @@ function VideoCallPage() {
 
   if (session.status === "completed") {
     return (
-      <div className="flex min-h-dvh items-center justify-center px-4 py-8">
+      <div className="flex min-h-dvh items-center justify-center px-4 py-4 sm:py-8">
         <div className="max-w-md text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-100">
             <Video className="h-8 w-8 text-blue-600" />
@@ -219,7 +219,7 @@ function VideoCallPage() {
 
   return (
     <>
-      <div className="flex min-h-dvh items-center justify-center px-4 py-8">
+      <div className="flex min-h-dvh items-center justify-center px-4 py-4 sm:py-8">
         <div className="w-full max-w-md rounded-xl border bg-card p-6 shadow-sm">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
             <Video className="h-7 w-7 text-primary" />

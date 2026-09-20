@@ -144,6 +144,29 @@
   }
 }
 
+/*
+ * Video consultation room: make it a true fullscreen call surface.
+ *
+ * WHY (root cause of page scroll / blank space on /video/:vcNo):
+ * @livekit/components-styles ships an UNLAYERED `.lk-room-container { height:
+ * 100% }`. The app's `h-dvh` utility lives inside Tailwind's @layer utilities,
+ * and unlayered rules beat layered ones regardless of order — so the utility
+ * never won. `height: 100%` then resolves against the auto-sized <body> and the
+ * room auto-heights to its own CONTENT: on wide/short viewports (>=~700px tall
+ * landscape) the 16/9 tile + control bar exceed the viewport (page scroll,
+ * control bar pushed below the fold); on tall phones the stage under-fills and
+ * leaves a blank band below the room.
+ *
+ * Pin the room to the dynamic viewport with an unlayered, specificity-boosted
+ * rule so it beats the LiveKit default regardless of stylesheet order.
+ */
+.vc-room-root.vc-room-root {
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

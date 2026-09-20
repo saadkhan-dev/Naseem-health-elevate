@@ -165,6 +165,75 @@ export function isUrduCode(code: string | undefined | null): boolean {
   return code === URDU_LANGUAGE_CODE || code === URDU_TRANSLATION_CODE;
 }
 
+// ---------------------------------------------------------------------------
+// STT phrase-list boost (medical vocabulary)
+// ---------------------------------------------------------------------------
+//
+// The Azure TranslationRecognizer transcribes the speaker's OWN language, and a
+// raw general-model recognizer can fumble medical words that matter (body
+// parts, symptoms, numeric durations, medication names) — especially when the
+// speech mixes Urdu with English loanwords (e.g. "painkiller", "blood
+// pressure"). Each STT source locale gets a short phrase list applied through
+// `SpeechSDK.PhraseListGrammar` — a pure recognition BIAS, not a translation or
+// behaviour change: it only helps the service transcribe these tokens, and if
+// the API is ever unavailable it is skipped entirely (never breaks the call).
+// The keys are the STT source locales from `roleSpeechSource` (doctor → ur-IN,
+// patient → their selected language). Keep entries short phrases / single
+// words — the phrase list is a hint, not a constraint.
+export const MEDICAL_STT_BOOST: Readonly<Record<string, readonly string[]>> = {
+  "ur-IN": [
+    "کمر میں درد",
+    "درد",
+    "بخار",
+    "کھانسی",
+    "بلڈ پریشر",
+    "شوگر",
+    "دوا",
+    "گولی",
+    "ٹانگ",
+    "ڈاکٹر صاحب",
+    "سانس لینے میں دشواری",
+    "چکر آنا",
+    "متلی",
+    "قے",
+    "اسہال",
+    "جوڑوں کا درد",
+    "معدہ",
+    "سر میں درد",
+    "آرام",
+    "شدید",
+  ],
+  "en-US": [
+    "back pain",
+    "severe pain",
+    "painkiller",
+    "right leg",
+    "left leg",
+    "numb",
+    "radiating",
+    "three days",
+    "fever",
+    "cough",
+    "headache",
+    "blood pressure",
+    "sugar",
+    "medicine",
+    "tablet",
+    "stomach pain",
+    "shortness of breath",
+    "dizziness",
+    "nausea",
+    "vomiting",
+    "knee pain",
+    "rest",
+  ],
+  "hi-IN": ["पीठ दर्द", "दर्द", "बुखार", "खांसी", "ब्लड प्रेशर", "दवा", "गोली", "सिरदर्द", "चक्कर"],
+  "pa-IN": ["ਪਿੱਠ ਦਰਦ", "ਦਰਦ", "ਬੁਖ਼ਾਰ", "ਖੰਘ", "ਬਲੱਡ ਪ੍ਰੈਸ਼ਰ", "ਦਵਾਈ"],
+  "bn-IN": ["পিঠে ব্যথা", "ব্যথা", "জ্বর", "কাশি", "ব্লাড প্রেসার", "ঔষধ"],
+  "ps-AF": ["د کمر درد", "درد", "تبه", "خبره", "میډیسین"],
+  "ar-SA": ["آلام الظهر", "ألم", "حمى", "سعال", "ضغط الدم", "دواء"],
+};
+
 /**
  * SENDER-SIDE role routing. The doctor speaks Urdu and the patient speaks their
  * selected language, so each device's OWN mic is the STT source and the OTHER

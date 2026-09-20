@@ -92,6 +92,50 @@ describe("toRomanUrdu — phrase-level priority", () => {
     expect(toRomanUrdu("دوائی دن میں تین بار لینی ہے")).toBe("Dawai din mein teen bar leni hai");
   });
 
+  it("prescribed E2E sentences keep their idiomatic roman spelling (with and without terminator)", () => {
+    expect(toRomanUrdu("مجھے تین دن سے کمر میں بہت درد ہے اور درد دائیں ٹانگ تک جا رہا ہے۔")).toBe(
+      "Mujhe teen din se kamarr mein bohat dard hai aur dard dayen tang tak ja raha hai.",
+    );
+    expect(toRomanUrdu("مجھے تین دن سے کمر میں بہت درد ہے اور درد دائیں ٹانگ تک جا رہا ہے")).toBe(
+      "Mujhe teen din se kamarr mein bohat dard hai aur dard dayen tang tak ja raha hai",
+    );
+    expect(
+      toRomanUrdu(
+        "جب میں زیادہ دیر بیٹھتا ہوں تو درد بڑھ جاتا ہے اور کبھی کبھی ٹانگ سن بھی ہو جاتی ہے۔",
+      ),
+    ).toBe(
+      "Jab mein zyada dair baithta hoon to dard barh jata hai aur kabhi kabhi tang sun bhi ho jati hai.",
+    );
+    expect(toRomanUrdu("میں نے پہلے درد کی دوا لی تھی لیکن اس سے زیادہ فرق نہیں پڑا۔")).toBe(
+      "Mein ne pehle dard ki dawa li thi lekin is se zyada farq nahi para.",
+    );
+    expect(toRomanUrdu("میں نے پہلے painkiller لی تھی لیکن اس سے زیادہ فرق نہیں پڑا")).toBe(
+      "Mein ne pehle painkiller li thi lekin is se zyada farq nahi para",
+    );
+    expect(
+      toRomanUrdu(
+        "آپ کو یہ درد کب سے ہو رہا ہے اور کیا چلنے یا سیڑھیاں چڑھنے سے درد زیادہ ہوتا ہے؟",
+      ),
+    ).toBe(
+      "Aap ko ye dard kab se ho raha hai aur kya chalne ya seerhiyan charne se dard zyada hota hai?",
+    );
+  });
+
+  it("expanded medical vocabulary (body sides, numbness, swelling, vitals)", () => {
+    expect(toRomanUrdu("درد دائیں طرف ہے")).toBe("Dard dayen taraf hai");
+    expect(toRomanUrdu("میری ٹانگ سن ہو گئی ہے")).toBe("Meri tang sun ho gayi hai");
+    expect(toRomanUrdu("کیا آپ کو سوجن ہے؟")).toBe("Kya aap ko soojan hai?");
+    expect(toRomanUrdu("آپ کا بلڈ پریشر کتنا ہے؟")).toBe("Aap ka blood pressure kitna hai?");
+    expect(toRomanUrdu("آپ کو فوراً اسپتال آنا ہے")).toBe("Aap ko foran hospital aana hai");
+    expect(toRomanUrdu("یہ کوئی خطرناک بیماری نہیں ہے")).toBe("Ye koi khatarnak bimari nahi hai");
+  });
+
+  it("mixed EN/UR medical tokens keep their Latin form", () => {
+    expect(toRomanUrdu("آپ کی دوا ختم ہو گئی ہے")).toBe("Aap ki dawa khatam ho gayi hai");
+    expect(toRomanUrdu("میرے پاس رپورٹ ہے")).toBe("Meray paas report hai");
+    expect(toRomanUrdu("ٹیسٹ کرائیں")).toBe("Test karaain");
+  });
+
   it("keeps the word dictionary for anything outside the phrase table", () => {
     expect(toRomanUrdu("بخار کتنے دن سے ہے؟")).toBe("Bukhar kitne din se hai?");
     expect(toRomanUrdu("آپ کا وزن کتنا ہے؟")).toBe("Aap ka wazan kitna hai?");

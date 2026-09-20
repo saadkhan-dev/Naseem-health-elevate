@@ -3,6 +3,7 @@ import type * as speechsdk from "microsoft-cognitiveservices-speech-sdk";
 import {
   isUrduCode,
   languageByCode,
+  MEDICAL_STT_BOOST,
   roleSpeechSource,
   roleTranslationTarget,
   roleTtsVoice,
@@ -916,6 +917,7 @@ export class VoiceTranslationEngine {
       };
 
       this.recognizer = recognizer;
+      this.applyMedicalSttBoost(recognizer);
       console.debug(
         "[vt-debug] recognizer built source=" +
           sourceLanguage +
@@ -928,6 +930,27 @@ export class VoiceTranslationEngine {
     } catch (e) {
       console.error("[voice-translation] failed to create recognizer", e);
       return false;
+    }
+  }
+
+  /**
+   * Bias the recognizer's STT toward the medical vocabulary that matters in a
+   * consultation (body parts, symptoms, severity, medication forms, vitals).
+   * Implemented via `PhraseListGrammar` — a recognition-side hint only. It can
+   * never alter translations, TTS text, the audio graph or the published track;
+   * if the API is absent or rejects the phrases it is skipped silently so a
+   * recognition/vocabulary hiccup can never break the interpreter.
+   */
+  private applyMedicalSttBoost(recognizer: speechsdk.TranslationRecognizer): void {
+    try {
+      const sdk = this.sdk;
+      const phrases = MEDICAL_STT_BOOST[roleSpeechSource(this.opts.role, this.patientLanguage)];
+      if (!sdk || !phrases || phrases.length === 0) return;
+      const grammar = sdk.PhraseListGrammar.fromRecognizer(recognizer);
+      for (const phrase of phrases) grammar.addPhrase(phrase);
+      console.debug("[vt-debug] STT phrase-list boost applied phrases=" + phrases.length);
+    } catch {
+      /* vocabulary boost is optional — never break recognition over it */
     }
   }
 

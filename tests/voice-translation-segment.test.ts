@@ -74,4 +74,17 @@ describe("SegmentAssembler — smart sentence segmentation (vo translation speec
     // Same utterance grown past the cap → emitted whole (never split mid-word).
     expect(a.push(one.repeat(50), 10)).toBe(one.repeat(50).trim());
   });
+
+  it("default hold keeps long multi-clause clinical sentences WHOLE (sentence context)", () => {
+    // Default maxHoldMs is 3600ms (tuned for 6-10s Urdu consultation sentences
+    // with conjunct clauses). A clause that lands 3s after the start is NOT
+    // force-emitted as a half-sentence — it stays merged until the terminator.
+    const a = new SegmentAssembler();
+    expect(a.push("میں نے یہ درد پہلی بار محسوس کیا", 0)).toBeNull();
+    expect(a.push("جب میں سیدھا کھڑا ہوتا ہوں", 3000)).toBeNull();
+    const complete =
+      "میں نے یہ درد پہلی بار محسوس کیا جب میں سیدھا کھڑا ہوتا ہوں تو درد بڑھ جاتا ہے۔";
+    expect(a.push(complete, 6000)).toBe(complete);
+    expect(a.holding).toBe(false);
+  });
 });
