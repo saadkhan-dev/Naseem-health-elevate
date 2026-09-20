@@ -318,27 +318,52 @@ export function ConsultationTools({ vcNo, className }: ConsultationToolsProps) {
       broadcast(false, patientLanguage, "Off");
     }
     void engineRef.current?.userGesture();
-    void setVideoTranslationState(vcNo, next, patientLanguage)
-      .then((res) => {
-        if (!next || res.error === null) return;
-        setLastError(res.error);
-        setEnabled(false);
-        engineRef.current?.dispose();
-        engineRef.current = null;
-        restoreMic();
-        setEngineState("off");
-        broadcast(false, patientLanguage, "Off");
-      })
-      .catch(() => {
-        if (!next) return;
-        setLastError("Could not update the interpreter setting. Please try again.");
-        setEnabled(false);
-        engineRef.current?.dispose();
-        engineRef.current = null;
-        restoreMic();
-        setEngineState("off");
-        broadcast(false, patientLanguage, "Off");
-      });
+    void persistToggle(next);
+  }
+
+  /**
+   * Persist the doctor's interpreter state. OFF rolls forward optimistically
+   * (never block de-escalation on the network). ON retries a TRANSIENT fetch
+   * failure a couple of times — a flaky POST must not roll back a functioning
+   * interpreter into silence — and only a real server-side rejection does.
+   */
+  async function persistToggle(next: boolean) {
+    const rollback = () => {
+      if (!next) return;
+      setLastError("Could not update the interpreter setting. Please try again.");
+      setEnabled(false);
+      engineRef.current?.dispose();
+      engineRef.current = null;
+      restoreMic();
+      setEngineState("off");
+      broadcast(false, patientLanguage, "Off");
+    };
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await setVideoTranslationState(vcNo, next, patientLanguage);
+        if (next && res.error) {
+          // Server rejected the write (e.g. invalid language) — real problem.
+          rollback();
+          return;
+        }
+        return;
+      } catch {
+        if (next && attempt < 2) {
+          await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+          continue;
+        }
+        if (next) {
+          rollback();
+          return;
+        }
+        // OFF is fire-and-forget: give up after retries, keep the call OFF.
+        if (attempt < 2) {
+          await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+          continue;
+        }
+        return;
+      }
+    }
   }
 
   /** Recreate the engine after a transient failure (Azure hiccup etc.). */

@@ -35,6 +35,12 @@ function LiveKitRoomActivity({ vcNo, isStaff }: LiveKitRoomParticipantInfo) {
   const role = isStaff ? "doctor" : "patient";
 
   useEffect(() => {
+    if (import.meta.env.DEV) {
+      (window as unknown as { __lkRoom?: typeof room }).__lkRoom = room;
+    }
+  }, [room]);
+
+  useEffect(() => {
     const onConnected = () => {
       void reportVideoSessionEventClient({ vcNo, role, event: "joined" });
     };
@@ -69,7 +75,7 @@ export function LiveKitVideoRoom({
       audio
       options={{ adaptiveStream: true, dynacast: true }}
       onDisconnected={onDisconnected}
-      className="vc-room-root flex w-full flex-col bg-background"
+      className="vc-room-root flex h-dvh w-full flex-col overflow-hidden bg-background"
     >
       <LiveKitRoomActivity vcNo={vcNo} isStaff={isStaff} />
       <div className="vc-room-stage relative flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -77,19 +83,27 @@ export function LiveKitVideoRoom({
         {isStaff ? (
           <ConsultationTools
             vcNo={vcNo}
-            className="absolute right-3 top-3 z-30 w-72 max-w-[calc(100%-1.5rem)]"
+            className="absolute right-3 top-[calc(env(safe-area-inset-top)_+_0.75rem)] z-30 w-72 max-w-[calc(100%-1.5rem)]"
           />
         ) : (
           <TranslationPatientIndicator
             vcNo={vcNo}
-            className="absolute left-1/2 top-3 z-30 -translate-x-1/2"
+            className="absolute left-1/2 top-[calc(env(safe-area-inset-top)_+_0.75rem)] z-30 -translate-x-1/2"
           />
         )}
-        <ControlBar
-          variation="minimal"
-          className="vc-room-controlbar"
-          controls={{ camera: true, microphone: true, screenShare: true, chat: false, leave: true }}
-        />
+        <div className="vc-room-controlbar-wrap flex w-full shrink-0 items-center justify-center pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <ControlBar
+            variation="minimal"
+            className="vc-room-controlbar"
+            controls={{
+              camera: true,
+              microphone: true,
+              screenShare: true,
+              chat: false,
+              leave: true,
+            }}
+          />
+        </div>
       </div>
     </LiveKitRoom>
   );

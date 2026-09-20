@@ -84,7 +84,9 @@ export function useVoiceTranslationPublishing(enabled: boolean): VoiceTranslatio
           console.debug("[vt-debug] swapping published mic track -> " + track.id.slice(0, 12));
           return local.replaceTrack(track, { userProvidedTrack: true }).then(
             (t) => {
-              publishedRef.current = t instanceof LocalAudioTrack ? t.mediaStreamTrack : track;
+              const applied = t instanceof LocalAudioTrack ? t.mediaStreamTrack : track;
+              publishedRef.current = applied;
+              console.debug("[vt-debug] livekit-track-swapped -> " + applied.id.slice(0, 12));
               return t;
             },
             (e: unknown) => {
@@ -114,20 +116,24 @@ export function useVoiceTranslationPublishing(enabled: boolean): VoiceTranslatio
   useEffect(() => {
     if (enabledRef.current) return;
     const freshest = freshestRawMic();
-    const live = freshest ?? currentMicTrack;
-    if (live && live.readyState === "live") rawRef.current = live;
-  }, [enabled, currentMicTrack, freshestRawMic]);
+    if (freshest) rawRef.current = freshest;
+  }, [enabled, freshestRawMic]);
 
   const captureRawMic = useCallback((): MediaStreamTrack | null => {
-    const live = freshestRawMic() ?? currentMicTrackRef.current;
-    if (live && live.readyState === "live") rawRef.current = live;
-    if (!rawRef.current || rawRef.current.readyState !== "live") {
-      const pub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
-      const t = pub?.track?.mediaStreamTrack ?? null;
-      if (t && t.readyState === "live") rawRef.current = t;
-    }
-    return rawRef.current;
-  }, [room, freshestRawMic]);
+    const pub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+    const pubTrack = pub?.track;
+    const brokerRaw =
+      pubTrack instanceof LocalAudioTrack && !pubTrack.isUserProvided
+        ? pubTrack.mediaStreamTrack
+        : null;
+    // Only a LIVE, broker-owned (non-userProvided) track may refresh the
+    // snapshot. Once the interpreter is ON the publication carries the engine's
+    // silent/TTS userProvided track — that must never clobber the raw-mic
+    // snapshot the STT input depends on (feeding silence would make recognition
+    // "start" but never hear a word).
+    if (brokerRaw && brokerRaw.readyState === "live") rawRef.current = brokerRaw;
+    return rawRef.current && rawRef.current.readyState === "live" ? rawRef.current : null;
+  }, [room]);
 
   const publishSilentNow = useCallback(() => {
     if (!silentTrack) return;

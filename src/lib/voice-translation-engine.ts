@@ -88,6 +88,12 @@ const EMIT_SAMPLES = ${VT_EMIT_SAMPLES};
 const THRESHOLD = ${VT_VAD_THRESHOLD};
 const TAIL_SAMPLES = Math.max(1, Math.round((${VT_VAD_TAIL_MS} / 1000) * TARGET_RATE));
 class VoiceTranslationInput extends AudioWorkletProcessor {
+  static get numberOfInputs() {
+    return 2;
+  }
+  static get numberOfOutputs() {
+    return 1;
+  }
   constructor() {
     super();
     this.ratio = sampleRate / TARGET_RATE;
@@ -217,6 +223,12 @@ const VOICE_TRANSLATION_OUTPUT_WORKLET_SRC = `
 const SOURCE_RATE = ${VT_TTS_SOURCE_RATE};
 const MAX_QUEUED = ${VT_TTS_MAX_QUEUED_SAMPLES};
 class VoiceTranslationOutput extends AudioWorkletProcessor {
+  static get numberOfInputs() {
+    return 0;
+  }
+  static get numberOfOutputs() {
+    return 1;
+  }
   constructor() {
     super();
     this.queue = [];
@@ -394,6 +406,8 @@ export class VoiceTranslationEngine {
   /** Monotonic id for the newest synthesis request — stale completions/drains are ignored. */
   private speechSeq = 0;
   private bootPromise: Promise<void> | null = null;
+  /** Diagnostic: count of 40 ms PCM blocks written into the STT push stream. */
+  private pcmBlocks = 0;
 
   constructor(opts: VoiceTranslationEngineOptions) {
     this.opts = opts;
@@ -585,6 +599,32 @@ export class VoiceTranslationEngine {
   // Boot / teardown internals
   // -------------------------------------------------------------------------
 
+  /**
+   * Grant the Azure speech token, retrying transient failures with backoff. A
+   * patient that starts its engine on the doctor's live broadcast can race the
+   * server-state persistence (the grant rule rejects "not enabled yet" by
+   * design) or hit a flaky network fetch — either way a one-shot failure would
+   * strand that participant in "Unavailable" until a full OFF→ON cycle, so the
+   * grant retries a few times over ~6s before giving up.
+   */
+  private async grantToken(): Promise<VoiceTranslationTokenResult | null> {
+    let attempt = 0;
+    for (;;) {
+      if (this.disposed) return null;
+      const granted = await this.opts.getToken().catch((e: unknown) => {
+        console.error("[voice-translation] token request failed", e);
+        return null;
+      });
+      if (granted?.token && !granted.error) return granted;
+      const reason = granted?.error ?? "token empty";
+      attempt += 1;
+      console.error("[voice-translation] token request failed (" + attempt + "): " + reason);
+      if (this.disposed) return null;
+      if (attempt >= 5) return granted ?? null;
+      await new Promise((r) => setTimeout(r, 400 * 2 ** (attempt - 1)));
+    }
+  }
+
   private async boot(): Promise<void> {
     const { onStateChange } = this.opts;
     this.setEngineState("starting");
@@ -598,10 +638,7 @@ export class VoiceTranslationEngine {
     }
     if (this.disposed) return;
 
-    const granted = await this.opts.getToken().catch((e: unknown) => {
-      console.error("[voice-translation] token request failed", e);
-      return null;
-    });
+    const granted = await this.grantToken();
     if (!granted?.token || granted.error) {
       console.error("[voice-translation] token request failed", granted?.error ?? "token empty");
       this.disableTransiently();
@@ -723,7 +760,16 @@ export class VoiceTranslationEngine {
         return false;
       }
 
-      const inputWorklet = new AudioWorkletNode(ctx, VOICE_TRANSLATION_INPUT_WORKLET_ID);
+      // The AudioWorkletNode's input/output counts come from the constructor
+      // OPTIONS (defaults are 1/1) — the processor's `numberOfInputs` static
+      // getter alone is ignored by the node constructor. Without these opts the
+      // mic→port-1 connect below throws IndexSizeError ("input index (1) exceeds
+      // number of inputs (1)") at boot; keep getters + options in sync.
+      const inputWorklet = new AudioWorkletNode(ctx, VOICE_TRANSLATION_INPUT_WORKLET_ID, {
+        numberOfInputs: 2,
+        numberOfOutputs: 1,
+        outputChannelCount: [1],
+      });
       inputWorklet.port.onmessage = this.onWorkletMessage.bind(this);
       // Zero-gain sink: the interpreter's consumption must never reach this
       // device's speakers (the remote track is played by RoomAudioRenderer).
@@ -732,7 +778,11 @@ export class VoiceTranslationEngine {
       inputWorklet.connect(muteGain);
       muteGain.connect(ctx.destination);
 
-      const outputWorklet = new AudioWorkletNode(ctx, VOICE_TRANSLATION_OUTPUT_WORKLET_ID);
+      const outputWorklet = new AudioWorkletNode(ctx, VOICE_TRANSLATION_OUTPUT_WORKLET_ID, {
+        numberOfInputs: 0,
+        numberOfOutputs: 1,
+        outputChannelCount: [1],
+      });
       outputWorklet.port.onmessage = (event: MessageEvent) => {
         const data = event.data as { type?: string } | null;
         if (data?.type === "ready") console.debug("[vt-debug] output worklet ready");
@@ -749,10 +799,10 @@ export class VoiceTranslationEngine {
       } catch (e) {
         console.error("[vt-debug] AudioContext.resume() rejected (autoplay policy?)", e);
       }
-      console.debug("[vt-debug] audio graph created; ctx.state=" + ctx.state);
+      console.debug("[vt-debug] audio-context-state=" + ctx.state + " after graph creation");
       if (ctx.state !== "running") {
         console.debug(
-          "[vt-debug] ctx NOT running — worklets will not process until a gesture resumes it",
+          "[vt-debug] audio-context-state NOT running — worklets will not process until a gesture resumes it",
         );
       }
       return true;
@@ -777,7 +827,11 @@ export class VoiceTranslationEngine {
     const track = this.mediaStreamDest.stream.getAudioTracks()[0];
     if (!track) return;
     this.outputTrackNotified = true;
-    console.debug("[vt-debug] output track notified (TTS track handed to publisher)");
+    console.debug(
+      "[vt-debug] tts-track-ready trackId=" +
+        track.id.slice(0, 12) +
+        " (MediaStreamAudioDestinationNode)",
+    );
     try {
       this.opts.onOutputTrack?.(track);
     } catch {
@@ -889,6 +943,7 @@ export class VoiceTranslationEngine {
           this.startingRecognition = false;
           if (gen !== this.recognizeGen || !this.started) return;
           this.recognitionActive = true;
+          console.debug("[vt-debug] recognition-started gen=" + gen);
         },
         (err) => {
           this.startingRecognition = false;
@@ -925,8 +980,16 @@ export class VoiceTranslationEngine {
       // output worklet — no container headers to strip.
       config.speechSynthesisOutputFormat = sdk.SpeechSynthesisOutputFormat.Raw24Khz16BitMonoPcm;
       config.speechSynthesisVoiceName = roleTtsVoice(this.opts.role, this.patientLanguage);
+      // Construct with `null` — NOT omitted. With the second arg omitted the SDK
+      // attaches a default-speaker AudioConfig whose MediaSource-backed sink
+      // receives EVERY synthesis chunk even though we pass a pull stream to
+      // speakTextAsync, and it cannot play Raw24Khz16BitMonoPcm — Chromium logs
+      // "Play back is not supported for raw PCM, mulaw or alaw format without
+      // header." and "Format PCM could not be played by MSE, streaming playback
+      // is not enabled." `null` leaves the session audio destination undefined,
+      // so the raw PCM reaches ONLY the pull stream we hand to speakTextAsync.
+      this.synthesizer = new sdk.SpeechSynthesizer(config, null);
       console.debug("[vt-debug] synthesizer built voice=" + config.speechSynthesisVoiceName);
-      this.synthesizer = new sdk.SpeechSynthesizer(config);
     } catch (e) {
       console.error("[voice-translation] failed to create synthesizer", e);
       this.synthesizer = null;
@@ -961,6 +1024,14 @@ export class VoiceTranslationEngine {
     const targetLanguage = roleTranslationTarget(this.opts.role, this.patientLanguage);
     const spoken = result.translations?.get(targetLanguage) ?? "";
 
+    console.debug(
+      "[vt-debug] segment-finalized source=" +
+        roleSpeechSource(this.opts.role, this.patientLanguage) +
+        " target=" +
+        targetLanguage +
+        " text=" +
+        (result.text?.slice(0, 40) ?? ""),
+    );
     this.emitSegment(result, false, spoken);
 
     if (!spoken.trim()) {
@@ -969,6 +1040,7 @@ export class VoiceTranslationEngine {
       this.setEngineState("listening");
       return;
     }
+    console.debug("[vt-debug] translation-completed enqueued=" + spoken.slice(0, 40));
 
     // Sentence/phrase segmentation: only a finalized, complete utterance reaches
     // the TTS — never a half sentence. Interim results stay in the transcript.
@@ -1041,7 +1113,7 @@ export class VoiceTranslationEngine {
     const id = ++this.speechSeq;
     this.synthesizing = true;
     this.setEngineState("speaking");
-    console.debug("[vt-debug] speak(" + id + "): " + text.slice(0, 60));
+    console.debug("[vt-debug] tts-started id=" + id + " text=" + text.slice(0, 60));
 
     const stream = sdk.AudioOutputStream.createPullStream();
     await new Promise<void>((resolve) => {
@@ -1078,7 +1150,7 @@ export class VoiceTranslationEngine {
         const copy = buf.slice(0, n);
         if (firstBytes) {
           firstBytes = false;
-          console.debug("[vt-debug] TTS PCM flowing (" + n + " bytes per read) to output worklet");
+          console.debug("[vt-debug] tts-pcm-received bytes-per-read=" + n + " id=" + id);
         }
         this.outputWorklet?.port.postMessage({ type: "pcm", id, buffer: copy }, [copy]);
       }
@@ -1120,9 +1192,18 @@ export class VoiceTranslationEngine {
 
     try {
       const micTrack = this.localMicTrack;
+      console.debug(
+        "[vt-debug] input-track-state mic=" +
+          (micTrack?.readyState ?? "none") +
+          " remote=" +
+          (this.remoteAudioTrack?.mediaStreamTrack?.readyState ?? "none"),
+      );
       if (micTrack && micTrack.readyState === "live") {
         this.micStream = new MediaStream([micTrack]);
         const src = ctx.createMediaStreamSource(this.micStream);
+        console.debug(
+          "[vt-debug] connecting MediaStreamAudioSourceNode(mic) -> inputWorklet input 0",
+        );
         src.connect(inputWorklet, 0, 0);
         this.micSource = src;
       }
@@ -1131,17 +1212,28 @@ export class VoiceTranslationEngine {
       if (remoteTrack && remoteTrack.readyState === "live") {
         this.remoteStream = new MediaStream([remoteTrack]);
         const src = ctx.createMediaStreamSource(this.remoteStream);
+        console.debug(
+          "[vt-debug] connecting MediaStreamAudioSourceNode(remote) -> inputWorklet input 1",
+        );
         src.connect(inputWorklet, 0, 1);
         this.remoteSource = src;
       }
       console.debug(
-        "[vt-debug] input graph attached; mic=" +
+        "[vt-debug] input-graph-attached mic=" +
           (this.micSource ? "connected" : "MISSING") +
           " remote=" +
           (this.remoteSource ? "connected" : "none"),
       );
     } catch (e) {
-      console.error("[voice-translation] attaching input graph failed", e);
+      console.error(
+        "[vt-debug] input graph attach FAILED — node types: MediaStreamAudioSourceNode(mic/remote) -> " +
+          "AudioWorkletNode(input, inputs=" +
+          inputWorklet.numberOfInputs +
+          ", outputs=" +
+          inputWorklet.numberOfOutputs +
+          ")",
+        e,
+      );
       if (gen === this.attachGen && this.started) {
         this.disableTransiently();
         this.setEngineState("error");
@@ -1161,6 +1253,10 @@ export class VoiceTranslationEngine {
     const data = event.data as { type: string; buffer?: ArrayBuffer };
     if (!data) return;
     if (data.type === "pcm" && data.buffer) {
+      this.pcmBlocks++;
+      if (this.pcmBlocks === 1 || this.pcmBlocks % 100 === 0) {
+        console.debug("[vt-debug] pcm-frames-received blocks=" + this.pcmBlocks);
+      }
       try {
         this.pushStream?.write(data.buffer);
       } catch {
