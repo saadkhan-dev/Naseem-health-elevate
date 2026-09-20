@@ -486,7 +486,7 @@ export function AssistantChat() {
         data-floating-control="true"
         className={cn(
           "fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+5.25rem)] z-50 transition-opacity duration-300 sm:right-5 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.25rem)]",
-          (open || hidden || naseemDismissed) && "pointer-events-none opacity-0",
+          (hidden || naseemDismissed) && "pointer-events-none opacity-0",
         )}
       >
         <div className="relative">
@@ -528,7 +528,7 @@ export function AssistantChat() {
           aria-label="Naseem AI Assistant"
           aria-modal="true"
           className={cn(
-            "fixed left-0 right-0 z-50 flex h-[min(84dvh,720px)] flex-col overflow-hidden rounded-t-3xl border border-border bg-card shadow-soft transition-[transform,opacity] duration-300 ease-out sm:left-auto sm:right-5 sm:h-[min(80dvh,680px)] sm:w-[450px] sm:max-w-[calc(100vw_-_2.5rem)] sm:rounded-3xl sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.25rem)] lg:w-[480px]",
+            "fixed bottom-0 left-0 right-0 z-50 flex h-[min(84dvh,720px)] flex-col overflow-hidden rounded-t-3xl border border-border bg-card shadow-soft transition-[transform,opacity] duration-300 ease-out sm:left-auto sm:right-5 sm:h-[min(80dvh,680px)] sm:w-[450px] sm:max-w-[calc(100vw_-_2.5rem)] sm:rounded-3xl sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.25rem)] lg:w-[480px]",
             open
               ? "translate-y-0 scale-100 opacity-100"
               : "pointer-events-none translate-y-4 scale-[0.97] opacity-0",
@@ -657,11 +657,11 @@ export function AssistantChat() {
           </div>
 
           {/* Footer */}
-          <div className="border-t border-border px-4 py-2 text-center text-[10px] text-muted-foreground">
+          <div className="hidden border-t border-border px-4 py-2 text-center text-[10px] text-muted-foreground sm:block">
             {MEDICAL_NOTE}
           </div>
           {!isTyping && (
-            <div className="flex justify-center gap-2 border-t border-border px-4 py-2">
+            <div className="hidden justify-center gap-2 border-t border-border px-4 py-2 sm:flex">
               <Link
                 to="/support"
                 onClick={() => {
