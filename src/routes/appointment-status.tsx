@@ -47,6 +47,7 @@ import { useFormDraft } from "@/hooks/useFormDraft";
 export const Route = createFileRoute("/appointment-status")({
   validateSearch: z.object({
     apt: z.string().optional(),
+    tab: z.enum(["appointment", "order"]).optional(),
   }),
   head: () => ({
     meta: [
@@ -101,9 +102,22 @@ const PAYMENT_LABELS: Record<string, string> = {
 type ManualMode = "id" | "recover";
 
 function AppointmentStatusPage() {
-  const { apt } = Route.useSearch();
+  const { apt, tab: tabParam } = Route.useSearch();
   const { user, loading: authLoading } = useAuth();
   const signedIn = !!user;
+
+  // Appointment and Order statuses live on this one page. A `tab` search param
+  // (or an `apt` prefill) decides which section is shown, so order-status links
+  // in emails can deep-link straight to the Order Status tab.
+  const tab: "appointment" | "order" = apt
+    ? "appointment"
+    : tabParam === "order"
+      ? "order"
+      : "appointment";
+  const isAptTab = tab === "appointment";
+  React.useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [tab]);
 
   const myAppointmentsQuery = useMyAppointments(signedIn);
   const myOrdersQuery = useMyOrders(signedIn);
@@ -166,52 +180,87 @@ function AppointmentStatusPage() {
     <PageShell>
       <PageHeader signedIn={signedIn} />
 
-      <section className="mt-8 rounded-3xl border border-border bg-card p-6 shadow-soft md:p-8">
-        <SectionHeading icon={<CalendarCheck className="h-5 w-5" />} title="Appointment Status" />
-        <div className="mt-5">
-          {signedIn ? (
-            showManualAppointment ? (
-              <GuestAppointmentLookup
-                mode={mode}
-                setMode={setMode}
-                onBackToAuto={() => {
-                  setShowManualAppointment(false);
-                  if (selectedAppointment) setSelectedApId(selectedAppointment.id);
-                }}
-              />
-            ) : (
-              <SignedInAppointments
-                appointments={appointments}
-                selectedAppointment={selectedAppointment}
-                loading={myAppointmentsQuery.isLoading}
-                onSelect={setSelectedApId}
-                onManual={() => setShowManualAppointment(true)}
-              />
-            )
-          ) : (
-            <GuestAppointmentLookup mode={mode} setMode={setMode} />
-          )}
-        </div>
-      </section>
+      <div
+        className="mt-8 grid grid-cols-2 gap-1.5 rounded-2xl border border-border bg-muted/60 p-1.5"
+        role="tablist"
+        aria-label="Status lookup type"
+      >
+        <Link
+          to="/appointment-status"
+          search={(prev) => ({ ...prev, tab: undefined })}
+          role="tab"
+          aria-selected={isAptTab}
+          className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
+            isAptTab
+              ? "bg-card text-foreground shadow-soft"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <CalendarCheck className="h-4 w-4" /> Appointment Status
+        </Link>
+        <Link
+          to="/appointment-status"
+          search={{ tab: "order" }}
+          role="tab"
+          aria-selected={!isAptTab}
+          className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
+            !isAptTab
+              ? "bg-card text-foreground shadow-soft"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Package className="h-4 w-4" /> Order Status
+        </Link>
+      </div>
 
-      <section className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-soft md:p-8">
-        <SectionHeading icon={<Package className="h-5 w-5" />} title="Order Status" />
-        <div className="mt-5">
-          {signedIn ? (
-            showManualOrder ? (
-              <GuestOrderLookup onBackToMine={() => setShowManualOrder(false)} />
+      {tab === "appointment" ? (
+        <section className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-soft md:p-8">
+          <SectionHeading icon={<CalendarCheck className="h-5 w-5" />} title="Appointment Status" />
+          <div className="mt-5">
+            {signedIn ? (
+              showManualAppointment ? (
+                <GuestAppointmentLookup
+                  mode={mode}
+                  setMode={setMode}
+                  onBackToAuto={() => {
+                    setShowManualAppointment(false);
+                    if (selectedAppointment) setSelectedApId(selectedAppointment.id);
+                  }}
+                />
+              ) : (
+                <SignedInAppointments
+                  appointments={appointments}
+                  selectedAppointment={selectedAppointment}
+                  loading={myAppointmentsQuery.isLoading}
+                  onSelect={setSelectedApId}
+                  onManual={() => setShowManualAppointment(true)}
+                />
+              )
             ) : (
-              <SignedInOrders
-                orders={orders}
-                loading={myOrdersQuery.isLoading}
-                onManual={() => setShowManualOrder(true)}
-              />
-            )
-          ) : (
-            <GuestOrderLookup />
-          )}
-        </div>
-      </section>
+              <GuestAppointmentLookup mode={mode} setMode={setMode} />
+            )}
+          </div>
+        </section>
+      ) : (
+        <section className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-soft md:p-8">
+          <SectionHeading icon={<Package className="h-5 w-5" />} title="Order Status" />
+          <div className="mt-5">
+            {signedIn ? (
+              showManualOrder ? (
+                <GuestOrderLookup onBackToMine={() => setShowManualOrder(false)} />
+              ) : (
+                <SignedInOrders
+                  orders={orders}
+                  loading={myOrdersQuery.isLoading}
+                  onManual={() => setShowManualOrder(true)}
+                />
+              )
+            ) : (
+              <GuestOrderLookup />
+            )}
+          </div>
+        </section>
+      )}
     </PageShell>
   );
 }

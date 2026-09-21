@@ -494,7 +494,7 @@ export async function setOrderPaymentStatus(
         orderId: order.order_no ?? order.id,
         patientName: order.name?.trim() || "Customer",
         total: order.payment_amount,
-        orderUrl: statusUrl ? `${statusUrl}/appointment-status` : undefined,
+        orderUrl: statusUrl ? `${statusUrl}/appointment-status?tab=order` : undefined,
         paymentStatusLabel: orderStatusLabel(input.status),
         email: contactEmail ?? undefined,
         phone: contactPhone ?? undefined,

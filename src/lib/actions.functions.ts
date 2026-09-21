@@ -3649,7 +3649,7 @@ export const placeOrder = createServerFn({ method: "POST" })
               subtotal,
               deliveryCharge,
               total,
-              orderUrl: siteUrl ? `${siteUrl}/appointment-status` : undefined,
+              orderUrl: siteUrl ? `${siteUrl}/appointment-status?tab=order` : undefined,
               paymentStatusLabel: "payment pending",
               email: data.email ?? undefined,
               phone: data.phone,
