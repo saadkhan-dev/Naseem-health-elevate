@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { AnalyticsEvents, trackAnalyticsEvent } from "@/lib/analytics";
 import {
   signUp,
   signIn,
@@ -85,12 +86,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const p = await getProfile(supabase, result.user.id);
     setProfile(p);
+    trackAnalyticsEvent(AnalyticsEvents.login);
     return { error: null, role: p?.role ?? "patient" };
   }, []);
 
   const register = useCallback(
     async (email: string, password: string, name: string, phone: string, gender?: string) => {
       const result = await signUp(email, password, name, phone, gender);
+      if (!result.error) trackAnalyticsEvent(AnalyticsEvents.signup);
       return result.error;
     },
     [],

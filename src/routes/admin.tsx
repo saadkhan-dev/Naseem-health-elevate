@@ -27,6 +27,8 @@ import { useStaffAuth } from "@/hooks/useStaffAuth";
 import { useStaffConsultationHistory, useConsultationRealtime } from "@/hooks/useConsultation";
 import { AdminNotificationsBell } from "@/components/admin/AdminNotificationsBell";
 import { AdminNotificationsRealtime } from "@/components/notifications/AdminNotificationsRealtime";
+import { AdminRealtimeSync } from "@/hooks/useRealtimeSync";
+import { SiteTracking } from "@/hooks/useSiteTracking";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -121,6 +123,8 @@ function AdminLayout() {
   return (
     <div className="flex min-h-screen flex-col overflow-x-clip bg-muted/30 lg:flex-row">
       <AdminNotificationsRealtime />
+      <AdminRealtimeSync client={staffSupabase} />
+      <SiteTracking client={staffSupabase} />
       <header className="flex items-center justify-between gap-2 border-b bg-card px-4 py-3 lg:hidden">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-bold">

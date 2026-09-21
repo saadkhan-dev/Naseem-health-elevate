@@ -336,3 +336,300 @@ export async function getAnalytics(
     return stats;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Live analytics: realtime presence + website traffic from the
+// public.website_events / public.live_sessions tables written by the
+// tracking RPCs (record_analytics_event / heartbeat_presence).
+// ---------------------------------------------------------------------------
+
+export interface LiveAnalytics {
+  ok: boolean;
+  live: {
+    onlineNow: number;
+    staff: number;
+    patients: number;
+    guests: number;
+    /** ISO timestamp of the last live_sessions heartbeat. */
+    updatedAt: string | null;
+    active: Array<{ session_id: string; userType: string; role: string; path: string }>;
+  };
+  traffic: {
+    viewsToday: number;
+    visitorsToday: number;
+    views7d: number;
+    visitors7d: number;
+    topPages: Array<{ path: string; views: number }>;
+    topReferrers: Array<{ referrer: string; views: number }>;
+    devices: Array<{ device: string; count: number }>;
+    peakHours: Array<{ hour: number; views: number }>;
+  };
+  funnel: {
+    bookingStarted: number;
+    bookingCompleted: number;
+    appointmentCreated: number;
+    orderPlaced: number;
+    login: number;
+    signup: number;
+    paymentSubmitted: number;
+    /** Started -> Completed conversion (0-100). */
+    startedToCompletedPct: number;
+    /** Completed -> Appointment-created conversion (0-100). */
+    completedToCreatedPct: number;
+  };
+  recent: Array<{
+    id: string;
+    event: string;
+    path: string | null;
+    userType: string;
+    createdAt: string;
+  }>;
+}
+
+const LIVE_WINDOW_MIN = 2;
+const TRAFFIC_DAYS = 7;
+const FUNNEL_DAYS = 30;
+
+function emptyLiveAnalytics(): LiveAnalytics {
+  return {
+    ok: false,
+    live: { onlineNow: 0, staff: 0, patients: 0, guests: 0, updatedAt: null, active: [] },
+    traffic: {
+      viewsToday: 0,
+      visitorsToday: 0,
+      views7d: 0,
+      visitors7d: 0,
+      topPages: [],
+      topReferrers: [],
+      devices: [],
+      peakHours: [],
+    },
+    funnel: {
+      bookingStarted: 0,
+      bookingCompleted: 0,
+      appointmentCreated: 0,
+      orderPlaced: 0,
+      login: 0,
+      signup: 0,
+      paymentSubmitted: 0,
+      startedToCompletedPct: 0,
+      completedToCreatedPct: 0,
+    },
+    recent: [],
+  };
+}
+
+/** Clinic hour (UTC+5) of a UTC ISO timestamp, for peak-hours bucketing. */
+function clinicHour(iso: string): number {
+  const ms = new Date(iso).getTime();
+  if (Number.isNaN(ms)) return 0;
+  return Math.floor(((ms + 5 * 3600 * 1000) % 86400000) / 3600000);
+}
+
+export async function getLiveAnalytics(admin: SupabaseClient): Promise<LiveAnalytics> {
+  const stats = emptyLiveAnalytics();
+  try {
+    // Opportunistic sweep so "online now" stays truthful.
+    await admin.rpc("purge_stale_sessions", { p_minutes: LIVE_WINDOW_MIN });
+
+    const today = todayInClinic().slice(0, 10);
+    const since7 = sinceDate(today, TRAFFIC_DAYS);
+    const since30 = sinceDate(today, FUNNEL_DAYS);
+
+    const [
+      liveRes,
+      tViews,
+      tVisitors,
+      v7Views,
+      v7Visitors,
+      topPagesRes,
+      referrersRes,
+      peakRes,
+      funnelRes,
+      recentRes,
+    ] = await Promise.all([
+      admin
+        .from("live_sessions")
+        .select("session_id, user_type, role, path, device")
+        .gte("last_seen_at", new Date(Date.now() - LIVE_WINDOW_MIN * 60 * 1000).toISOString())
+        .order("last_seen_at", { ascending: false }),
+      admin
+        .from("website_events")
+        .select("id", { count: "exact", head: true })
+        .eq("event_name", "page_view")
+        .gte("created_at", `${today}T00:00:00Z`),
+      admin
+        .from("website_events")
+        .select("session_id")
+        .eq("event_name", "page_view")
+        .gte("created_at", `${today}T00:00:00Z`),
+      admin
+        .from("website_events")
+        .select("id", { count: "exact", head: true })
+        .eq("event_name", "page_view")
+        .gte("created_at", `${since7}T00:00:00Z`),
+      admin
+        .from("website_events")
+        .select("session_id")
+        .eq("event_name", "page_view")
+        .gte("created_at", `${since7}T00:00:00Z`),
+      admin
+        .from("website_events")
+        .select("path")
+        .eq("event_name", "page_view")
+        .gte("created_at", `${since7}T00:00:00Z`)
+        .order("created_at", { ascending: false })
+        .limit(20000),
+      admin
+        .from("website_events")
+        .select("referrer")
+        .eq("event_name", "page_view")
+        .gte("created_at", `${since7}T00:00:00Z`)
+        .limit(20000),
+      admin
+        .from("website_events")
+        .select("created_at")
+        .eq("event_name", "page_view")
+        .gte("created_at", `${since7}T00:00:00Z`)
+        .order("created_at", { ascending: false })
+        .limit(50000),
+      admin
+        .from("website_events")
+        .select("event_name, created_at")
+        .in("event_name", [
+          "booking_started",
+          "booking_completed",
+          "appointment_created",
+          "order_placed",
+          "login",
+          "signup",
+          "payment_submitted",
+        ])
+        .gte("created_at", `${since30}T00:00:00Z`)
+        .order("created_at", { ascending: false })
+        .limit(50000),
+      admin
+        .from("website_events")
+        .select("id, event_name, path, user_type, created_at")
+        .gte("created_at", `${since7}T00:00:00Z`)
+        .order("created_at", { ascending: false })
+        .limit(50),
+    ]);
+
+    const liveRows = (liveRes.data ?? []) as Array<{
+      session_id: string;
+      user_type: string;
+      role: string;
+      path: string;
+      device: string | null;
+    }>;
+    stats.live.onlineNow = liveRows.length;
+    stats.live.staff = liveRows.filter((r) => r.user_type === "staff").length;
+    stats.live.patients = liveRows.filter((r) => r.user_type === "patient").length;
+    stats.live.guests = liveRows.filter((r) => r.user_type === "guest").length;
+    stats.live.active = liveRows.map((r) => ({
+      session_id: r.session_id,
+      userType: r.user_type,
+      role: r.role,
+      path: r.path,
+    }));
+    if (liveRows.length > 0) stats.live.updatedAt = new Date().toISOString();
+
+    const todayVisitorsSet = new Set((tVisitors.data ?? []).map((r) => r.session_id as string));
+    const v7VisitorsSet = new Set((v7Visitors.data ?? []).map((r) => r.session_id as string));
+    stats.traffic = {
+      viewsToday: tViews.count ?? 0,
+      visitorsToday: todayVisitorsSet.size,
+      views7d: v7Views.count ?? 0,
+      visitors7d: v7VisitorsSet.size,
+      topPages: [],
+      topReferrers: [],
+      devices: [],
+      peakHours: [],
+    };
+
+    const pageMap = new Map<string, number>();
+    for (const r of (topPagesRes.data ?? []) as Array<{ path: string | null }>) {
+      const path = (r.path ?? "/").slice(0, 120);
+      pageMap.set(path, (pageMap.get(path) ?? 0) + 1);
+    }
+    stats.traffic.topPages = [...pageMap.entries()]
+      .map(([path, views]) => ({ path, views }))
+      .sort((a, b) => b.views - a.views)
+      .slice(0, 8);
+
+    const refMap = new Map<string, number>();
+    for (const r of (referrersRes.data ?? []) as Array<{ referrer: string | null }>) {
+      const ref = r.referrer ? new URL(r.referrer).hostname : "direct";
+      refMap.set(ref, (refMap.get(ref) ?? 0) + 1);
+    }
+    stats.traffic.topReferrers = [...refMap.entries()]
+      .map(([referrer, views]) => ({ referrer, views }))
+      .sort((a, b) => b.views - a.views)
+      .slice(0, 8);
+
+    const hourMap = new Map<number, number>();
+    for (const r of (peakRes.data ?? []) as Array<{ created_at: string }>) {
+      const h = clinicHour(r.created_at);
+      hourMap.set(h, (hourMap.get(h) ?? 0) + 1);
+    }
+    for (let h = 0; h < 24; h++) hourMap.set(h, hourMap.get(h) ?? 0);
+    stats.traffic.peakHours = [...hourMap.entries()]
+      .map(([hour, views]) => ({ hour, views }))
+      .sort((a, b) => a.hour - b.hour);
+
+    // Devices come from live sessions (device is only known while live).
+    const deviceMap = new Map<string, number>();
+    for (const r of liveRows) {
+      const d = (r.device || "unknown").toLowerCase();
+      deviceMap.set(d, (deviceMap.get(d) ?? 0) + 1);
+    }
+    stats.traffic.devices = [...deviceMap.entries()].map(([device, count]) => ({ device, count }));
+
+    const funnelCounts = new Map<string, number>();
+    for (const r of (funnelRes.data ?? []) as Array<{ event_name: string }>) {
+      funnelCounts.set(r.event_name, (funnelCounts.get(r.event_name) ?? 0) + 1);
+    }
+    const bookingStarted = funnelCounts.get("booking_started") ?? 0;
+    const bookingCompleted = funnelCounts.get("booking_completed") ?? 0;
+    const appointmentCreated = funnelCounts.get("appointment_created") ?? 0;
+    stats.funnel = {
+      bookingStarted,
+      bookingCompleted,
+      appointmentCreated,
+      orderPlaced: funnelCounts.get("order_placed") ?? 0,
+      login: funnelCounts.get("login") ?? 0,
+      signup: funnelCounts.get("signup") ?? 0,
+      paymentSubmitted: funnelCounts.get("payment_submitted") ?? 0,
+      startedToCompletedPct:
+        bookingStarted > 0 ? Math.round((bookingCompleted / bookingStarted) * 100) : 0,
+      completedToCreatedPct:
+        bookingCompleted > 0 ? Math.round((appointmentCreated / bookingCompleted) * 100) : 0,
+    };
+
+    stats.recent = (
+      (recentRes.data ?? []) as Array<{
+        id: string;
+        event_name: string;
+        path: string | null;
+        user_type: string;
+        created_at: string;
+      }>
+    ).map((r) => ({
+      id: r.id,
+      event: r.event_name,
+      path: r.path,
+      userType: r.user_type,
+      createdAt: r.created_at,
+    }));
+
+    stats.ok = true;
+    return stats;
+  } catch (e) {
+    console.error(
+      "[analytics] getLiveAnalytics failed:",
+      e instanceof Error ? e.message : "unknown",
+    );
+    return stats;
+  }
+}

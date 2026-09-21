@@ -44,7 +44,7 @@ import {
   sendDueAppointmentReminders as sendDueReminders,
 } from "./server/reminders";
 import { searchSite } from "./server/search";
-import { getAnalytics } from "./server/analytics";
+import { getAnalytics, getLiveAnalytics } from "./server/analytics";
 import { getGoogleReviewsServer } from "./server/google-reviews";
 import {
   sendAppointmentNotifications,
@@ -4930,6 +4930,13 @@ export const adminGetAnalytics = createServerFn({ method: "GET" })
   )
   .handler(async ({ data }) => {
     return getAnalytics(getSupabaseAdmin(), data.range ?? "30d");
+  });
+
+export const adminGetLiveAnalytics = createServerFn({ method: "GET" })
+  .middleware([adminMiddleware])
+  .validator((d: unknown) => d as undefined)
+  .handler(async () => {
+    return getLiveAnalytics(getSupabaseAdmin());
   });
 
 // ---------------------------------------------------------------------------

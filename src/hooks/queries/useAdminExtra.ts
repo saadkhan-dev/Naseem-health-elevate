@@ -22,6 +22,7 @@ import {
   cancelReminderAdmin,
   sendDueRemindersAdmin,
   getAnalyticsAdmin,
+  getLiveAnalyticsAdmin,
   type Faq,
   type DoctorProfile,
   type SupportMessage,
@@ -32,6 +33,7 @@ import {
   type AdminReminder,
   type AnalyticsStats,
 } from "@/lib/admin-extra";
+import type { LiveAnalytics } from "@/lib/server/analytics";
 
 // --- FAQs ---
 
@@ -252,5 +254,15 @@ export function useAnalytics(range: "today" | "7d" | "30d" | "90d" = "30d") {
     queryKey: ["admin", "analytics", range],
     queryFn: () => getAnalyticsAdmin(range),
     refetchInterval: 60000,
+  });
+}
+
+export function useLiveAnalytics(enabled = true) {
+  return useQuery<LiveAnalytics>({
+    queryKey: ["admin", "live-analytics"],
+    queryFn: getLiveAnalyticsAdmin,
+    refetchInterval: 30000,
+    enabled,
+    refetchIntervalInBackground: false,
   });
 }

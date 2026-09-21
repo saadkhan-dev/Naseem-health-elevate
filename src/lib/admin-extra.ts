@@ -21,9 +21,10 @@ import {
   adminCancelReminder,
   adminSendDueReminders,
   adminGetAnalytics,
+  adminGetLiveAnalytics,
 } from "@/lib/actions.functions";
 import type { Faq, DoctorProfile } from "@/lib/site-extra";
-import type { AnalyticsStats } from "@/lib/server/analytics";
+import type { AnalyticsStats, LiveAnalytics } from "@/lib/server/analytics";
 import type { NotificationResult } from "@/lib/notifications";
 
 export type { Faq, DoctorProfile, AnalyticsStats };
@@ -303,4 +304,8 @@ export async function getAnalyticsAdmin(
   range: "today" | "7d" | "30d" | "90d" = "30d",
 ): Promise<AnalyticsStats> {
   return adminGetAnalytics({ data: { range } });
+}
+
+export async function getLiveAnalyticsAdmin(): Promise<LiveAnalytics> {
+  return adminGetLiveAnalytics({ data: undefined });
 }

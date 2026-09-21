@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useFormDraft } from "@/hooks/useFormDraft";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
@@ -40,6 +40,7 @@ import {
 } from "@/lib/product-offer-types";
 import { productDeliveryEstimate } from "@/lib/delivery";
 import { getProductById } from "@/lib/admin-data";
+import { AnalyticsEvents, trackAnalyticsEvent } from "@/lib/analytics";
 
 export const Route = createFileRoute("/product/$productId")({
   head: async ({ params }) => {
@@ -181,6 +182,16 @@ function ProductDetail() {
   const router = useRouter();
   const submitReview = useSubmitProductReview();
   const today = todayInClinic();
+  const productViewedRef = useRef(false);
+
+  useEffect(() => {
+    if (product?.id && !productViewedRef.current) {
+      productViewedRef.current = true;
+      trackAnalyticsEvent(AnalyticsEvents.productView, {
+        metadata: { productId: product.id },
+      });
+    }
+  }, [product?.id]);
 
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);

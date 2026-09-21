@@ -9,6 +9,7 @@ import {
   adminGetProductReviews,
   adminUpdateProductReview,
 } from "@/lib/actions.functions";
+import { AnalyticsEvents, trackAnalyticsEvent } from "@/lib/analytics";
 
 /**
  * Client-side data layer for the e-commerce flow (cart checkout, order
@@ -61,26 +62,38 @@ export async function submitOrderPayment(input: {
   payerPhone?: string;
   payerEmail?: string;
 }): Promise<OrderPaymentResult> {
-  return submitOrderPaymentServer({
+  const result = await submitOrderPaymentServer({
     data: {
       ...input,
       payerPhone: input.payerPhone?.trim() || undefined,
       payerEmail: input.payerEmail?.trim()?.toLowerCase() || undefined,
     },
   });
+  if (!result.error) {
+    trackAnalyticsEvent(AnalyticsEvents.paymentSubmitted, {
+      metadata: { channel: "order" },
+    });
+  }
+  return result;
 }
 
 /** Guest (no account) submits payment proof using Order ID + contact details. */
 export async function submitOrderPaymentAsGuest(
   input: GuestOrderPaymentInput,
 ): Promise<OrderPaymentResult> {
-  return submitGuestOrderPayment({
+  const result = await submitGuestOrderPayment({
     data: {
       ...input,
       phone: input.phone?.trim() || undefined,
       email: input.email?.trim()?.toLowerCase() || undefined,
     },
   });
+  if (!result.error) {
+    trackAnalyticsEvent(AnalyticsEvents.paymentSubmitted, {
+      metadata: { channel: "order" },
+    });
+  }
+  return result;
 }
 
 /** Guest uploads a payment receipt screenshot as proof. */

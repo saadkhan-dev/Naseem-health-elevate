@@ -15,6 +15,11 @@ import { AssistantChat } from "@/components/chat/AssistantChat";
 import { FloatingRestore } from "@/components/chat/FloatingRestore";
 import { PatientNotificationsRealtime } from "@/components/notifications/PatientNotificationsRealtime";
 import { SignInBlink } from "@/components/site/SignInBlink";
+import { Toaster } from "@/components/ui/sonner";
+import { useAuth } from "@/hooks/useAuth";
+import { PublicContentRealtime, PatientRealtimeSync } from "@/hooks/useRealtimeSync";
+import { SiteTracking } from "@/hooks/useSiteTracking";
+import { supabase } from "@/lib/supabase";
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -164,6 +169,14 @@ function RootComponent() {
       <StaffAuthProvider>
         <AuthProvider>
           <Outlet />
+          <Toaster />
+          <PublicContentRealtime client={supabase} />
+          {!isAdminRoute && (
+            <>
+              <SiteTracking client={supabase} />
+              <PatientRealtimeSync client={supabase} />
+            </>
+          )}
           {!isAdminRoute && <AssistantChat />}
           {!isAdminRoute && <FloatingRestore />}
           {!isAdminRoute && <PatientNotificationsRealtime />}

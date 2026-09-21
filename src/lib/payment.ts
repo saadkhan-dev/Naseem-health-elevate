@@ -3,6 +3,7 @@ import { submitVideoPayment as submitVideoPaymentServer } from "@/lib/actions.fu
 import { verifyVideoPayment as verifyVideoPaymentServer } from "@/lib/actions.functions";
 import { submitPaymentReceipt as submitPaymentReceiptServer } from "@/lib/actions.functions";
 import { submitPaymentSchema } from "@/lib/booking-schema";
+import { AnalyticsEvents, trackAnalyticsEvent } from "@/lib/analytics";
 
 /**
  * Prepaid Video Consultation payment model.
@@ -91,7 +92,13 @@ export interface SubmitVideoPaymentInput {
 export async function submitVideoPayment(input: SubmitVideoPaymentInput): Promise<{
   error: string | null;
 }> {
-  return submitVideoPaymentServer({ data: input });
+  const result = await submitVideoPaymentServer({ data: input });
+  if (!result.error) {
+    trackAnalyticsEvent(AnalyticsEvents.paymentSubmitted, {
+      metadata: { channel: "video" },
+    });
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -143,7 +150,7 @@ export async function verifyVideoPayment(input: VerifyVideoPaymentInput): Promis
 export async function submitPaymentReceipt(input: SubmitPaymentReceiptInput): Promise<{
   error: string | null;
 }> {
-  return submitPaymentReceiptServer({
+  const result = await submitPaymentReceiptServer({
     data: {
       id: input.id,
       phone: input.phone?.trim() || undefined,
@@ -155,4 +162,10 @@ export async function submitPaymentReceipt(input: SubmitPaymentReceiptInput): Pr
       fileSize: input.fileSize,
     },
   });
+  if (!result.error) {
+    trackAnalyticsEvent(AnalyticsEvents.paymentSubmitted, {
+      metadata: { channel: "video" },
+    });
+  }
+  return result;
 }

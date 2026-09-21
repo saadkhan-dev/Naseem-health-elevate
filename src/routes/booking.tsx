@@ -41,6 +41,7 @@ import {
 } from "@/lib/bookings";
 import { isDateBeforeTodayClinic, toClinicDate } from "@/lib/clinic";
 import { saveRecentAppointment } from "@/lib/recent-appointment";
+import { AnalyticsEvents, trackAnalyticsEvent } from "@/lib/analytics";
 import { BookingConfirmation } from "@/components/site/BookingConfirmation";
 import { VideoPaymentStep } from "@/components/site/VideoPaymentStep";
 import { Nav } from "@/components/site/Nav";
@@ -132,6 +133,22 @@ function BookingPage() {
   });
   const restoredBooking = React.useRef(false);
   const skipDraftWrite = React.useRef(true);
+  const submittedRef = React.useRef(false);
+
+  // Booking funnel analytics: started on mount, abandoned if the visitor leaves
+  // before a booking is placed. fire-and-forget, never blocks the UI.
+  React.useEffect(() => {
+    trackAnalyticsEvent(AnalyticsEvents.bookingStarted, {
+      path: window.location.pathname,
+      metadata: { source: isVideoMode ? "video" : "regular" },
+    });
+    return () => {
+      if (!submittedRef.current) {
+        trackAnalyticsEvent(AnalyticsEvents.bookingAbandoned);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Restore the saved draft into the individual booking fields once.
   React.useEffect(() => {
@@ -266,7 +283,12 @@ function BookingPage() {
         setOfferTitle(result.offerTitle);
         setIsWaived(result.paymentStatus === "waived");
         setConfirmed(true);
+        submittedRef.current = true;
         bookingDraft.clearDraft();
+        trackAnalyticsEvent(AnalyticsEvents.bookingCompleted);
+        trackAnalyticsEvent(AnalyticsEvents.appointmentCreated, {
+          metadata: { service: selectedService?.name ?? "unknown" },
+        });
 
         if (result.appointmentNo) {
           saveRecentAppointment({

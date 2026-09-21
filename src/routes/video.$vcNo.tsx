@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { useVideoJoin } from "@/hooks/queries/useVideo";
 import { ensureConsultationConversation } from "@/lib/consultation-data";
 import { getVideoJoinToken } from "@/lib/video-call";
 import type { VideoJoinTokenResult } from "@/lib/video-call";
+import { AnalyticsEvents, trackAnalyticsEvent } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Loader2, Video, Clock, ShieldAlert, AlertTriangle, MessageSquare } from "lucide-react";
 import { formatTimeDisplay } from "@/lib/bookings";
@@ -35,6 +36,7 @@ function VideoCallPage() {
   const [openingChat, setOpeningChat] = useState(false);
   const [joiningCall, setJoiningCall] = useState(false);
   const [tokenResult, setTokenResult] = useState<VideoJoinTokenResult | null>(null);
+  const joinedRef = useRef(false);
 
   useEffect(() => {
     if (!isLoading || joinTimedOut) return;
@@ -86,12 +88,20 @@ function VideoCallPage() {
     try {
       const res = await getVideoJoinToken(vcNo);
       setTokenResult(res);
+      if (res.token && res.serverUrl) {
+        joinedRef.current = true;
+        trackAnalyticsEvent(AnalyticsEvents.videoJoined, { metadata: { vc: vcNo } });
+      }
     } finally {
       setJoiningCall(false);
     }
   }
 
   function handleLeaveRoom() {
+    if (joinedRef.current) {
+      joinedRef.current = false;
+      trackAnalyticsEvent(AnalyticsEvents.videoEnded, { metadata: { vc: vcNo } });
+    }
     setTokenResult(null);
   }
 

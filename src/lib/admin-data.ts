@@ -45,6 +45,7 @@ import type {
 } from "./bookings";
 import { DEFAULT_STORE_SETTINGS, normalizeStoreSettings, type StoreSettings } from "./delivery";
 import type { PaymentMethod, PaymentStatus } from "./payment";
+import { AnalyticsEvents, trackAnalyticsEvent } from "@/lib/analytics";
 
 export interface PlaceOrderInput {
   items: Array<{ productId: string; quantity: number }>;
@@ -521,7 +522,13 @@ export async function placeOrder(data: PlaceOrderInput): Promise<{
   deliveryCharge: number | null;
   deliveryAreaName: string | null;
 }> {
-  return adminPlaceOrder({ data });
+  const result = await adminPlaceOrder({ data });
+  if (!result.error) {
+    trackAnalyticsEvent(AnalyticsEvents.orderPlaced, {
+      metadata: { channel: "order" },
+    });
+  }
+  return result;
 }
 
 // --- Services ---
