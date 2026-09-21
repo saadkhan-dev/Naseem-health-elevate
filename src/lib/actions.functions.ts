@@ -51,6 +51,7 @@ import {
   sendStatusChangeNotifications,
   sendRescheduleNotifications,
   sendSupportReplyNotifications,
+  sendOrderNotifications,
   getServerNotificationEnv,
   getSiteUrl,
 } from "./server/notifications";
@@ -3632,6 +3633,30 @@ export const placeOrder = createServerFn({ method: "POST" })
           link: buildAdminFocusLink("/admin/orders", "order", orderId),
           dedupKey: buildAdminNotificationDedupKey("new_order", orderId),
         });
+
+        // Best-effort order-created email/SMS to the customer's contact on
+        // file (guests included) — same Resend/Twilio senders as appointment
+        // messages. Never throws; failures surface as per-channel results.
+        const siteUrl = getSiteUrl();
+        if (data.email || data.phone) {
+          await sendOrderNotifications(
+            {
+              orderId: orderNo,
+              patientName: data.name,
+              itemSummary: itemRows
+                .map((r) => `${r.product_name} × ${r.quantity} — Rs. ${r.price}`)
+                .join("; "),
+              subtotal,
+              deliveryCharge,
+              total,
+              orderUrl: siteUrl ? `${siteUrl}/appointment-status` : undefined,
+              paymentStatusLabel: "payment pending",
+              email: data.email ?? undefined,
+              phone: data.phone,
+            },
+            "created",
+          );
+        }
 
         return {
           error: null,

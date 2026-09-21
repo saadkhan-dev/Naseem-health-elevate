@@ -16,6 +16,7 @@ import {
   Copy,
   MessageSquare,
   Wallet,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,7 +67,7 @@ import { VideoPaymentStep } from "@/components/site/VideoPaymentStep";
 import { useAuth } from "@/hooks/useAuth";
 import { PAYMENT_STATUS_LABELS, type PaymentStatus } from "@/lib/payment";
 import { usePageFocus, useFocusHighlight } from "@/hooks/usePageFocus";
-import { hasFormDraft } from "@/hooks/useFormDraft";
+import { readFormDraft } from "@/hooks/useFormDraft";
 
 export const Route = createFileRoute("/patient/")({
   validateSearch: z.object({
@@ -421,6 +422,73 @@ function JoinVideoDialog({
 }
 
 /**
+ * Per-item dismissal for "Continue where you left off". Each row remembers the
+ * exact content (a fingerprint) it was dismissed at, so a row reappears as soon
+ * as its real state changes (payment submitted, draft re-edited) and disappears
+ * naturally once it is finished. Dismissing one item never hides the others.
+ */
+const REMINDER_DISMISS_KEY = "health-elevate:reminder-dismissed";
+
+function readReminderDismissals(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(REMINDER_DISMISS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function isReminderDismissed(key: string, fingerprint: string): boolean {
+  return readReminderDismissals()[key] === fingerprint;
+}
+
+function dismissReminderItem(key: string, fingerprint: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    const next = readReminderDismissals();
+    next[key] = fingerprint;
+    window.localStorage.setItem(REMINDER_DISMISS_KEY, JSON.stringify(next));
+  } catch {
+    // Storage unavailable — dismissal just won't persist.
+  }
+}
+
+/** Stable identity + content fingerprint for an unpaid order row. */
+function reminderOrderKey(o: { id: string }): string {
+  return `order:${o.id}`;
+}
+function reminderOrderFingerprint(o: {
+  id: string;
+  order_no?: string | null;
+  payment_status: string;
+  total: number | string;
+}): string {
+  return `${o.payment_status}|${o.total}`;
+}
+
+/** Stable identity + content fingerprint for an unpaid video consultation row. */
+function reminderVideoKey(a: { id: string }): string {
+  return `video:${a.id}`;
+}
+function reminderVideoFingerprint(a: {
+  id: string;
+  appointmentNo?: string | null;
+  paymentStatus: string | null;
+  paymentAmount?: number | null;
+}): string {
+  return `${a.paymentStatus ?? ""}|${a.paymentAmount ?? ""}`;
+}
+
+/** Fingerprint of a saved form draft (null when none exists / it expired). */
+function formDraftFingerprint(key: string): string | null {
+  const value = readFormDraft<unknown>(key);
+  return value == null ? null : JSON.stringify(value);
+}
+
+/**
  * "Continue where you left off" — surfaces anything the patient didn't finish:
  * unpaid orders, unpaid video consultations, and locally-saved form drafts.
  * Every action deep-links into the existing flow; nothing is submitted from here.
@@ -432,12 +500,15 @@ function ContinueWhereYouLeftOff({
 }) {
   const { data: orders } = useMyOrders();
   const { data: appointments } = useMyAppointments();
-  const [drafts, setDrafts] = useState({ booking: false, support: false });
+  const [drafts, setDrafts] = useState<{ booking: string | null; support: string | null }>({
+    booking: null,
+    support: null,
+  });
 
   useEffect(() => {
     setDrafts({
-      booking: hasFormDraft("booking:appointment"),
-      support: hasFormDraft("support:patient"),
+      booking: formDraftFingerprint("booking:appointment"),
+      support: formDraftFingerprint("support:patient"),
     });
   }, []);
 
@@ -455,12 +526,28 @@ function ContinueWhereYouLeftOff({
       a.status !== "no_show",
   );
 
+  // A dismissed row stays hidden ONLY until its content changes (different
+  // fingerprint → real state changed → show it again). Finished items are
+  // already filtered out of the lists above.
+  const visibleOrders = unpaidOrders.filter(
+    (o) => !isReminderDismissed(reminderOrderKey(o), reminderOrderFingerprint(o)),
+  );
+  const visibleVideo = unpaidVideo.filter(
+    (a) => !isReminderDismissed(reminderVideoKey(a), reminderVideoFingerprint(a)),
+  );
+  const showBookingDraft =
+    drafts.booking != null && !isReminderDismissed("draft:booking", drafts.booking);
+  const showSupportDraft =
+    drafts.support != null && !isReminderDismissed("draft:support", drafts.support);
+
   const hasAny =
-    unpaidOrders.length > 0 || unpaidVideo.length > 0 || drafts.booking || drafts.support;
+    visibleOrders.length > 0 || visibleVideo.length > 0 || showBookingDraft || showSupportDraft;
   if (!hasAny) return null;
 
   const rowClass =
     "flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-card p-3 text-left transition hover:border-primary/40 hover:bg-muted";
+  // Rows reserve right padding (pr-11) so the X dismiss button never overlaps them.
+  const rowLinkClass = `${rowClass} pr-11`;
 
   return (
     <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5 shadow-soft">
@@ -469,90 +556,134 @@ function ContinueWhereYouLeftOff({
         <h2 className="font-display font-semibold text-foreground">Continue where you left off</h2>
       </div>
       <div className="mt-3 space-y-2">
-        {unpaidOrders.map((o) => (
-          <Link
-            key={o.id}
-            to="/patient/orders"
-            search={{ focus: "order", id: o.id }}
-            className={rowClass}
-          >
-            <span className="flex min-w-0 items-center gap-3">
-              <Package className="h-5 w-5 shrink-0 text-amber-700" />
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-medium text-foreground">
-                  Order {o.order_no ?? o.id} — payment pending
-                </span>
-                <span className="block text-xs text-muted-foreground">
-                  Rs. {Number(o.total).toLocaleString()} ·{" "}
-                  {o.payment_status === "payment_failed"
-                    ? "Your payment was not accepted — resubmit your proof."
-                    : "Complete your payment so the clinic can confirm it."}
+        {visibleOrders.map((o) => (
+          <div key={o.id} className="relative">
+            <Link
+              to="/patient/orders"
+              search={{ focus: "order", id: o.id }}
+              className={rowLinkClass}
+            >
+              <span className="flex min-w-0 items-center gap-3">
+                <Package className="h-5 w-5 shrink-0 text-amber-700" />
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-foreground">
+                    Order {o.order_no ?? o.id} — payment pending
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    Rs. {Number(o.total).toLocaleString()} ·{" "}
+                    {o.payment_status === "payment_failed"
+                      ? "Your payment was not accepted — resubmit your proof."
+                      : "Complete your payment so the clinic can confirm it."}
+                  </span>
                 </span>
               </span>
-            </span>
-            <span className="shrink-0 text-sm font-semibold text-primary">
-              {o.payment_status === "payment_failed" ? "Resubmit" : "Pay Now"} →
-            </span>
-          </Link>
+              <span className="shrink-0 text-sm font-semibold text-primary">
+                {o.payment_status === "payment_failed" ? "Resubmit" : "Pay Now"} →
+              </span>
+            </Link>
+            <button
+              type="button"
+              onClick={() => dismissReminderItem(reminderOrderKey(o), reminderOrderFingerprint(o))}
+              aria-label={`Dismiss reminder for order ${o.order_no ?? o.id}`}
+              className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-amber-700/70 transition hover:bg-amber-100 hover:text-amber-900 active:scale-90"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         ))}
 
-        {unpaidVideo.map((a) => (
-          <button key={a.id} type="button" onClick={() => onPayAppointment(a)} className={rowClass}>
-            <span className="flex min-w-0 items-center gap-3">
-              <Video className="h-5 w-5 shrink-0 text-amber-700" />
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-medium text-foreground">
-                  Video consultation {a.appointmentNo ?? ""} — payment required
-                </span>
-                <span className="block text-xs text-muted-foreground">
-                  {format(new Date(`${a.date}T00:00:00`), "MMM d, yyyy")}
-                  {a.paymentAmount != null
-                    ? ` · Rs. ${Number(a.paymentAmount).toLocaleString()}`
-                    : ""}
-                  {a.paymentStatus === "payment_failed"
-                    ? " · Resubmit your payment proof."
-                    : " · Complete your prepaid payment."}
+        {visibleVideo.map((a) => (
+          <div key={a.id} className="relative">
+            <button type="button" onClick={() => onPayAppointment(a)} className={rowLinkClass}>
+              <span className="flex min-w-0 items-center gap-3">
+                <Video className="h-5 w-5 shrink-0 text-amber-700" />
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-foreground">
+                    Video consultation {a.appointmentNo ?? ""} — payment required
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    {format(new Date(`${a.date}T00:00:00`), "MMM d, yyyy")}
+                    {a.paymentAmount != null
+                      ? ` · Rs. ${Number(a.paymentAmount).toLocaleString()}`
+                      : ""}
+                    {a.paymentStatus === "payment_failed"
+                      ? " · Resubmit your payment proof."
+                      : " · Complete your prepaid payment."}
+                  </span>
                 </span>
               </span>
-            </span>
-            <span className="shrink-0 text-sm font-semibold text-primary">
-              {a.paymentStatus === "payment_failed" ? "Resubmit" : "Submit Payment"} →
-            </span>
-          </button>
+              <span className="shrink-0 text-sm font-semibold text-primary">
+                {a.paymentStatus === "payment_failed" ? "Resubmit" : "Submit Payment"} →
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => dismissReminderItem(reminderVideoKey(a), reminderVideoFingerprint(a))}
+              aria-label={`Dismiss reminder for video consultation ${a.appointmentNo ?? ""}`}
+              className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-amber-700/70 transition hover:bg-amber-100 hover:text-amber-900 active:scale-90"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         ))}
 
-        {drafts.booking && (
-          <Link to="/booking" className={rowClass}>
-            <span className="flex min-w-0 items-center gap-3">
-              <Calendar className="h-5 w-5 shrink-0 text-amber-700" />
-              <span className="min-w-0">
-                <span className="block text-sm font-medium text-foreground">
-                  Unfinished booking
-                </span>
-                <span className="block text-xs text-muted-foreground">
-                  We saved the service, date and details you started — continue where you left off.
+        {showBookingDraft && (
+          <div className="relative">
+            <Link to="/booking" className={rowLinkClass}>
+              <span className="flex min-w-0 items-center gap-3">
+                <Calendar className="h-5 w-5 shrink-0 text-amber-700" />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-foreground">
+                    Unfinished booking
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    We saved the service, date and details you started — continue where you left
+                    off.
+                  </span>
                 </span>
               </span>
-            </span>
-            <span className="shrink-0 text-sm font-semibold text-primary">Continue →</span>
-          </Link>
+              <span className="shrink-0 text-sm font-semibold text-primary">Continue →</span>
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                if (drafts.booking != null) dismissReminderItem("draft:booking", drafts.booking);
+              }}
+              aria-label="Dismiss unfinished booking reminder"
+              className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-amber-700/70 transition hover:bg-amber-100 hover:text-amber-900 active:scale-90"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         )}
 
-        {drafts.support && (
-          <Link to="/patient/support" className={rowClass}>
-            <span className="flex min-w-0 items-center gap-3">
-              <MessageSquare className="h-5 w-5 shrink-0 text-amber-700" />
-              <span className="min-w-0">
-                <span className="block text-sm font-medium text-foreground">
-                  Unfinished support message
-                </span>
-                <span className="block text-xs text-muted-foreground">
-                  We saved your draft message — continue writing or send it.
+        {showSupportDraft && (
+          <div className="relative">
+            <Link to="/patient/support" className={rowLinkClass}>
+              <span className="flex min-w-0 items-center gap-3">
+                <MessageSquare className="h-5 w-5 shrink-0 text-amber-700" />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-foreground">
+                    Unfinished support message
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    We saved your draft message — continue writing or send it.
+                  </span>
                 </span>
               </span>
-            </span>
-            <span className="shrink-0 text-sm font-semibold text-primary">Continue →</span>
-          </Link>
+              <span className="shrink-0 text-sm font-semibold text-primary">Continue →</span>
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                if (drafts.support != null) dismissReminderItem("draft:support", drafts.support);
+              }}
+              aria-label="Dismiss unfinished support message reminder"
+              className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-amber-700/70 transition hover:bg-amber-100 hover:text-amber-900 active:scale-90"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         )}
       </div>
     </div>

@@ -10,6 +10,13 @@ export type NotificationChannel = "sms" | "whatsapp" | "email";
 
 export type NotificationStatus = "sent" | "not_configured" | "error";
 
+/**
+ * The clinic's time zone is Pakistan Standard Time — a fixed UTC+5 offset with
+ * no daylight saving. Labelling times explicitly lets international patients
+ * (e.g. in Canada) convert without guessing.
+ */
+export const CLINIC_TIME_LABEL = "Pakistan time (UTC+5)";
+
 export interface NotificationResult {
   channel: NotificationChannel;
   status: NotificationStatus;
@@ -276,7 +283,7 @@ export function buildAppointmentMessages(details: AppointmentNotificationDetails
     `Appointment ID: ${details.appointmentId}`,
     `Service: ${details.serviceName}`,
     `Date: ${details.date}`,
-    `Time: ${details.time}`,
+    `Time: ${details.time} (${CLINIC_TIME_LABEL})`,
     `Patient: ${details.patientName}`,
   ];
 
@@ -328,7 +335,7 @@ export function buildStatusChangeMessages(details: StatusChangeNotificationDetai
     `Appointment ID: ${details.appointmentId}`,
     `Service: ${details.serviceName ?? "Your appointment"}`,
     `Date: ${details.date}`,
-    `Time: ${details.time}`,
+    `Time: ${details.time} (${CLINIC_TIME_LABEL})`,
     `Patient: ${details.patientName}`,
   ];
   if (details.statusUrl) {
@@ -384,7 +391,7 @@ export function buildVideoReadyMessages(details: VideoReadyNotificationDetails):
     `Appointment: ${details.appointmentId}`,
     `Video Consultation ID: ${details.vcNo}`,
     `Date: ${details.date}`,
-    `Time: ${details.time}`,
+    `Time: ${details.time} (${CLINIC_TIME_LABEL})`,
     ``,
     `Join your consultation:`,
     `${details.joinUrl}`,
@@ -454,7 +461,11 @@ export function buildSupportReplyMessages(details: SupportReplyNotificationDetai
     .filter((line): line is string => line !== undefined)
     .join("\n");
 
-  const smsText = `${details.clinicName} replied to your message${subjectLine ? ` (${details.originalSubject.trim()})` : ""}: ${details.reply}`.slice(0, 480);
+  const smsText =
+    `${details.clinicName} replied to your message${subjectLine ? ` (${details.originalSubject.trim()})` : ""}: ${details.reply}`.slice(
+      0,
+      480,
+    );
 
   return {
     emailSubject: `Reply from ${details.clinicName} — your message`,
@@ -478,7 +489,7 @@ export function buildRescheduleMessages(details: RescheduleNotificationDetails):
     `Appointment ID: ${details.appointmentId}`,
     `Service: ${details.serviceName ?? "Your appointment"}`,
     `New date: ${details.date}`,
-    `New time: ${details.time}`,
+    `New time: ${details.time} (${CLINIC_TIME_LABEL})`,
     `Patient: ${details.patientName}`,
   ];
   if (details.previousDate) {
@@ -503,6 +514,142 @@ export function buildRescheduleMessages(details: RescheduleNotificationDetails):
       details.date,
       details.time,
       ...(details.statusUrl ? [details.statusUrl] : []),
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Product order notifications
+// ---------------------------------------------------------------------------
+
+export type OrderNotificationKind = "created" | "status";
+
+/** Contact + summary details for a product-order notification. */
+export interface OrderNotificationDetails {
+  /** Patient-facing Order ID (e.g. "OD-8F3K21"). */
+  orderId: string;
+  patientName: string;
+  /** One-line item summary, e.g. "2 × Glucosamine — Rs. 1200; 1 × Gel — Rs. 400". */
+  itemSummary?: string;
+  subtotal?: number | null;
+  deliveryCharge?: number | null;
+  total?: number | null;
+  /** Absolute URL where the patient can check the order status (optional). */
+  orderUrl?: string;
+  /** Short human-readable payment/status label (e.g. "payment pending"). */
+  paymentStatusLabel?: string;
+  phone?: string;
+  email?: string;
+}
+
+/** Human-readable label used in order emails for common order/payment statuses. */
+export function orderStatusLabel(value: string): string {
+  switch (value) {
+    case "payment_verified":
+      return "Payment verified — order confirmed";
+    case "payment_failed":
+      return "Payment not accepted";
+    case "refunded":
+      return "Payment refunded";
+    case "waived":
+      return "Payment waived — order confirmed";
+    case "payment_pending":
+    case "pending_payment":
+      return "Payment pending";
+    case "cancelled":
+      return "Order cancelled";
+    case "confirmed":
+      return "Order confirmed";
+    case "shipped":
+      return "Order shipped / on its way";
+    case "delivered":
+      return "Order delivered";
+    case "completed":
+      return "Order completed";
+    default:
+      return value.replace(/_/g, " ");
+  }
+}
+
+/** Build the "your order was received" message (awaiting payment). */
+export function buildOrderMessages(
+  details: OrderNotificationDetails,
+  kind: OrderNotificationKind,
+): {
+  emailSubject: string;
+  emailText: string;
+  smsText: string;
+  whatsappText: string;
+  whatsappContentVariables: string[];
+} {
+  if (kind === "created") {
+    const priceLines: string[] = [];
+    if (details.itemSummary) priceLines.push(`Items: ${details.itemSummary}`);
+    if (details.total != null) {
+      priceLines.push(
+        `Total: Rs. ${details.total}`,
+        `Subtotal: Rs. ${details.subtotal ?? 0}`,
+        `Delivery: Rs. ${details.deliveryCharge ?? 0}`,
+      );
+    }
+    if (details.paymentStatusLabel) priceLines.push(`Payment: ${details.paymentStatusLabel}`);
+
+    const emailText = [
+      `Dear ${details.patientName},`,
+      ``,
+      `Your order has been received by Dr. Naseem Ahmed Khan's clinic.`,
+      ``,
+      `Order ID: ${details.orderId}`,
+      ...priceLines,
+      ...(details.orderUrl ? [``, `Check your order status: ${details.orderUrl}`] : []),
+      ``,
+      `Keep your Order ID — you will need it, along with your phone number or email, to check your order status.`,
+    ].join("\n");
+
+    const smsText = `Order ${details.orderId} received by the clinic${
+      details.total != null ? ` — Total Rs. ${details.total}` : ""
+    }${details.orderUrl ? `. Check status: ${details.orderUrl}` : ""}`.slice(0, 480);
+
+    return {
+      emailSubject: `Order ${details.orderId} received — pending confirmation`,
+      emailText,
+      smsText,
+      whatsappText: smsText,
+      whatsappContentVariables: [
+        details.orderId,
+        details.patientName,
+        details.total != null ? `Rs. ${details.total}` : "—",
+        ...(details.orderUrl ? [details.orderUrl] : []),
+      ],
+    };
+  }
+
+  const statusText = details.paymentStatusLabel ?? orderStatusLabel("updated");
+  const emailText = [
+    `Dear ${details.patientName},`,
+    ``,
+    `Your order status has been updated by the clinic.`,
+    ``,
+    `Order ID: ${details.orderId}`,
+    `Status: ${statusText}`,
+    ...(details.total != null ? [`Total: Rs. ${details.total}`] : []),
+    ...(details.orderUrl ? [``, `Check your order status: ${details.orderUrl}`] : []),
+  ].join("\n");
+
+  const smsText = `Order ${details.orderId} — ${statusText}${
+    details.total != null ? ` (Rs. ${details.total})` : ""
+  }${details.orderUrl ? `. Check status: ${details.orderUrl}` : ""}`.slice(0, 480);
+
+  return {
+    emailSubject: `Order ${details.orderId} — ${statusText}`,
+    emailText,
+    smsText,
+    whatsappText: smsText,
+    whatsappContentVariables: [
+      details.orderId,
+      details.patientName,
+      statusText,
+      ...(details.orderUrl ? [details.orderUrl] : []),
     ],
   };
 }

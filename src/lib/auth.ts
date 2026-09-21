@@ -59,6 +59,12 @@ function friendlyAuthError(message: string): string {
   if (lower.includes("invalid email") || lower.includes("email address is invalid")) {
     return "Please enter a valid email address.";
   }
+  if (lower.includes("already verified") || lower.includes("already confirmed")) {
+    return "This email is already confirmed — please sign in instead.";
+  }
+  if (lower.includes("rate limit") || lower.includes("too many")) {
+    return "You've requested too many emails recently. Please wait a moment and try again.";
+  }
   if (lower.includes("email not confirmed") || lower.includes("email_not_confirmed")) {
     return "Please confirm your email first — check your inbox for the confirmation link we sent.";
   }
@@ -134,6 +140,22 @@ export async function signUp(
             "An account with this email may already exist. Please try signing in, or check your inbox for a confirmation link.",
         };
       }
+      return { error: null };
+    },
+  );
+}
+
+/**
+ * Re-send the email confirmation link for a sign-up. Supabase only sends when
+ * the account is still unconfirmed; confirmed emails / rate limits get friendly
+ * messages instead of raw errors. Same safeAuthCall safety rules as signUp.
+ */
+export async function resendSignupConfirmation(email: string) {
+  return safeAuthCall(
+    () => supabase.auth.resend({ type: "signup", email }),
+    ({ error }) => {
+      if (error) return { error: error.message };
+      console.info("[auth] confirmation email resent", { email });
       return { error: null };
     },
   );

@@ -15,6 +15,7 @@
 
 import {
   buildAppointmentMessages,
+  buildOrderMessages,
   buildRescheduleMessages,
   buildStatusChangeMessages,
   buildSupportReplyMessages,
@@ -28,6 +29,8 @@ import {
   type NotificationDeliveryOptions,
   type NotificationEnv,
   type NotificationResult,
+  type OrderNotificationDetails,
+  type OrderNotificationKind,
   type RescheduleNotificationDetails,
   type StatusChangeNotificationDetails,
   type SupportReplyNotificationDetails,
@@ -295,6 +298,35 @@ export async function sendSupportReplyNotifications(
   });
 }
 
+/**
+ * Notify the patient that their product order was created or its status
+ * changed. Delivers to the contact detail(s) in the order (email and/or SMS);
+ * WhatsApp is intentionally excluded because out-of-session WhatsApp requires
+ * an approved content template that does not exist for orders. Same best-effort
+ * + `not_configured` reporting rules as every other sender.
+ */
+export async function sendOrderNotifications(
+  details: OrderNotificationDetails,
+  kind: OrderNotificationKind = "created",
+  env: NotificationEnv = getServerNotificationEnv(),
+  options?: NotificationDeliveryOptions,
+): Promise<NotificationResult[]> {
+  return deliverToChannels({
+    env,
+    details,
+    messages: buildOrderMessages(details, kind),
+    options: {
+      defaultCountryCode: env.PHONE_COUNTRY_CODE ?? "+92",
+      ...options,
+      only: [
+        ...(details.email ? (["email"] as const) : []),
+        ...(details.phone ? (["sms"] as const) : []),
+      ],
+      phoneChannel: "sms",
+    },
+  });
+}
+
 /** Log a provider failure so failures are visible server-side, not just in the UI. */
 function logDeliveryError(result: NotificationResult): void {
   console.error(
@@ -386,5 +418,7 @@ async function deliverToChannels({
 export type {
   NotificationChannel,
   NotificationResult,
+  OrderNotificationDetails,
+  OrderNotificationKind,
   SupportReplyNotificationDetails,
 } from "@/lib/notifications";

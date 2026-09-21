@@ -1,7 +1,15 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
-import { signUp, signIn, signOut, getProfile, type Profile, type Role } from "@/lib/auth";
+import {
+  signUp,
+  signIn,
+  signOut,
+  resendSignupConfirmation,
+  getProfile,
+  type Profile,
+  type Role,
+} from "@/lib/auth";
 
 interface AuthState {
   user: User | null;
@@ -16,6 +24,8 @@ interface AuthState {
     phone: string,
     gender?: string,
   ) => Promise<string | null>;
+  /** Re-send the sign-up confirmation email. Returns a user-facing error or null. */
+  resendConfirmation: (email: string) => Promise<string | null>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<Profile | null>;
 }
@@ -27,6 +37,7 @@ const AuthContext = createContext<AuthState>({
   loading: true,
   login: async () => ({ error: null, role: null }),
   register: async () => null,
+  resendConfirmation: async () => null,
   logout: async () => {},
   refreshProfile: async () => null,
 });
@@ -85,6 +96,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const resendConfirmation = useCallback(async (email: string) => {
+    const result = await resendSignupConfirmation(email);
+    return result.error;
+  }, []);
+
   const logout = useCallback(async () => {
     await signOut();
     setUser(null);
@@ -108,6 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         login,
         register,
+        resendConfirmation,
         logout,
         refreshProfile,
       }}

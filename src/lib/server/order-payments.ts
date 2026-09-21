@@ -5,6 +5,8 @@ import {
   buildAdminNotificationDedupKey,
 } from "./patient-notifications";
 import { buildAdminFocusLink } from "@/lib/admin-focus";
+import { getSiteUrl, sendOrderNotifications } from "./notifications";
+import { orderStatusLabel } from "@/lib/notifications";
 
 /**
  * Server-side order payment operations.
@@ -47,14 +49,18 @@ interface OrderRow {
   payment_submitted_at: string | null;
   payment_verified_at: string | null;
   payment_receipt_url: string | null;
+  /** Contact left at checkout — used to reach guests for order emails/SMS. */
+  email: string | null;
+  phone: string | null;
 }
+
+const ORDER_SELECT_COLUMNS =
+  "id, patient_id, name, order_no, status, payment_status, payment_amount, payment_method, payment_reference, payment_payer_name, payment_payer_phone, payment_payer_email, payment_submitted_at, payment_verified_at, payment_receipt_url, email, phone";
 
 async function loadOrder(admin: SupabaseClient, orderId: string): Promise<OrderRow | null> {
   const { data } = await admin
     .from("orders")
-    .select(
-      "id, patient_id, name, order_no, status, payment_status, payment_amount, payment_method, payment_reference, payment_payer_name, payment_payer_phone, payment_payer_email, payment_submitted_at, payment_verified_at, payment_receipt_url",
-    )
+    .select(ORDER_SELECT_COLUMNS)
     .eq("id", orderId)
     .maybeSingle();
   return (data ?? null) as OrderRow | null;
@@ -153,9 +159,7 @@ async function findOrderByIdentifier(
 
   let query = admin
     .from("orders")
-    .select(
-      "id, patient_id, name, order_no, status, payment_status, payment_amount, payment_method, payment_reference, payment_payer_name, payment_payer_phone, payment_payer_email, payment_submitted_at, payment_verified_at, payment_receipt_url",
-    )
+    .select(ORDER_SELECT_COLUMNS)
     .order("created_at", { ascending: false })
     .limit(1);
 
@@ -446,7 +450,10 @@ export async function setOrderPaymentStatus(
     await admin.from("order_status_history").insert({
       order_id: input.orderId,
       status: newOrderStatus,
-      note: input.status === "waived" ? "Payment waived — order confirmed" : "Payment verified — order confirmed",
+      note:
+        input.status === "waived"
+          ? "Payment waived — order confirmed"
+          : "Payment verified — order confirmed",
     });
   } else if (input.status === "payment_failed") {
     await admin.from("order_status_history").insert({
@@ -473,6 +480,27 @@ export async function setOrderPaymentStatus(
           : `The payment for order ${order.order_no ?? ""} is now "${input.status.replace("payment_", "")}".`,
       link: buildAdminFocusLink("/patient/orders", "order", order.id),
     });
+  }
+
+  // Best-effort email/SMS to the patient's contact (checkout email, or the
+  // email/phone used with the payment proof) telling them their payment/order
+  // status changed. Never throws. No WhatsApp — no approved order template.
+  const contactEmail = order.email ?? order.payment_payer_email ?? null;
+  const contactPhone = order.phone ?? order.payment_payer_phone ?? null;
+  if (contactEmail || contactPhone) {
+    const statusUrl = getSiteUrl();
+    await sendOrderNotifications(
+      {
+        orderId: order.order_no ?? order.id,
+        patientName: order.name?.trim() || "Customer",
+        total: order.payment_amount,
+        orderUrl: statusUrl ? `${statusUrl}/appointment-status` : undefined,
+        paymentStatusLabel: orderStatusLabel(input.status),
+        email: contactEmail ?? undefined,
+        phone: contactPhone ?? undefined,
+      },
+      "status",
+    );
   }
 
   return { error: null };

@@ -42,7 +42,8 @@ function AdminLogin() {
       setLoading(false);
       return;
     }
-    navigate({ to: "/admin" });
+    // replace: Back after signing in must not loop back onto the login page.
+    navigate({ to: "/admin", replace: true });
   }
 
   async function handleForgot(e: FormEvent) {

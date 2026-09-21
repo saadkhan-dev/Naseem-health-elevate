@@ -64,9 +64,11 @@ function PatientLayout() {
 
   // After sign-in, finish the journey that brought the patient here (e.g. the
   // "Chat with Doctor" button) instead of dumping them on the dashboard.
+  // `replace` (not push) so browser Back never returns to this /patient?redirect
+  // entry and re-triggers the redirect — one step back, exactly one page.
   useEffect(() => {
     if (loading || !user || !redirectTarget) return;
-    void navigate({ to: redirectTarget });
+    void navigate({ to: redirectTarget, replace: true });
   }, [loading, user, redirectTarget, navigate]);
 
   if (loading) {
@@ -153,7 +155,9 @@ function PatientLayout() {
               <button
                 onClick={async () => {
                   await signOut();
-                  router.navigate({ to: "/" });
+                  // replace: Back after signing out must NOT land on the stale
+                  // authed patient page — it goes to the page before signing in.
+                  router.navigate({ to: "/", replace: true });
                 }}
                 className="flex shrink-0 items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground lg:w-full lg:py-2.5"
               >

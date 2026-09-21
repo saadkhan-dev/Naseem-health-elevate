@@ -141,7 +141,8 @@ export function Nav() {
   async function handleSignOut() {
     await logout();
     closeMenu();
-    router.navigate({ to: "/" });
+    // replace: Back after signing out must not restore the authed page.
+    router.navigate({ to: "/", replace: true });
   }
 
   return (

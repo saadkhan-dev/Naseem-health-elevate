@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,7 @@ interface RegisterFormProps {
 }
 
 export function RegisterForm({ onSuccess }: RegisterFormProps) {
-  const { register } = useAuth();
+  const { register, resendConfirmation } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -27,6 +27,16 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [registered, setRegistered] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendError, setResendError] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  // One-minute cooldown between confirmation-link resends.
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = window.setInterval(() => setResendCooldown((c) => c - 1), 1000);
+    return () => window.clearInterval(t);
+  }, [resendCooldown]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,6 +56,19 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
     }
   }
 
+  async function handleResend() {
+    if (resendCooldown > 0 || resendLoading) return;
+    setResendLoading(true);
+    setResendError("");
+    const err = await resendConfirmation(email);
+    setResendLoading(false);
+    if (err) {
+      setResendError(err);
+    } else {
+      setResendCooldown(60);
+    }
+  }
+
   if (registered) {
     return (
       <div className="space-y-4 py-2 text-center">
@@ -62,6 +85,30 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
             sign in and start booking appointments.
           </p>
         </div>
+        <button
+          type="button"
+          onClick={handleResend}
+          disabled={resendCooldown > 0 || resendLoading}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 transition-colors hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {resendLoading ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending confirmation email...
+            </>
+          ) : resendCooldown > 0 ? (
+            `You can resend the confirmation email in ${resendCooldown}s`
+          ) : (
+            "Didn't receive it? Resend confirmation email"
+          )}
+        </button>
+        {resendError && (
+          <p role="alert" className="text-sm text-destructive">
+            {resendError}
+          </p>
+        )}
+        <p className="text-xs text-muted-foreground">
+          Don't see it? Check your spam or junk folder.
+        </p>
         <Button type="button" className="w-full" onClick={onSuccess}>
           Done
         </Button>

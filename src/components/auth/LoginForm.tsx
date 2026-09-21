@@ -14,13 +14,18 @@ interface LoginFormProps {
 }
 
 export function LoginForm({ onSuccess }: LoginFormProps) {
-  const { login } = useAuth();
+  const { login, resendConfirmation } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [resetState, setResetState] = useState<"idle" | "loading" | "sent" | "error">("idle");
   const [resetError, setResetError] = useState("");
+  const [resendState, setResendState] = useState<"idle" | "loading" | "sent" | "error">("idle");
+  const [resendError, setResendError] = useState("");
+
+  // Show the "resend confirmation" action only for the unconfirmed-email error.
+  const unconfirmed = /confirm your email|email not confirmed/i.test(error);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -32,6 +37,18 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       setLoading(false);
     } else {
       onSuccess();
+    }
+  }
+
+  async function handleResendConfirmation() {
+    setResendState("loading");
+    setResendError("");
+    const err = await resendConfirmation(email.trim());
+    if (err) {
+      setResendError(err);
+      setResendState("error");
+    } else {
+      setResendState("sent");
     }
   }
 
@@ -88,6 +105,35 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
+      )}
+      {unconfirmed && (
+        <div className="-mt-2">
+          {resendState === "sent" ? (
+            <p role="status" className="text-sm text-primary">
+              Confirmation link sent! Check your inbox (and spam folder).
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={handleResendConfirmation}
+              disabled={resendState === "loading"}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 transition-colors hover:underline disabled:opacity-60"
+            >
+              {resendState === "loading" ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending confirmation email...
+                </>
+              ) : (
+                "Resend confirmation email"
+              )}
+            </button>
+          )}
+          {resendState === "error" && (
+            <p role="alert" className="text-sm text-destructive">
+              {resendError}
+            </p>
+          )}
+        </div>
       )}
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign in"}

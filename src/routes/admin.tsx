@@ -87,12 +87,16 @@ function AdminLayout() {
   useEffect(() => {
     if (isLoginPage) {
       if (!loading && isAdmin) {
-        router.navigate({ to: "/admin" });
+        // replace: a signed-in staff back-button from /admin/login must not
+        // loop back onto this redirect entry.
+        router.navigate({ to: "/admin", replace: true });
       }
       return;
     }
     if (!loading && !isAdmin) {
-      router.navigate({ to: "/admin/login" });
+      // replace: after returning from the login page, Back takes the staff
+      // member one step further back — not straight back into the guard.
+      router.navigate({ to: "/admin/login", replace: true });
     }
   }, [user, profile, loading, router, isAdmin, isLoginPage]);
 
@@ -110,7 +114,8 @@ function AdminLayout() {
 
   async function handleSignOut() {
     await staffSupabase.auth.signOut();
-    router.navigate({ to: "/" });
+    // replace: Back after signing out must not return to the stale admin page.
+    router.navigate({ to: "/", replace: true });
   }
 
   return (

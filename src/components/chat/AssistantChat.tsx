@@ -241,6 +241,8 @@ export function AssistantChat() {
   const closeTimer = useRef<number | undefined>(undefined);
   const openRef = useRef(false);
   const sentinelRef = useRef(false);
+  /** The exact URL pushed as the history sentinel (see openChat/closeChat). */
+  const sentinelUrlRef = useRef<string | null>(null);
 
   // Keep a ref in sync so the history handler can read the latest state
   // without re-binding itself on every render.
@@ -254,6 +256,12 @@ export function AssistantChat() {
   // closing the chat (and restoring the floating button) always happens.
   useEffect(() => {
     function onPopState() {
+      // A pop (browser back/Android gesture) has already consumed the sentinel
+      // entry, so mark it dead before closing — closeChat must never call back()
+      // again (that would skip past this page). Clearing here also keeps the
+      // guard correct in webviews where this handler runs before the router's.
+      sentinelRef.current = false;
+      sentinelUrlRef.current = null;
       if (openRef.current) closeChat();
     }
     window.addEventListener("popstate", onPopState);
@@ -376,7 +384,8 @@ export function AssistantChat() {
     // the chat instead of leaving the page. Handled by the history subscriber.
     if (!sentinelRef.current) {
       sentinelRef.current = true;
-      router.history.push(router.history.location.href);
+      sentinelUrlRef.current = router.history.location.href;
+      router.history.push(sentinelUrlRef.current);
     }
   }
 
@@ -385,6 +394,22 @@ export function AssistantChat() {
     setConfirmClear(false);
     window.clearTimeout(closeTimer.current);
     closeTimer.current = window.setTimeout(() => setMounted(false), 250);
+
+    // If the sentinel pushed at open is still the CURRENT history entry, the
+    // chat was closed through the UI (X / back arrow / a link) rather than the
+    // browser's back gesture — pop it so browser Back afterwards goes exactly
+    // one step instead of landing on the ghost duplicate of this page. When
+    // the back gesture itself closes the chat, the router BACK subscriber and
+    // the window popstate handler have already cleared `sentinelRef`, so this
+    // branch only ever fires for real UI closes.
+    if (sentinelRef.current) {
+      const sentinelUrl = sentinelUrlRef.current;
+      sentinelRef.current = false;
+      sentinelUrlRef.current = null;
+      if (sentinelUrl != null && router.history.location.href === sentinelUrl) {
+        router.history.back();
+      }
+    }
   }
 
   function clearChat() {
@@ -524,198 +549,214 @@ export function AssistantChat() {
       {/* Chat window */}
       {mounted && (
         <div
-          role="dialog"
-          aria-label="Naseem AI Assistant"
-          aria-modal="true"
+          data-floating-control="true"
           className={cn(
-            "fixed bottom-0 left-0 right-0 z-50 flex h-[min(84dvh,720px)] flex-col overflow-hidden rounded-t-3xl border border-border bg-card shadow-soft transition-[transform,opacity] duration-300 ease-out sm:left-auto sm:right-5 sm:h-[min(80dvh,680px)] sm:w-[450px] sm:max-w-[calc(100vw_-_2.5rem)] sm:rounded-3xl sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.25rem)] lg:w-[480px]",
-            open
-              ? "translate-y-0 scale-100 opacity-100"
-              : "pointer-events-none translate-y-4 scale-[0.97] opacity-0",
+            // On mobile the panel is a floating card CENTERED in the visible
+            // area (equal breathing room all around, safe-area aware). The
+            // wrapper is pointer-events-none so taps outside pass through to
+            // the page; only the panel itself is interactive. On sm+ the same
+            // wrapper anchors the panel bottom-right above the FAB, matching
+            // the previous desktop placement exactly.
+            "pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-3",
+            "sm:flex sm:items-end sm:justify-end sm:p-0 sm:pr-5 sm:pb-[calc(env(safe-area-inset-bottom,0px)+6.25rem)]",
           )}
           style={{
+            // When the on-screen keyboard opens, pull the visible area up by
+            // the keyboard offset so the centered panel (and composer) stay in
+            // view and never get hidden under the keyboard.
             bottom: isMobile && kbOffset > 0 ? `${kbOffset}px` : undefined,
-            maxHeight: isMobile
-              ? `max(240px, calc(100dvh - ${kbOffset}px - env(safe-area-inset-bottom, 0px)))`
-              : "max(200px, calc(100dvh - 9.5rem - env(safe-area-inset-bottom, 0px)))",
           }}
-          data-floating-control="true"
         >
-          {/* Header */}
-          <div className="flex items-center gap-3 bg-gradient-primary px-4 py-3.5 text-primary-foreground">
-            <button
-              type="button"
-              onClick={closeChat}
-              aria-label="Back"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15 transition-all duration-300 hover:bg-white/25 active:scale-90 sm:hidden"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20 shadow-inner">
-              <Bot className="h-5 w-5" />
-            </div>
-            <div className="min-w-0 flex-1 leading-tight">
-              <div className="font-display text-sm font-semibold">Naseem AI Assistant</div>
-              <div className="flex items-center gap-1.5 text-[11px] text-primary-foreground/85">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse" />
-                Online · replies instantly
-              </div>
-            </div>
-            {messages.length > 1 && !confirmClear ? (
+          <div
+            role="dialog"
+            aria-label="Naseem AI Assistant"
+            aria-modal="true"
+            className={cn(
+              "pointer-events-auto flex h-full w-full max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-soft transition-[transform,opacity] duration-300 ease-out sm:h-[min(80dvh,680px)] sm:w-[450px] sm:max-w-[calc(100vw_-_2.5rem)] sm:rounded-3xl lg:w-[480px]",
+              open ? "scale-100 opacity-100" : "pointer-events-none scale-95 opacity-0",
+            )}
+            style={{
+              maxHeight: isMobile
+                ? `max(240px, min(86dvh, calc(100dvh - ${kbOffset}px - 2rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))))`
+                : "max(200px, calc(100dvh - 9.5rem - env(safe-area-inset-bottom, 0px)))",
+            }}
+          >
+            {/* Header */}
+            <div className="flex items-center gap-3 bg-gradient-primary px-4 py-3.5 text-primary-foreground">
               <button
                 type="button"
-                onClick={() => setConfirmClear(true)}
-                aria-label="Clear conversation"
-                title="Clear conversation"
+                onClick={closeChat}
+                aria-label="Back"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15 transition-all duration-300 hover:bg-white/25 active:scale-90 sm:hidden"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20 shadow-inner">
+                <Bot className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1 leading-tight">
+                <div className="font-display text-sm font-semibold">Naseem AI Assistant</div>
+                <div className="flex items-center gap-1.5 text-[11px] text-primary-foreground/85">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse" />
+                  Online · replies instantly
+                </div>
+              </div>
+              {messages.length > 1 && !confirmClear ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmClear(true)}
+                  aria-label="Clear conversation"
+                  title="Clear conversation"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 transition-all duration-300 hover:bg-white/25 active:scale-90"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              ) : null}
+              {messages.length > 1 && confirmClear ? (
+                <button
+                  type="button"
+                  onClick={clearChat}
+                  aria-label="Confirm clear conversation"
+                  title="Click again to confirm"
+                  className="flex h-9 items-center gap-1 rounded-full bg-white/25 px-3 text-[11px] font-semibold transition-all duration-300 hover:bg-white/35 active:scale-95"
+                >
+                  Clear? <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={closeChat}
+                aria-label="Close chat"
                 className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 transition-all duration-300 hover:bg-white/25 active:scale-90"
               >
-                <Trash2 className="h-4 w-4" />
+                <X className="h-4 w-4" />
               </button>
-            ) : null}
-            {messages.length > 1 && confirmClear ? (
-              <button
-                type="button"
-                onClick={clearChat}
-                aria-label="Confirm clear conversation"
-                title="Click again to confirm"
-                className="flex h-9 items-center gap-1 rounded-full bg-white/25 px-3 text-[11px] font-semibold transition-all duration-300 hover:bg-white/35 active:scale-95"
-              >
-                Clear? <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={closeChat}
-              aria-label="Close chat"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 transition-all duration-300 hover:bg-white/25 active:scale-90"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Messages */}
-          <div className="relative min-h-0 flex-1">
-            <div
-              ref={scrollRef}
-              onScroll={handleScroll}
-              className="h-full space-y-3 overflow-y-auto overscroll-contain px-4 py-4"
-            >
-              {messages.map((m, i) => (
-                <MessageBubble
-                  key={`${i}-${m.t}`}
-                  message={m}
-                  copied={copied === `${i}`}
-                  onCopy={(content) => copyMessage(content, `${i}`)}
-                  onRetry={retryLast}
-                />
-              ))}
-
-              {showQuickActions && (
-                <div className="chat-msg-in flex justify-start">
-                  <div className="mr-2 mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-600">
-                    <Sparkles className="h-3.5 w-3.5" />
-                  </div>
-                  <div className="min-w-0 rounded-2xl rounded-bl-md border border-sky-100 bg-sky-50 p-2.5 text-slate-700">
-                    <div className="mb-1.5 pl-0.5 text-[11px] font-medium text-sky-700/80">
-                      Try one of these or ask your own question
-                    </div>
-                    <div className="scrollbar-thin flex max-h-36 flex-wrap content-start gap-1.5 overflow-y-auto pr-0.5">
-                      {QUICK_ACTIONS.map((q) => (
-                        <button
-                          key={q.label}
-                          type="button"
-                          onClick={() => sendMessage(q.prompt)}
-                          disabled={isTyping}
-                          className="rounded-full border border-sky-200/80 bg-sky-50 px-2.5 py-1 text-[11px] font-medium text-sky-700 transition-all duration-300 hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-100 active:scale-95 disabled:pointer-events-none disabled:opacity-50"
-                        >
-                          {q.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {isTyping && <TypingIndicator />}
             </div>
 
-            {!atBottom && (
-              <button
-                type="button"
-                onClick={() =>
-                  scrollRef.current?.scrollTo({
-                    top: scrollRef.current.scrollHeight,
-                    behavior: "smooth",
-                  })
-                }
-                aria-label="Scroll to latest message"
-                className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-md transition hover:bg-accent"
+            {/* Messages */}
+            <div className="relative min-h-0 flex-1">
+              <div
+                ref={scrollRef}
+                onScroll={handleScroll}
+                className="h-full space-y-3 overflow-y-auto overscroll-contain px-4 py-4"
               >
-                <ArrowDown className="h-4 w-4" />
-              </button>
-            )}
-          </div>
+                {messages.map((m, i) => (
+                  <MessageBubble
+                    key={`${i}-${m.t}`}
+                    message={m}
+                    copied={copied === `${i}`}
+                    onCopy={(content) => copyMessage(content, `${i}`)}
+                    onRetry={retryLast}
+                  />
+                ))}
 
-          {/* Footer */}
-          <div className="hidden border-t border-border px-4 py-2 text-center text-[10px] text-muted-foreground sm:block">
-            {MEDICAL_NOTE}
-          </div>
-          {!isTyping && (
-            <div className="hidden justify-center gap-2 border-t border-border px-4 py-2 sm:flex">
-              <Link
-                to="/support"
-                onClick={() => {
-                  handoffToHuman();
-                  setTimeout(closeChat, 250);
-                }}
-                className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1.5 text-[11px] font-semibold text-sky-700 transition hover:bg-sky-100 active:scale-95"
-              >
-                <Bot className="h-3.5 w-3.5" />
-                Talk to a human · Contact us
-              </Link>
-            </div>
-          )}
-
-          {/* Input */}
-          <form
-            onSubmit={onSubmit}
-            className="border-t border-border p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] sm:pb-3"
-          >
-            <div className="flex items-end gap-2">
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value);
-                  autosize();
-                }}
-                onKeyDown={handleKeyDown}
-                rows={1}
-                maxLength={MAX_LENGTH}
-                placeholder="Type your message..."
-                aria-label="Type your message"
-                className="max-h-28 min-h-[42px] flex-1 resize-none rounded-2xl border border-border bg-muted/50 px-3.5 py-2.5 text-sm text-foreground caret-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60"
-              />
-              <button
-                type="submit"
-                disabled={!input.trim() || isTyping}
-                aria-label="Send message"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-primary text-primary-foreground shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:shadow-soft active:scale-90 disabled:pointer-events-none disabled:opacity-40"
-              >
-                {isTyping ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
+                {showQuickActions && (
+                  <div className="chat-msg-in flex justify-start">
+                    <div className="mr-2 mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-600">
+                      <Sparkles className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="min-w-0 rounded-2xl rounded-bl-md border border-sky-100 bg-sky-50 p-2.5 text-slate-700">
+                      <div className="mb-1.5 pl-0.5 text-[11px] font-medium text-sky-700/80">
+                        Try one of these or ask your own question
+                      </div>
+                      <div className="scrollbar-thin flex max-h-36 flex-wrap content-start gap-1.5 overflow-y-auto pr-0.5">
+                        {QUICK_ACTIONS.map((q) => (
+                          <button
+                            key={q.label}
+                            type="button"
+                            onClick={() => sendMessage(q.prompt)}
+                            disabled={isTyping}
+                            className="rounded-full border border-sky-200/80 bg-sky-50 px-2.5 py-1 text-[11px] font-medium text-sky-700 transition-all duration-300 hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-100 active:scale-95 disabled:pointer-events-none disabled:opacity-50"
+                          >
+                            {q.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 )}
-              </button>
+
+                {isTyping && <TypingIndicator />}
+              </div>
+
+              {!atBottom && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    scrollRef.current?.scrollTo({
+                      top: scrollRef.current.scrollHeight,
+                      behavior: "smooth",
+                    })
+                  }
+                  aria-label="Scroll to latest message"
+                  className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-md transition hover:bg-accent"
+                >
+                  <ArrowDown className="h-4 w-4" />
+                </button>
+              )}
             </div>
-            <div className="mt-1 flex items-center justify-between text-[10px] text-muted-foreground">
-              <span>Enter to send · Shift+Enter for a new line</span>
-              <span className={cn(nearLimit && "font-semibold text-amber-500")}>
-                {input.length}/{MAX_LENGTH}
-              </span>
+
+            {/* Footer */}
+            <div className="hidden border-t border-border px-4 py-2 text-center text-[10px] text-muted-foreground sm:block">
+              {MEDICAL_NOTE}
             </div>
-          </form>
+            {!isTyping && (
+              <div className="hidden justify-center gap-2 border-t border-border px-4 py-2 sm:flex">
+                <Link
+                  to="/support"
+                  onClick={() => {
+                    handoffToHuman();
+                    setTimeout(closeChat, 250);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1.5 text-[11px] font-semibold text-sky-700 transition hover:bg-sky-100 active:scale-95"
+                >
+                  <Bot className="h-3.5 w-3.5" />
+                  Talk to a human · Contact us
+                </Link>
+              </div>
+            )}
+
+            {/* Input */}
+            <form
+              onSubmit={onSubmit}
+              className="border-t border-border p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] sm:pb-3"
+            >
+              <div className="flex items-end gap-2">
+                <textarea
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    autosize();
+                  }}
+                  onKeyDown={handleKeyDown}
+                  rows={1}
+                  maxLength={MAX_LENGTH}
+                  placeholder="Type your message..."
+                  aria-label="Type your message"
+                  className="max-h-28 min-h-[42px] flex-1 resize-none rounded-2xl border border-border bg-muted/50 px-3.5 py-2.5 text-sm text-foreground caret-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60"
+                />
+                <button
+                  type="submit"
+                  disabled={!input.trim() || isTyping}
+                  aria-label="Send message"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-primary text-primary-foreground shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:shadow-soft active:scale-90 disabled:pointer-events-none disabled:opacity-40"
+                >
+                  {isTyping ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+              <div className="mt-1 flex items-center justify-between text-[10px] text-muted-foreground">
+                <span>Enter to send · Shift+Enter for a new line</span>
+                <span className={cn(nearLimit && "font-semibold text-amber-500")}>
+                  {input.length}/{MAX_LENGTH}
+                </span>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </>
