@@ -142,6 +142,52 @@ describe("toRomanUrdu — phrase-level priority", () => {
   });
 });
 
+describe("toRomanUrdu — everyday natural-phrasing expansions", () => {
+  it("walks / stairs / postures read naturally", () => {
+    expect(toRomanUrdu("کیا درد چلنے سے بڑھتا ہے؟")).toBe("Kya dard chalne se barhta hai?");
+    expect(toRomanUrdu("کیا آپ سیڑھیاں چڑھ سکتے ہیں؟")).toBe("Kya aap seerhiyan charh sakte hain?");
+    expect(toRomanUrdu("مجھے سیڑھیاں چڑھنے میں مشکل ہوتی ہے۔")).toBe(
+      "Mujhe seerhiyan charhne mein mushkil hoti hai.",
+    );
+    expect(toRomanUrdu("کیا درد اٹھتے وقت زیادہ ہوتا ہے؟")).toBe(
+      "Kya dard uthate waqt zyada hota hai?",
+    );
+    expect(toRomanUrdu("میں زیادہ دیر بیٹھ نہیں سکتا۔")).toBe("Mein zyada dair baith nahi sakta.");
+  });
+
+  it("spread / numbness / stiffness sentences stay idiomatic", () => {
+    expect(toRomanUrdu("درد دائیں ٹانگ تک پھیل رہا ہے۔")).toBe(
+      "Dard dayen tang tak phail raha hai.",
+    );
+    expect(toRomanUrdu("میری ٹانگ سن ہو جاتی ہے۔")).toBe("Meri tang sun ho jati hai.");
+    expect(toRomanUrdu("میری کمر اکڑ جاتی ہے۔")).toBe("Meri kamarr akarh jati hai.");
+    expect(toRomanUrdu("درد میں جھنجھناہٹ بھی ہوتی ہے۔")).toBe(
+      "Dard mein jhunjhunaht bhi hoti hai.",
+    );
+  });
+
+  it("sleep / appetite / breathing daily-life questions", () => {
+    expect(toRomanUrdu("کیا آپ کی نیند ٹھیک آتی ہے؟")).toBe("Kya aap ki neend theek aati hai?");
+    expect(toRomanUrdu("مجھے نیند نہیں آ رہی۔")).toBe("Mujhe neend nahi aa rahi.");
+    expect(toRomanUrdu("بھوک کم لگتی ہے۔")).toBe("Bhukh kam lagti hai.");
+    expect(toRomanUrdu("سانس پھولتی ہے۔")).toBe("Saans phoolti hai.");
+    expect(toRomanUrdu("میں چل نہیں سکتا۔")).toBe("Mein chal nahi sakta.");
+  });
+
+  it("follow-up / vitals / medication-failure sentences", () => {
+    expect(toRomanUrdu("درد رات کو زیادہ ہوتا ہے۔")).toBe("Dard raat ko zyada hota hai.");
+    expect(toRomanUrdu("میرا بلڈ پریشر بڑھ گیا ہے۔")).toBe("Mera blood pressure barh gaya hai.");
+    expect(toRomanUrdu("شوگر زیادہ ہو گئی ہے.")).toBe("Sugar zyada ho gayi hai.");
+    expect(toRomanUrdu("دوا ختم ہو گئی ہے.")).toBe("Dawa khatam ho gayi hai.");
+    expect(toRomanUrdu("دوا کی خوراک کتنی ہے؟")).toBe("Dawa ki khorak kitni hai?");
+    expect(toRomanUrdu("آپ نے کون سی دوا لی تھی؟")).toBe("Aap ne kaun si dawa li thi?");
+    expect(toRomanUrdu("مجھے کھانا کھانے کے بعد درد ہوتا ہے.")).toBe(
+      "Mujhe khana khaane ke baad dard hota hai.",
+    );
+    expect(toRomanUrdu("آپ کو اسپتال جانا پڑے گا.")).toBe("Aap ko hospital jana pare ga.");
+  });
+});
+
 describe("hasUrduScript", () => {
   it("detects script text", () => {
     expect(hasUrduScript("ہو رہا ہے")).toBe(true);

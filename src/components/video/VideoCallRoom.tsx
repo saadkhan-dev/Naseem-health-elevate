@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import "@livekit/components-styles";
 import { ControlBar, LiveKitRoom, useRoomContext } from "@livekit/components-react";
 import { RoomEvent } from "livekit-client";
@@ -6,6 +6,7 @@ import { reportVideoSessionEventClient } from "@/lib/video-call";
 import { ConferenceLayout } from "@/components/video/ConferenceLayout";
 import { ConsultationTools } from "@/components/video/ConsultationTools";
 import { TranslationPatientIndicator } from "@/components/video/TranslationPatientIndicator";
+import { VideoConsultationOverlay } from "@/components/video/VideoConsultationOverlay";
 
 /**
  * Embedded LiveKit room for a video consultation. This replaced the old Jitsi
@@ -66,6 +67,11 @@ export function LiveKitVideoRoom({
   roomName,
   onDisconnected,
 }: LiveKitVideoRoomProps) {
+  // The doctor's interpreter toggle, shared with the remote-viewer overlay
+  // (data-channel broadcasts never loop back to the sender, so the overlay
+  // needs the local truth to clear captions/indicator when the doctor turns it
+  // OFF). `null` means "unknown yet"; patients leave it unset entirely.
+  const [interpreterEnabled, setInterpreterEnabled] = useState<boolean | null>(null);
   return (
     <LiveKitRoom
       serverUrl={serverUrl}
@@ -83,6 +89,7 @@ export function LiveKitVideoRoom({
         {isStaff ? (
           <ConsultationTools
             vcNo={vcNo}
+            onEnabledChange={setInterpreterEnabled}
             className="absolute right-3 top-[calc(env(safe-area-inset-top)_+_0.75rem)] z-30 w-72 max-w-[calc(100%-1.5rem)]"
           />
         ) : (
@@ -102,6 +109,11 @@ export function LiveKitVideoRoom({
               chat: false,
               leave: true,
             }}
+          />
+          <VideoConsultationOverlay
+            isStaff={isStaff}
+            vcNo={vcNo}
+            interpreterEnabled={isStaff ? interpreterEnabled : undefined}
           />
         </div>
       </div>

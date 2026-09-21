@@ -45,6 +45,9 @@ export function TranslationPatientIndicator({ vcNo, className }: TranslationPati
   const engineRef = useRef<VoiceTranslationEngine | null>(null);
   const enabledRef = useRef(false);
   const remoteAudioTrackRef = useRef<RemoteAudioTrack | null>(null);
+  // Mirrors whether the patient's own pipeline is actively speech-producing, so
+  // the (memoised) segment broadcast stamps `speaking` without churn.
+  const speakingRef = useRef(false);
 
   // Sender-side publishing: while active the patient's OWN mic is STT'd,
   // translated and published back as Urdu TTS (the raw mic is never sent).
@@ -65,6 +68,7 @@ export function TranslationPatientIndicator({ vcNo, className }: TranslationPati
           original: seg.original,
           translated: seg.translated,
           interim: seg.interim,
+          speaking: speakingRef.current,
         }),
       );
       try {
@@ -122,6 +126,12 @@ export function TranslationPatientIndicator({ vcNo, className }: TranslationPati
   useEffect(() => {
     enabledRef.current = enabled;
   }, [enabled]);
+
+  // Keep `speaking` in a ref so the memoised broadcast stamps it without churn.
+  // `status` is the raw engine state from onStateChange.
+  useEffect(() => {
+    speakingRef.current = /^(speaking|translating)$/i.test(status);
+  }, [status]);
 
   // Patient-side engine: translate the patient's speech into Urdu and publish it
   // (sender-side). Re-targeted live (`setPatientLanguage`) when the doctor

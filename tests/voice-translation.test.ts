@@ -59,6 +59,19 @@ describe("voice translation — data-channel state message", () => {
     expect(decoded).toEqual(msg);
   });
 
+  it("round-trips the optional speaking flag for the remote-speaker indicator", () => {
+    const msg = { enabled: true, patientLanguage: "ps-AF", status: "Speaking…", speaking: true };
+    const decoded = decodeVoiceTranslationStateMessage(encodeVoiceTranslationStateMessage(msg));
+    expect(decoded).toEqual(msg);
+    expect(decoded?.speaking).toBe(true);
+  });
+
+  it("leaves speaking undefined for older peers that never send it", () => {
+    const msg = { enabled: true, patientLanguage: "bn-IN", status: "Listening" };
+    const decoded = decodeVoiceTranslationStateMessage(encodeVoiceTranslationStateMessage(msg));
+    expect(decoded?.speaking).toBeUndefined();
+  });
+
   it("rejects malformed payloads without throwing", () => {
     expect(decodeVoiceTranslationStateMessage(new TextEncoder().encode("not json"))).toBeNull();
     expect(
@@ -109,6 +122,36 @@ describe("voice translation — data-channel segment message", () => {
       interim: false,
     });
     expect(decodeVoiceTranslationSegmentMessage(bad)).toBeNull();
+  });
+
+  it("round-trips the optional speaking flag on a live segment", () => {
+    const msg = {
+      role: "doctor" as const,
+      sourceLanguage: "ur-IN",
+      targetLanguage: "en",
+      original: "آپ کی پیٹھ",
+      translated: "your back",
+      interim: true,
+      speaking: true,
+    };
+    expect(decodeVoiceTranslationSegmentMessage(encodeVoiceTranslationSegmentMessage(msg))).toEqual(
+      msg,
+    );
+  });
+
+  it("stamps speaking false on segments sent while the pipeline is idle", () => {
+    const msg = {
+      role: "patient" as const,
+      sourceLanguage: "en-US",
+      targetLanguage: "ur",
+      original: "hello",
+      translated: "ہیلو",
+      interim: false,
+      speaking: false,
+    };
+    expect(decodeVoiceTranslationSegmentMessage(encodeVoiceTranslationSegmentMessage(msg))).toEqual(
+      msg,
+    );
   });
 });
 

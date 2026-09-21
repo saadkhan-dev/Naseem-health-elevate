@@ -41,6 +41,8 @@ interface TranscriptEntry {
 interface ConsultationToolsProps {
   vcNo: string;
   className?: string;
+  /** Reports the local interpreter-enabled state (used by the remote-viewer overlay). */
+  onEnabledChange?: (enabled: boolean) => void;
 }
 
 /**
@@ -55,13 +57,13 @@ interface ConsultationToolsProps {
  * Changing the language mid-call re-targets the running engine live
  * (`engine.setPatientLanguage`) without restarting anything else.
  */
-export function ConsultationTools({ vcNo, className }: ConsultationToolsProps) {
+export function ConsultationTools({ vcNo, className, onEnabledChange }: ConsultationToolsProps) {
   const room = useRoomContext();
   const remoteAudioTrack = useRemoteAudioTrack();
 
   const [enabled, setEnabled] = useState(false);
-  // The doctor-selected patient language (a SupportedLanguage.code, or "" while
-  // none is chosen — never an assumed English/Urdu default).
+  // The patient-language selection the doctor made (a SupportedLanguage.code,
+  // or "" while none is chosen — never an assumed English/Urdu default).
   const [patientLanguage, setPatientLanguage] = useState("");
   const [engineState, setEngineState] = useState<VoiceTranslationState>("off");
   const [expanded, setExpanded] = useState(false);
@@ -74,6 +76,20 @@ export function ConsultationTools({ vcNo, className }: ConsultationToolsProps) {
   const enabledRef = useRef(false);
   const remoteAudioTrackRef = useRef<RemoteAudioTrack | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  // Mirrors whether the doctor's own pipeline is actively speech-producing, so
+  // the (memoised) broadcast functions can stamp `speaking` without churn.
+  const speakingRef = useRef(false);
+  // Reports the interpreter toggle to the remote-viewer overlay (the doctor's
+  // own data-channel broadcasts never loop back, so the overlay needs the local
+  // truth). Kept in a ref so `applyEnabled` stays stable for effect deps.
+  const onEnabledChangeRef = useRef(onEnabledChange);
+  useEffect(() => {
+    onEnabledChangeRef.current = onEnabledChange;
+  }, [onEnabledChange]);
+  const applyEnabled = useCallback((next: boolean) => {
+    setEnabled(next);
+    onEnabledChangeRef.current?.(next);
+  }, []);
 
   // Sender-side publishing: while the interpreter actually runs (enabled + a
   // concrete non-Urdu patient language) the raw mic is never on the wire — a
@@ -119,6 +135,7 @@ export function ConsultationTools({ vcNo, className }: ConsultationToolsProps) {
           original: seg.original,
           translated: seg.translated,
           interim: seg.interim,
+          speaking: speakingRef.current,
         }),
       );
       try {
@@ -149,6 +166,7 @@ export function ConsultationTools({ vcNo, className }: ConsultationToolsProps) {
           enabled: isEnabled,
           patientLanguage: patientLang,
           status,
+          speaking: speakingRef.current,
         }),
       );
       try {
@@ -173,18 +191,24 @@ export function ConsultationTools({ vcNo, className }: ConsultationToolsProps) {
         if (!live || !res.state) return;
         const restored = res.state.patientLanguage;
         if (restored) setPatientLanguage((prev) => prev || restored);
-        if (res.state.enabled) setEnabled(true);
+        if (res.state.enabled) applyEnabled(true);
       })
       .catch(() => undefined);
     return () => {
       live = false;
     };
-  }, [vcNo]);
+  }, [vcNo, applyEnabled]);
 
   // Keep the refs the track-swap path reads in sync with state.
   useEffect(() => {
     enabledRef.current = enabled;
   }, [enabled]);
+
+  // Keep `speaking` in a ref so the memoised broadcasts stamp it without
+  // recreating themselves (which would churn the engine lifecycle effect).
+  useEffect(() => {
+    speakingRef.current = engineState === "speaking" || engineState === "translating";
+  }, [engineState]);
 
   // Engine lifecycle: only runs when the interpreter is ON and a real
   // translation is needed (a concrete, non-Urdu patient language was selected).
@@ -306,7 +330,7 @@ export function ConsultationTools({ vcNo, className }: ConsultationToolsProps) {
       setLastError("Choose the patient's language to start voice translation.");
       return;
     }
-    setEnabled(next);
+    applyEnabled(next);
     if (next) {
       setEngineState("starting");
       broadcast(true, patientLanguage, "Starting");
@@ -331,7 +355,7 @@ export function ConsultationTools({ vcNo, className }: ConsultationToolsProps) {
     const rollback = () => {
       if (!next) return;
       setLastError("Could not update the interpreter setting. Please try again.");
-      setEnabled(false);
+      applyEnabled(false);
       engineRef.current?.dispose();
       engineRef.current = null;
       restoreMic();

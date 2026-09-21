@@ -167,6 +167,27 @@
   overflow: hidden;
 }
 
+/*
+ * Narrow screens: keep the room control bar (LiveKit buttons + the captions
+ * toggle) fully inside the viewport. LiveKit's button padding is unlayered, so
+ * these specificity-boosted rules win only at <= 380px and only inside the room.
+ */
+@media (max-width: 380px) {
+  .vc-room-controlbar.vc-room-controlbar {
+    gap: 0.25rem;
+  }
+  .vc-room-controlbar .lk-button-group-container {
+    gap: 0.25rem;
+  }
+  .vc-room-controlbar .lk-button {
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
+  }
+  .vc-room-controlbar-wrap [data-testid="vt-captions-toggle"] {
+    margin-left: 0.25rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
