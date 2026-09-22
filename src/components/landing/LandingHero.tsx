@@ -136,7 +136,7 @@ export function LandingHero() {
             className="liquid-glass inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-medium text-white transition-all hover:bg-white/10 hover:shadow-glass"
           >
             <Video className="h-4 w-4 text-cyan-400" />
-            Video Tele-Consult
+            Video Consultation
           </SectionLink>
           <SectionLink
             hash="#diseases"

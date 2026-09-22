@@ -163,14 +163,16 @@ export function VideoConsultationOverlay({
           className="pointer-events-none absolute inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 flex justify-center px-3 sm:px-6"
         >
           <div
-            className={`w-full max-w-screen-sm rounded-xl bg-black/75 px-4 py-2 text-center shadow-lg backdrop-blur ${
+            className={`w-full max-w-screen-sm rounded-xl bg-black/75 px-4 py-2.5 text-left shadow-lg backdrop-blur ${
               activeCaption.interim ? "opacity-85" : ""
             }`}
           >
             <div className="text-[10px] font-semibold uppercase tracking-wide text-white/70">
               {activeCaption.speaker === "doctor" ? "Doctor" : "Patient"}
             </div>
-            <div className="break-words text-sm leading-snug text-white">{activeCaption.text}</div>
+            <div className="mt-1 break-words text-sm leading-relaxed text-white">
+              {activeCaption.text}
+            </div>
           </div>
         </div>
       )}

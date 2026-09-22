@@ -568,9 +568,8 @@ function GuestAppointmentLookup({
             </p>
             <Button
               type="button"
-              variant="outline"
               onClick={() => setMode("recover")}
-              className="mt-3"
+              className="mt-3 bg-emerald-600 hover:bg-emerald-700"
             >
               <Search className="h-4 w-4" /> Find My Appointment Id
             </Button>
@@ -635,7 +634,7 @@ function GuestAppointmentLookup({
             <Button
               type="submit"
               disabled={recoverStatus.isPending}
-              className="h-11 w-full rounded-xl"
+              className="h-11 w-full rounded-xl bg-emerald-600 hover:bg-emerald-700"
             >
               {recoverStatus.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -1266,9 +1265,8 @@ function GuestOrderLookup({ onBackToMine }: { onBackToMine?: () => void }) {
             </p>
             <Button
               type="button"
-              variant="outline"
               onClick={() => setMode("recover")}
-              className="mt-3"
+              className="mt-3 bg-emerald-600 hover:bg-emerald-700"
             >
               <Search className="h-4 w-4" /> Find My Order Id
             </Button>
@@ -1331,7 +1329,7 @@ function GuestOrderLookup({ onBackToMine }: { onBackToMine?: () => void }) {
             <Button
               type="submit"
               disabled={recoverOrderStatus.isPending}
-              className="h-11 w-full rounded-xl"
+              className="h-11 w-full rounded-xl bg-emerald-600 hover:bg-emerald-700"
             >
               {recoverOrderStatus.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

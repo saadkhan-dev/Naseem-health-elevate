@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { MessageSquare, X } from "lucide-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useLocation } from "@tanstack/react-router";
@@ -36,12 +36,19 @@ const NOTIFICATION_MS = 6000;
  * consultation page (patient AND staff/admin video rooms).
  *
  * Clicking the button (or the toast preview) opens the dedicated full-page
- * consultation chat in a NEW tab via a plain anchor (`target="_blank"
- * rel="noopener noreferrer"`): patients go to `/video/{vcNo}/chat`, staff go to
- * `/admin/consultations/{conversationId}` — the SAME existing conversation,
+ * consultation chat in a NEW tab: patients go to `/video/{vcNo}/chat`, staff go
+ * to `/admin/consultations/{conversationId}` — the SAME existing conversation,
  * never a second chat implementation. The current video-call tab is never
- * touched: no `router.navigate()`, no `window.open()` fallback, nothing that
- * could reload or rerender the LiveKit room.
+ * touched: no `router.navigate()`, nothing that could reload or rerender the
+ * LiveKit room.
+ *
+ * The chat window is opened through a single named browsing context, so
+ * repeated clicks never spawn duplicate chat tabs: the reference of the opened
+ * window is stored, existing + still-open windows are focused instead of
+ * re-created, and a manually closed window is replaced with a fresh one. The
+ * window name is derived from the chat URL, so any other instance targeting the
+ * same conversation (e.g. the launcher in the active room vs. the join card)
+ * reuses the exact same tab.
  *
  * Realtime notes (no duplicate listeners / no leaks):
  *  - This component keeps the shared message cache warm with the realtime
@@ -79,6 +86,9 @@ export function FloatingConsultationChat({
   const prevLastId = useRef<string | null>(null);
   const initializedRef = useRef(false);
   const seenNotifRef = useRef<Set<string>>(new Set());
+  // Reference to the single chat window we own for this conversation (reused on
+  // every click; replaced only if the user closed it manually).
+  const chatWindowRef = useRef<Window | null>(null);
 
   const ensure = useConsultationEnsure(enabled ? appointmentId : null, enabled, surface);
   const conversationId = ensure.data?.conversationId ?? null;
@@ -150,16 +160,42 @@ export function FloatingConsultationChat({
   // The chat opens in a NEW tab (its own top-level page, like the video call).
   // We deliberately do NOT open it in-place: on mobile browsers the SPA would
   // reload under the user, and the doctor's replies need a persistent surface
-  // while the call tab stays open. A plain `<a target="_blank" rel="noopener
-  // noreferrer">` (see the JSX below) is the browser-native new-tab mechanism:
-  // one navigation call, popup-blocker safe under a user click, and it CANNOT
-  // navigate the current tab. onClick only dismisses the toast; it must never
-  // call router.navigate(), window.open() or preventDefault() — the anchor does
-  // the whole job, and a fallback like `window.open(...noopener...)` returning
-  // null (always, per spec) used to send THIS tab to the chat page.
-  function handleChatClick() {
+  // while the call tab stays open. We open a single NAMED browsing context and
+  // keep its reference, so subsequent clicks focus the same window instead of
+  // duplicating it. This runs synchronously inside the click handler, so it is
+  // popup-blocker safe under a user gesture, and it CANNOT navigate the current
+  // tab. Notably the open is done WITHOUT a `noopener` feature — `noopener`
+  // makes `window.open()` return `null`, which would make it impossible to keep
+  // the window reference for reuse.
+  function openChat() {
+    const windowName = `consultation-chat-${chatUrl.replace(/[^a-zA-Z0-9]+/g, "-")}`;
+    const existing = chatWindowRef.current;
+    if (existing && !existing.closed) {
+      try {
+        existing.focus();
+      } catch {
+        /* same-origin focus; ignore any edge-case failure */
+      }
+      return;
+    }
+    chatWindowRef.current = window.open(chatUrl, windowName);
+    if (chatWindowRef.current) {
+      try {
+        chatWindowRef.current.focus();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  // onClick only dismisses the toast and opens/reuses the shared chat window;
+  // it must never call router.navigate() — the reserved window name does the
+  // whole reuse job.
+  function handleChatClick(e: MouseEvent<HTMLAnchorElement>) {
+    e.preventDefault();
     setNotif(null);
     window.clearTimeout(notifTimer.current);
+    openChat();
   }
 
   if (!enabled || !user) return null;
@@ -186,8 +222,6 @@ export function FloatingConsultationChat({
     <>
       <a
         href={chatUrl}
-        target="_blank"
-        rel="noopener noreferrer"
         onClick={handleChatClick}
         aria-label={badgeLabel ? `Open consultation chat, ${unreadAria}` : "Open consultation chat"}
         title={badgeLabel ? unreadAria : "Open consultation chat"}
@@ -213,8 +247,6 @@ export function FloatingConsultationChat({
           <div className="flex w-full max-w-sm items-center gap-2 rounded-2xl border border-border bg-card p-3 shadow-soft">
             <a
               href={chatUrl}
-              target="_blank"
-              rel="noopener noreferrer"
               onClick={handleChatClick}
               className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
             >
