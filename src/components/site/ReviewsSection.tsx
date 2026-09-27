@@ -3,7 +3,7 @@ import { Star, MessageCircle, Loader2, CheckCircle2 } from "lucide-react";
 import { motion, useInView } from "framer-motion";
 import { useReviews } from "@/hooks/queries/useContent";
 import { useSubmitReview } from "@/hooks/queries/useSiteExtra";
-import { GoogleReviewsBlock } from "./GoogleReviewsBlock";
+import { ElfsightGoogleReviews } from "./ElfsightGoogleReviews";
 import { WebsiteReviewsBlock } from "./WebsiteReviewsBlock";
 
 export function ReviewsSection() {
@@ -75,7 +75,7 @@ export function ReviewsSection() {
           </p>
         </motion.div>
 
-        <GoogleReviewsBlock isInView={isInView} />
+        <ElfsightGoogleReviews isInView={isInView} />
 
         <motion.div
           initial={{ opacity: 0, y: 40 }}

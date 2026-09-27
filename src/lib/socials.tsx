@@ -1,10 +1,11 @@
 import type { ComponentType } from "react";
 
 /**
- * Public links for the clinic's pages. Google is still a placeholder until the
- * real business listing is available; YouTube now points to the clinic channel.
+ * Public links for the clinic's pages. Google points at the official Google
+ * Maps business listing; YouTube points to the clinic channel.
  */
-export const GOOGLE_PLACEHOLDER = "#";
+export const GOOGLE_MAPS_URL =
+  "https://www.google.com/maps/place/Rahat+Homeopathic+%26+physiotherapy+clinic+11c2+North+Karachi(Dr.Naseem+Ahmed)./@24.9687799,67.0610153,17z/data=!3m1!4b1!4m6!3m5!1s0x3eb341eb84332d53:0xd6833173c75c3d7!8m2!3d24.9687799!4d67.0610153!16s%2Fg%2F11kpts2x31!18m1!1e1?entry=ttu";
 export const YOUTUBE_PLACEHOLDER = "https://youtube.com/@naseemkhan-u2t?si=jAG4ZZk8AkuP1Dcn";
 
 /** Icons used by the social link groups (single source of truth for both the Home hero and footer). */

@@ -45,7 +45,6 @@ import {
 } from "./server/reminders";
 import { searchSite } from "./server/search";
 import { getAnalytics, getLiveAnalytics } from "./server/analytics";
-import { getGoogleReviewsServer } from "./server/google-reviews";
 import {
   sendAppointmentNotifications,
   sendStatusChangeNotifications,
@@ -4088,12 +4087,6 @@ export const getPublicDoctorProfile = createServerFn({ method: "GET" })
       .eq("id", 1)
       .maybeSingle();
     return { profile: data ?? null };
-  });
-
-export const getGoogleReviews = createServerFn({ method: "GET" })
-  .validator((d: unknown) => d as undefined)
-  .handler(async () => {
-    return getGoogleReviewsServer();
   });
 
 /** Shared insert + best-effort admin notification for the support inbox. */

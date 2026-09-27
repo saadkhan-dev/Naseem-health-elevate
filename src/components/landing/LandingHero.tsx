@@ -16,12 +16,7 @@ import { SectionLink } from "@/components/site/SectionLink";
 import { whatsappUrl } from "@/lib/contact";
 import { useVideoFadeLoop } from "@/hooks/useVideoFadeLoop";
 import { usePauseOffscreenVideo } from "@/hooks/usePauseOffscreenVideo";
-import {
-  GoogleIcon,
-  GOOGLE_PLACEHOLDER,
-  YOUTUBE_PLACEHOLDER,
-  type SocialIcon,
-} from "@/lib/socials";
+import { GoogleIcon, GOOGLE_MAPS_URL, YOUTUBE_PLACEHOLDER, type SocialIcon } from "@/lib/socials";
 
 const HERO_VIDEO =
   "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260405_074625_a81f018a-956b-43fb-9aee-4d1508e30e6a.mp4";
@@ -178,7 +173,7 @@ export function LandingHero() {
                 href: whatsappUrl("Hi Dr. Naseem, I would like to book a consultation."),
                 label: "WhatsApp Fast Connect",
               },
-              { Icon: GoogleIcon, href: GOOGLE_PLACEHOLDER, label: "Google" },
+              { Icon: GoogleIcon, href: GOOGLE_MAPS_URL, label: "Google Maps" },
               { Icon: Youtube, href: YOUTUBE_PLACEHOLDER, label: "YouTube" },
             ] as { Icon: SocialIcon; href: string; label: string }[]
           ).map(({ Icon, href, label }) => (

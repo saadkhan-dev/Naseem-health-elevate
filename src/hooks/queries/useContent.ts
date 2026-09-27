@@ -2,8 +2,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getPublicVideoOffers } from "@/lib/video-offers-public";
 import type { VideoOffer } from "@/lib/video-offer-types";
 import { getPublishedProducts, type Product } from "@/lib/admin-data";
-import { fetchGoogleReviews } from "@/lib/google-reviews-public";
-import type { GoogleReviewsResult } from "@/lib/server/google-reviews";
 import {
   getVideos,
   getPublishedVideos,
@@ -103,16 +101,6 @@ export function useReviews() {
     queryKey: ["reviews"],
     queryFn: getReviews,
     staleTime: 1000 * 60 * 10,
-  });
-}
-
-// Google Reviews (public — proxied server-side, never exposes the Places API key)
-export function useGoogleReviews() {
-  return useQuery<GoogleReviewsResult>({
-    queryKey: ["google-reviews"],
-    queryFn: fetchGoogleReviews,
-    staleTime: 1000 * 60 * 10,
-    retry: 1,
   });
 }
 

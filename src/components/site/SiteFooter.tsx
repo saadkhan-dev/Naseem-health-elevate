@@ -14,12 +14,7 @@ import { PHONE, EMAIL, telUrl, whatsappUrl } from "@/lib/contact";
 import { SectionLink } from "@/components/site/SectionLink";
 import { useFloatingControls } from "@/hooks/useFloatingControls";
 import { useFloatingDismiss } from "@/hooks/useFloatingDismiss";
-import {
-  GoogleIcon,
-  GOOGLE_PLACEHOLDER,
-  YOUTUBE_PLACEHOLDER,
-  type SocialIcon,
-} from "@/lib/socials";
+import { GoogleIcon, GOOGLE_MAPS_URL, YOUTUBE_PLACEHOLDER, type SocialIcon } from "@/lib/socials";
 
 export function SiteFooter({ dark = false }: { dark?: boolean }) {
   const { hidden } = useFloatingControls();
@@ -65,7 +60,7 @@ export function SiteFooter({ dark = false }: { dark?: boolean }) {
                   link: whatsappUrl("Hi Dr. Naseem, I'd like to know more."),
                   label: "WhatsApp",
                 },
-                { Icon: GoogleIcon, link: GOOGLE_PLACEHOLDER, label: "Google" },
+                { Icon: GoogleIcon, link: GOOGLE_MAPS_URL, label: "Google Maps" },
                 { Icon: Youtube, link: YOUTUBE_PLACEHOLDER, label: "YouTube" },
               ] as { Icon: SocialIcon; link: string; label: string }[]
             ).map(({ Icon, link, label }) => (
@@ -148,9 +143,20 @@ export function SiteFooter({ dark = false }: { dark?: boolean }) {
         </div>
       </div>
       <div className="border-t border-white/10">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 px-4 py-5 text-[13px] text-white/60 sm:flex-row sm:text-xs md:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-5 text-[13px] text-white/60 sm:flex-row sm:text-xs md:px-8">
           <div>© {new Date().getFullYear()} Dr. Naseem Ahmed Khan. All Rights Reserved.</div>
-          <div>Designed with care for better health.</div>
+          <div className="flex flex-col items-center gap-2.5 sm:flex-row sm:items-center sm:gap-4">
+            <div>Designed with care for better health.</div>
+            {/* Doctor/admin access. Routes to the existing /admin guard, which
+                handles authentication — no credentials live in the frontend. */}
+            <Link
+              to="/admin"
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-white/55 transition-all duration-300 hover:border-white/25 hover:bg-white/5 hover:text-white/90 active:scale-95"
+            >
+              <Stethoscope className="h-3 w-3" />
+              Doctor Login
+            </Link>
+          </div>
         </div>
       </div>
 

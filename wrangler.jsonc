@@ -6,6 +6,13 @@
 //   npx wrangler secret put RESEND_API_KEY
 //   npx wrangler secret put GEMINI_API_KEY
 // (also: AZURE_SPEECH_KEY, AZURE_SPEECH_REGION when voice translation is configured)
+// Meta WhatsApp Cloud API webhook (server-only, never VITE_*):
+//   npx wrangler secret put META_WA_APP_SECRET
+//   npx wrangler secret put META_WA_VERIFY_TOKEN
+//   npx wrangler secret put META_WA_ACCESS_TOKEN
+//   npx wrangler secret put META_WA_PHONE_NUMBER_ID
+//   npx wrangler secret put META_WA_BUSINESS_ACCOUNT_ID
+// (META_WA_API_VERSION is optional; defaults to v23.0)
 // VITE_* values (Supabase URL/anon key) are baked into the client build, not set here.
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
