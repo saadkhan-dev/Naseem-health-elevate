@@ -30,6 +30,27 @@ export const DEFAULT_META_GRAPH_API_VERSION = "v23.0";
 /** Meta's signature header. */
 export const META_SIGNATURE_HEADER = "x-hub-signature-256";
 
+/**
+ * Mask a recipient for logging: keeps only the last 2 digits and a length hint,
+ * e.g. `923300123456` -> `***56 (len 12)`.
+ *
+ * A full number never reaches a log line. Deliberately lossy: correlation is by
+ * Meta's `messageId`, not by phone number.
+ */
+export function maskRecipient(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length === 0) return "unknown";
+  return `***${digits.slice(-2)} (len ${digits.length})`;
+}
+
+/**
+ * Collapse whitespace and clamp length so a Meta-supplied error string can never
+ * smuggle a multi-line blob (or anything patient-shaped) into the logs.
+ */
+export function maskDiagnosticText(value: string): string {
+  return value.replace(/\s+/g, " ").trim().slice(0, 300);
+}
+
 export interface MetaWebhookEnv {
   /** Our own random string; Meta echoes it during subscription verification. */
   META_WA_VERIFY_TOKEN: string | undefined;
@@ -219,7 +240,26 @@ const metaValueSchema = z
       .optional(),
     messages: z.array(metaMessageSchema).optional(),
     statuses: z
-      .array(z.object({ id: z.string().optional(), status: z.string().optional() }).passthrough())
+      .array(
+        z
+          .object({
+            id: z.string().optional(),
+            status: z.string().optional(),
+            timestamp: z.union([z.string(), z.number()]).optional(),
+            recipient_id: z.string().optional(),
+            errors: z
+              .array(
+                z
+                  .object({
+                    code: z.union([z.string(), z.number()]).optional(),
+                    title: z.string().optional(),
+                  })
+                  .passthrough(),
+              )
+              .optional(),
+          })
+          .passthrough(),
+      )
       .optional(),
     errors: z.array(z.unknown()).optional(),
   })
@@ -263,6 +303,13 @@ export interface MetaInboundMessage {
 export interface MetaDeliveryStatus {
   id: string | null;
   status: string | null;
+  /** Recipient, already masked. Never the full number — see `maskRecipient`. */
+  recipient: string | null;
+  timestamp: string | null;
+  /** Meta's error code, only present on a `failed` status. */
+  errorCode: string | null;
+  /** Meta's error title, only present on a `failed` status. Already truncated. */
+  errorTitle: string | null;
 }
 
 export interface MetaParsedWebhook {
@@ -336,7 +383,19 @@ export function parseMetaWebhookPayload(raw: unknown): MetaParsedWebhook {
       }
 
       for (const status of value.statuses ?? []) {
-        statuses.push({ id: status.id ?? null, status: status.status ?? null });
+        // First error wins; Meta puts the actionable code there on a `failed`.
+        const firstError = status.errors?.[0];
+        statuses.push({
+          id: status.id ?? null,
+          status: status.status ?? null,
+          recipient: status.recipient_id ? maskRecipient(status.recipient_id) : null,
+          timestamp: status.timestamp === undefined ? null : String(status.timestamp),
+          errorCode:
+            firstError?.code === undefined || firstError.code === null
+              ? null
+              : String(firstError.code),
+          errorTitle: firstError?.title ? maskDiagnosticText(firstError.title) : null,
+        });
       }
     }
   }

@@ -2,6 +2,7 @@ import { defineHandler, getRequestHeader, readRawBody, setResponseStatus } from 
 import {
   META_SIGNATURE_HEADER,
   getMetaWebhookEnv,
+  maskDiagnosticText,
   markMetaEventSeen,
   metaWebhookMissingConfig,
   parseMetaWebhookPayload,
@@ -63,6 +64,28 @@ export default defineHandler(async (event) => {
   }
 
   const fresh = payload.messages.filter((m) => markMetaEventSeen(m.id));
+
+  // Diagnostic only: log each delivery status on its own line so a real booking
+  // can be followed from "accepted" (with its messageId) to sent/delivered/failed.
+  // Safe fields only: Meta's message id, its status, its timestamp, a masked
+  // recipient and Meta's own error code/title. Never the full phone number,
+  // never message text, never template parameters, never patient data.
+  for (const status of payload.statuses) {
+    const parts = [
+      `[WhatsApp Meta Webhook] status=${status.status ?? "unknown"}`,
+      `messageId=${status.id ?? "missing"}`,
+    ];
+
+    if (status.recipient) parts.push(`recipient=${status.recipient}`);
+
+    if (status.timestamp) parts.push(`timestamp=${status.timestamp}`);
+
+    if (status.errorCode) parts.push(`errorCode=${status.errorCode}`);
+
+    if (status.errorTitle) parts.push(`errorTitle=${maskDiagnosticText(status.errorTitle)}`);
+
+    console.log(parts.join(" "));
+  }
 
   console.log(
     "[meta-webhook] event received",

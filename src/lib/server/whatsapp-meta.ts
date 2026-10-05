@@ -504,6 +504,62 @@ function safeDetail(prefix: string, raw: string): string {
 }
 
 /**
+ * Shape of the success body Meta returns from `POST /{phone_number_id}/messages`.
+ * Only the message id is ever read — the rest of the object is ignored.
+ */
+interface MetaGraphAcceptedResponse {
+  messages?: Array<{ id?: unknown }>;
+}
+
+/**
+ * Pull the actionable fields out of a Meta Graph error envelope.
+ *
+ * Meta error bodies are echoed (truncated) by `safeDetail` because the code is
+ * the whole point, but the body never contains the access token: it is not in
+ * the response and our URL does not carry one. Nothing here touches the request
+ * payload, the recipient number, or any appointment/patient field.
+ */
+function parseMetaGraphError(raw: string): {
+  code: string;
+  type: string;
+  message: string;
+  subcode: string;
+} {
+  const none = { code: "unknown", type: "unknown", message: "", subcode: "unknown" };
+  try {
+    const body = JSON.parse(raw) as {
+      error?: {
+        code?: unknown;
+        type?: unknown;
+        message?: unknown;
+        error_subcode?: unknown;
+        error_data?: { details?: unknown };
+      };
+    };
+    const error = body?.error;
+    if (!error || typeof error !== "object") return none;
+
+    const asText = (value: unknown): string => {
+      if (typeof value === "number" || typeof value === "string") return String(value);
+      if (value && typeof value === "object") {
+        const details = (value as { details?: unknown }).details;
+        if (typeof details === "string") return details.slice(0, 300);
+      }
+      return "unknown";
+    };
+
+    return {
+      code: asText(error.code),
+      type: asText(error.type),
+      message: typeof error.message === "string" ? error.message.slice(0, 300) : "",
+      subcode: asText(error.error_subcode),
+    };
+  } catch {
+    return none;
+  }
+}
+
+/**
  * Send one approved-template WhatsApp message through the Meta Cloud API.
  *
  * Best-effort by contract: it never throws. Any missing configuration, invalid
@@ -588,6 +644,17 @@ export async function sendMetaWhatsAppNotification(input: {
 
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
+      const rejection = parseMetaGraphError(detail);
+
+      // Diagnostic only. Safe fields: HTTP status, Meta's own error code/type and
+      // its own message text. Never the token, the request payload, the recipient
+      // number, or any appointment/patient field.
+      console.error(
+        `[WhatsApp Meta] send rejected template=${template} httpStatus=${res.status} ` +
+          `errorCode=${rejection.code} errorType=${rejection.type} ` +
+          `subcode=${rejection.subcode} message=${rejection.message || "none"}`,
+      );
+
       return {
         channel,
         status: "error",
@@ -595,6 +662,21 @@ export async function sendMetaWhatsAppNotification(input: {
         detail: safeDetail(`Meta Graph HTTP ${res.status}`, detail),
       };
     }
+
+    // Meta accepted the request (2xx). Read the body only for the message id so a
+    // real booking can be correlated with the webhook's delivery status later.
+    const accepted = (await res.json().catch(() => null)) as MetaGraphAcceptedResponse | null;
+    const messageId =
+      typeof accepted?.messages?.[0]?.id === "string" && accepted.messages[0].id.trim()
+        ? accepted.messages[0].id.trim()
+        : "missing";
+
+    // Diagnostic only. No token, no recipient number, no template parameters, no
+    // message body, no appointment data.
+    console.log(
+      `[WhatsApp Meta] send accepted template=${template} httpStatus=${res.status} ` +
+        `messageId=${messageId} status=sent`,
+    );
 
     return { channel, status: "sent", to: e164 };
   } catch (e) {

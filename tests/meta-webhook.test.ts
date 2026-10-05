@@ -3,6 +3,8 @@ import {
   DEFAULT_META_GRAPH_API_VERSION,
   constantTimeEqual,
   getMetaWebhookEnv,
+  maskDiagnosticText,
+  maskRecipient,
   markMetaEventSeen,
   metaGraphApiVersion,
   metaWebhookMissingConfig,
@@ -274,7 +276,71 @@ describe("Meta webhook payload parsing", () => {
         ],
       }),
     );
-    expect(parsed.statuses).toEqual([{ id: "wamid.OUT1", status: "delivered" }]);
+    expect(parsed.statuses).toEqual([
+      {
+        id: "wamid.OUT1",
+        status: "delivered",
+        recipient: null,
+        timestamp: null,
+        errorCode: null,
+        errorTitle: null,
+      },
+    ]);
+  });
+
+  it("masks recipients so no full phone number can reach a log", () => {
+    expect(maskRecipient("923001234567")).toBe("***67 (len 12)");
+    expect(maskRecipient("+92 300 1234567")).toBe("***67 (len 12)");
+    expect(maskRecipient("")).toBe("unknown");
+    expect(maskRecipient("ab")).toBe("unknown");
+  });
+
+  it("clamps and flattens Meta-supplied text before it is logged", () => {
+    expect(maskDiagnosticText("a\n\nb   c")).toBe("a b c");
+    expect(maskDiagnosticText("x".repeat(500))).toHaveLength(300);
+  });
+
+  it("extracts a failed status's error code and masks the recipient", () => {
+    const parsed = parseMetaWebhookPayload(
+      JSON.stringify({
+        object: "whatsapp_business_account",
+        entry: [
+          {
+            id: "0",
+            changes: [
+              {
+                field: "messages",
+                value: {
+                  messaging_product: "whatsapp",
+                  statuses: [
+                    {
+                      id: "wamid.OUT2",
+                      status: "failed",
+                      timestamp: "1730000000",
+                      recipient_id: "923001234567",
+                      errors: [{ code: 131009, title: "Message   not\n delivered" }],
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    expect(parsed.statuses).toEqual([
+      {
+        id: "wamid.OUT2",
+        status: "failed",
+        // Masked: never the full number.
+        recipient: "***67 (len 12)",
+        timestamp: "1730000000",
+        errorCode: "131009",
+        // Whitespace collapsed so a Meta string cannot span log lines.
+        errorTitle: "Message not delivered",
+      },
+    ]);
   });
 
   it("counts Meta-reported errors without throwing", () => {
