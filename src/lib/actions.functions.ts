@@ -4671,9 +4671,13 @@ export const adminUpdateOrderStatus = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const admin = getSupabaseAdmin();
+    // Contact/order columns are selected here (as `order-payments.ts` already
+    // does) purely so the external notification below can reach the customer.
     const { data: order } = await admin
       .from("orders")
-      .select("id, patient_id, status")
+      .select(
+        "id, patient_id, status, name, order_no, email, phone, payment_payer_phone, payment_payer_email",
+      )
       .eq("id", data.id)
       .maybeSingle();
     if (!order) return { error: "Order not found." };
@@ -4691,9 +4695,12 @@ export const adminUpdateOrderStatus = createServerFn({ method: "POST" })
       note: data.note || null,
     });
 
+    // One label, used by both the in-app row and the outbound template, so the
+    // customer reads "Confirmed"/"Shipped" rather than the "updated" fallback.
+    const statusLabel = data.status.charAt(0).toUpperCase() + data.status.slice(1);
+
     // Notify the patient (best-effort; the notification helper never throws).
     if (order.patient_id) {
-      const statusLabel = data.status.charAt(0).toUpperCase() + data.status.slice(1);
       await createPatientNotification(admin, {
         userId: order.patient_id,
         type: "order",
@@ -4701,6 +4708,29 @@ export const adminUpdateOrderStatus = createServerFn({ method: "POST" })
         body: `Your order status changed to ${statusLabel}.`,
         link: buildAdminFocusLink("/patient/orders", "order", order.id),
       });
+    }
+
+    // Best-effort outbound notification of the status change. This sends
+    // WhatsApp via the approved `order_status_update` template whenever a phone
+    // is on file, and never SMS (see ORDER_PHONE_CHANNEL). Guest orders have no
+    // `patient_id` above but are still contacted here when they have a number.
+    // An order with neither an email nor a phone is skipped entirely rather than
+    // attempting a delivery that cannot succeed.
+    const contactEmail = order.email ?? order.payment_payer_email ?? null;
+    const contactPhone = order.phone ?? order.payment_payer_phone ?? null;
+    if (contactEmail || contactPhone) {
+      const siteUrl = getSiteUrl();
+      await sendOrderNotifications(
+        {
+          orderId: order.order_no ?? order.id,
+          patientName: order.name?.trim() || "Customer",
+          orderUrl: siteUrl ? `${siteUrl}/appointment-status?tab=order` : undefined,
+          paymentStatusLabel: statusLabel,
+          email: contactEmail ?? undefined,
+          phone: contactPhone ?? undefined,
+        },
+        "status",
+      );
     }
     return { error: null };
   });
