@@ -275,8 +275,10 @@ export async function sendVideoReadyNotifications(
  * rejected / cancelled / completed). Same best-effort rules as booking
  * notifications.
  *
- * Meta: only `cancelled` maps to a Meta template slot at all
+ * Meta: only `cancelled` and `rejected` map to a Meta template slot
  * (`appointment_cancelled` -> approved `appointment_cancelled_notice`).
+ * Both statuses are the same event from the patient's point of view — the
+ * appointment will not happen — so they deliberately share one template.
  * There is deliberately NO generic "status" template — for every other status
  * this resolves to `null`, so Meta reports `not_configured` instead of us
  * inventing a template name or reusing the wrong one. Email/SMS are unaffected.
@@ -291,7 +293,10 @@ export async function sendStatusChangeNotifications(
     details,
     messages: buildStatusChangeMessages(details),
     template: "status",
-    metaTemplate: details.newStatus === "cancelled" ? "appointment_cancelled" : null,
+    metaTemplate:
+      details.newStatus === "cancelled" || details.newStatus === "rejected"
+        ? "appointment_cancelled"
+        : null,
     options,
   });
 }
@@ -348,11 +353,22 @@ export async function sendSupportReplyNotifications(
 }
 
 /**
+ * The single thing that decides which phone channel order notifications use.
+ *
+ * Today that is WhatsApp, because the clinic has approved Meta templates for
+ * these events. SMS is intentionally NOT removed - the Twilio path, its env
+ * vars and `phoneChannel: "sms"` support all remain intact and reachable;
+ * flipping this constant back to "sms" is the whole of any future SMS change,
+ * with no other edit required.
+ */
+const ORDER_PHONE_CHANNEL: "whatsapp" | "sms" = "whatsapp";
+
+/**
  * Notify the patient that their product order was created or its status
- * changed. Delivers to the contact detail(s) in the order (email and/or SMS);
- * WhatsApp is intentionally excluded because out-of-session WhatsApp requires
- * an approved content template that does not exist for orders. Same best-effort
- * + `not_configured` reporting rules as every other sender.
+ * changed. Delivers to the contact detail(s) in the order: email (when an
+ * address is on file) and, per `ORDER_PHONE_CHANNEL` above, WhatsApp (when a
+ * phone number is on file). Same best-effort + `not_configured` reporting rules
+ * as every other sender.
  */
 export async function sendOrderNotifications(
   details: OrderNotificationDetails,
@@ -364,17 +380,20 @@ export async function sendOrderNotifications(
     env,
     details,
     messages: buildOrderMessages(details, kind),
-    // These Meta slots are mapped but the `only` / `phoneChannel` policy below
-    // still forces SMS + email: WhatsApp is NOT enabled for orders.
+    // Reached only when `ORDER_PHONE_CHANNEL` is "whatsapp". A caller may still
+    // override the slot (e.g. order-payments.ts sends
+    // `order_payment_confirmed`); both land in the same approved Meta slot.
     metaTemplate: kind === "created" ? "order_confirmation" : "order_status_update",
     options: {
       defaultCountryCode: env.PHONE_COUNTRY_CODE ?? "+92",
       ...options,
+      // `only` is authoritative: it names the phone channel so WhatsApp is
+      // actually selected and SMS is NOT silently kept alongside it.
       only: [
         ...(details.email ? (["email"] as const) : []),
-        ...(details.phone ? (["sms"] as const) : []),
+        ...(details.phone ? ([ORDER_PHONE_CHANNEL] as const) : []),
       ],
-      phoneChannel: "sms",
+      phoneChannel: ORDER_PHONE_CHANNEL,
     },
   });
 }
@@ -468,6 +487,9 @@ async function deliverToChannels({
         details: details as MetaTemplateDetails,
         to: phone!,
         defaultCountryCode: options?.defaultCountryCode ?? env.PHONE_COUNTRY_CODE ?? "+92",
+        // Slots that cannot be derived from `details` (e.g. `orderDate`) arrive
+        // here. Omitting it leaves every slot exactly as it was before.
+        extras: options?.metaExtras,
       });
     } else {
       // `phone` is normalized E.164 or null; the guard above already rejected

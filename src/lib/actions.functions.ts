@@ -66,7 +66,7 @@ import {
   verifyPaymentSchema,
   submitReceiptSchema,
 } from "./booking-schema";
-import { todayInClinic, nowTimeInClinic, toMinutes } from "./clinic";
+import { CLINIC_TIME_ZONE, todayInClinic, nowTimeInClinic, toMinutes } from "./clinic";
 import { intervalsOverlap } from "./slot-logic";
 import { getChatUsageStats, type ChatUsageRange, type ChatUsageStats } from "./server/chat-usage";
 import { generateAppointmentNo, generateOrderNo } from "./ids";
@@ -975,6 +975,27 @@ export const adminUpdateAppointmentStatus = createServerFn({ method: "POST" })
 
     return { error: null, id: data.id, status: data.status, notifications };
   });
+
+/**
+ * The order date shown to a customer, in clinic time.
+ *
+ * `orders.created_at` is the authoritative order-creation timestamp (a DB
+ * default), so it is read back from the inserted row rather than recomputed
+ * from the clock — the message can never claim a different day than the row.
+ * Rendered in Pakistan time (`Asia/Karachi`) to match every other patient-facing
+ * date in the app, in a plain unambiguous form rather than a raw ISO instant.
+ */
+function orderDateForNotification(createdAt: string | null | undefined): string | undefined {
+  if (!createdAt) return undefined;
+  const when = new Date(createdAt);
+  if (Number.isNaN(when.getTime())) return undefined;
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: CLINIC_TIME_ZONE,
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(when);
+}
 
 // ---------------------------------------------------------------------------
 // Admin — availability
@@ -3544,13 +3565,26 @@ export const placeOrder = createServerFn({ method: "POST" })
         delivery_charge_override: null,
       };
 
-      let { error: orderError } = await admin.from("orders").insert(orderPayload);
+      // `created_at` is a DB default; read it back so the notification quotes the
+      // row's real order date instead of recomputing it from the clock.
+      let createdAt: string | null = null;
+      let { data: createdOrder, error: orderError } = await admin
+        .from("orders")
+        .insert(orderPayload)
+        .select("created_at")
+        .single();
+      createdAt = createdOrder?.created_at ?? null;
 
       // Fallback 1: If live DB constraint orders_status_check does not allow 'pending_payment' yet
       if (orderError && /orders_status_check/i.test(orderError.message)) {
         orderPayload.status = "pending";
-        const retry = await admin.from("orders").insert(orderPayload);
+        const retry = await admin
+          .from("orders")
+          .insert(orderPayload)
+          .select("created_at")
+          .single();
         orderError = retry.error;
+        createdAt = retry.data?.created_at ?? null;
       }
 
       // Fallback 2: If live DB has not added delivery_area columns yet
@@ -3558,8 +3592,13 @@ export const placeOrder = createServerFn({ method: "POST" })
         delete orderPayload.delivery_area_id;
         delete orderPayload.delivery_area_name;
         delete orderPayload.delivery_charge_override;
-        const retry = await admin.from("orders").insert(orderPayload);
+        const retry = await admin
+          .from("orders")
+          .insert(orderPayload)
+          .select("created_at")
+          .single();
         orderError = retry.error;
+        createdAt = retry.data?.created_at ?? null;
       }
 
       if (!orderError) {
@@ -3633,9 +3672,9 @@ export const placeOrder = createServerFn({ method: "POST" })
           dedupKey: buildAdminNotificationDedupKey("new_order", orderId),
         });
 
-        // Best-effort order-created email/SMS to the customer's contact on
-        // file (guests included) — same Resend/Twilio senders as appointment
-        // messages. Never throws; failures surface as per-channel results.
+        // Best-effort order-created email/WhatsApp to the customer's contact on
+        // file (guests included) — same senders as appointment messages.
+        // Never throws; failures surface as per-channel results.
         const siteUrl = getSiteUrl();
         if (data.email || data.phone) {
           await sendOrderNotifications(
@@ -3654,6 +3693,11 @@ export const placeOrder = createServerFn({ method: "POST" })
               phone: data.phone,
             },
             "created",
+            undefined,
+            // Fills template slot 3 of `order_confirmation`. Omitted only if the
+            // row could not be read back, which leaves that slot empty exactly
+            // as it was before - arity stays 4 either way.
+            { metaExtras: { orderDate: orderDateForNotification(createdAt) } },
           );
         }
 

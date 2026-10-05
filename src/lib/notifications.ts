@@ -130,6 +130,30 @@ export interface NotificationDeliveryOptions {
    * id, so this never changes Twilio behaviour.
    */
   metaTemplate?: MetaWhatsAppTemplateId;
+  /**
+   * Values for template slots that are not derivable from the shared booking /
+   * order details (`orderDate`, `paymentStatus`, `refundAmount`).
+   *
+   * Forwarded to the Meta sender only. A caller that omits this behaves exactly
+   * as before: the affected slots render empty, arity is unchanged, and nothing
+   * else about the message changes.
+   */
+  metaExtras?: MetaTemplateExtras;
+}
+
+/**
+ * The subset of `MetaTemplateExtras` that callers may supply. Declared here (as
+ * the template id union already is) so this module stays free of provider
+ * imports; `server/whatsapp-meta.ts` owns the canonical interface and the two
+ * are structurally compatible.
+ */
+export interface MetaTemplateExtras {
+  /** Human-readable payment status, for payment-pending / refund status slots. */
+  paymentStatus?: string;
+  /** Order date, for `order_confirmation`. */
+  orderDate?: string;
+  /** Refunded amount, for `appointment_refund` / `order_refund`. */
+  refundAmount?: string;
 }
 
 /**

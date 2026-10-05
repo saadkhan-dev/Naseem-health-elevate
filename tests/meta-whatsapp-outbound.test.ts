@@ -17,7 +17,11 @@ import {
   type MetaWhatsAppEnv,
   type MetaWhatsAppTemplateId,
 } from "../src/lib/server/whatsapp-meta";
-import { getNotificationConfig, resolveWhatsAppProvider } from "../src/lib/notifications";
+import {
+  getNotificationConfig,
+  resolveNotificationChannels,
+  resolveWhatsAppProvider,
+} from "../src/lib/notifications";
 import {
   sendAppointmentNotifications,
   sendOrderNotifications,
@@ -926,15 +930,21 @@ describe("event -> approved Meta template", () => {
     });
   });
 
+  // A rejected appointment is the same event from the patient's point of view as
+  // a cancelled one, so it reuses the approved cancellation template rather than
+  // silently resolving to no template at all.
+  it("status change to rejected -> appointment_cancelled", async () => {
+    await withFetch(200, "{}", async (calls) => {
+      await sendStatusChangeNotifications({ ...PATIENT, newStatus: "rejected" }, FULL_META);
+      expect(graphTemplate(calls).name).toBe("appointment_cancelled_notice");
+      expect(graphTemplate(calls).language).toBe("en");
+      expect(graphParams(calls)).toEqual(["Ali", "2026-09-01", "19:00", "APT-1", "Homeopathy"]);
+      expect(graphParams(calls)).toHaveLength(5);
+    });
+  });
+
   it("every other status reports not_configured — no invented template", async () => {
-    for (const status of [
-      "pending",
-      "confirmed",
-      "rejected",
-      "completed",
-      "arrived",
-      "no_show",
-    ] as const) {
+    for (const status of ["pending", "confirmed", "completed", "arrived", "no_show"] as const) {
       await withFetch(200, "{}", async (calls) => {
         const results = await sendStatusChangeNotifications(
           { ...PATIENT, newStatus: status },
@@ -1040,11 +1050,13 @@ describe("event -> approved Meta template", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Order / support policy unchanged
+// Order routing: WhatsApp + email, never SMS.
+// Support replies stay on SMS + email.
 // ---------------------------------------------------------------------------
 
-describe("order + support stay on SMS + email", () => {
-  it("order created never reaches WhatsApp even with the template configured", async () => {
+describe("orders use WhatsApp + email, never SMS", () => {
+  // `order_confirmation` -> approved `order_confirmed_notice`, arity 4.
+  it("A. order created reaches Meta on WhatsApp with 4 params and no SMS", async () => {
     await withFetch(200, "{}", async (calls) => {
       const results = await sendOrderNotifications(
         {
@@ -1059,14 +1071,57 @@ describe("order + support stay on SMS + email", () => {
         { ...FULL_META, RESEND_API_KEY: "re_test", NOTIFICATION_FROM_EMAIL: "c@e.com" },
       );
 
-      expect(results.map((r) => r.channel)).toEqual(["email", "sms"]);
-      expect(calls.some((c) => c.url.includes("graph.facebook.com"))).toBe(false);
+      // WhatsApp is selected; SMS is NOT, even though email + phone are present.
+      expect(results.map((r) => r.channel)).toEqual(["email", "whatsapp"]);
+      expect(results.some((r) => r.channel === "sms")).toBe(false);
+
+      expect(graphTemplate(calls)).toEqual({
+        name: "order_confirmed_notice",
+        language: "en",
+      });
+      // Slot 3 is the order date. No caller-supplied extras here, so it stays
+      // empty - the "non-empty when supplied" case is asserted separately below.
+      expect(graphParams(calls)).toEqual(["Ali", "OD-1", "", "Rs. 1200"]);
+      expect(graphParams(calls)).toHaveLength(4);
+
+      // Nothing was handed to Twilio for the phone channel.
+      expect(calls.some((c) => c.url.includes("api.twilio.com"))).toBe(false);
     });
   });
 
-  it("order status update never reaches WhatsApp", async () => {
+  // The order-created caller reads `orders.created_at` back and passes it as
+  // `metaExtras.orderDate`. This proves slot 3 is no longer blank in that path.
+  it("order_confirmation fills slot 3 with the caller-supplied order date", async () => {
     await withFetch(200, "{}", async (calls) => {
-      await sendOrderNotifications(
+      const results = await sendOrderNotifications(
+        {
+          orderId: "OD-9",
+          patientName: "Ali",
+          total: 1200,
+          phone: "+923001234567",
+          email: "ali@example.com",
+        },
+        "created",
+        { ...FULL_META, RESEND_API_KEY: "re_test", NOTIFICATION_FROM_EMAIL: "c@e.com" },
+        { metaExtras: { orderDate: "05 Oct 2026" } },
+      );
+
+      expect(results.map((r) => r.channel)).toEqual(["email", "whatsapp"]);
+      expect(results.some((r) => r.channel === "sms")).toBe(false);
+
+      expect(graphTemplate(calls).name).toBe("order_confirmed_notice");
+      const params = graphParams(calls);
+      expect(params).toEqual(["Ali", "OD-9", "05 Oct 2026", "Rs. 1200"]);
+      // Still exactly 4: the date fills an existing slot, it never adds one.
+      expect(params).toHaveLength(4);
+      expect(params[2]).not.toBe("");
+    });
+  });
+
+  // `order_status_update` -> approved `order_status_update_notice`, arity 3.
+  it("B. order status update reaches Meta on WhatsApp with 3 params and no SMS", async () => {
+    await withFetch(200, "{}", async (calls) => {
+      const results = await sendOrderNotifications(
         {
           orderId: "OD-2",
           patientName: "Bilal",
@@ -1076,10 +1131,177 @@ describe("order + support stay on SMS + email", () => {
         "status",
         { ...FULL_META, RESEND_API_KEY: "re_test", NOTIFICATION_FROM_EMAIL: "c@e.com" },
       );
+
+      expect(results.map((r) => r.channel)).toEqual(["whatsapp"]);
+      expect(results.some((r) => r.channel === "sms")).toBe(false);
+
+      expect(graphTemplate(calls).name).toBe("order_status_update_notice");
+      expect(graphParams(calls)).toEqual(["Bilal", "OD-2", "Order shipped"]);
+      expect(graphParams(calls)).toHaveLength(3);
+      expect(calls.some((c) => c.url.includes("api.twilio.com"))).toBe(false);
+    });
+  });
+
+  // `order_payment_confirmed` is assigned by the order-payments caller; it must
+  // survive the routing change rather than being replaced by the default slot.
+  it("C. order_payment_confirmed override reaches Meta with 4 params and no SMS", async () => {
+    await withFetch(200, "{}", async (calls) => {
+      const results = await sendOrderNotifications(
+        {
+          orderId: "ORD-77",
+          patientName: "Bilal",
+          total: 2400,
+          paymentStatusLabel: "Payment verified",
+          phone: "+923001234567",
+          email: "bilal@example.com",
+        },
+        "status",
+        { ...FULL_META, RESEND_API_KEY: "re_test", NOTIFICATION_FROM_EMAIL: "c@e.com" },
+        { metaTemplate: "order_payment_confirmed" },
+      );
+
+      expect(results.map((r) => r.channel)).toEqual(["email", "whatsapp"]);
+      expect(results.some((r) => r.channel === "sms")).toBe(false);
+
+      expect(graphTemplate(calls).name).toBe("order_payment_confirmed");
+      expect(graphParams(calls)).toEqual([
+        "Bilal",
+        "ORD-77",
+        "Rs. 2400",
+        "Payment verified",
+      ]);
+      expect(graphParams(calls)).toHaveLength(4);
+      expect(calls.some((c) => c.url.includes("api.twilio.com"))).toBe(false);
+    });
+  });
+
+  it("a phone-less order still gets email and never asks Meta to send", async () => {
+    await withFetch(200, "{}", async (calls) => {
+      const results = await sendOrderNotifications(
+        { orderId: "OD-3", patientName: "Ali", total: 500, email: "ali@example.com" },
+        "created",
+        { ...FULL_META, RESEND_API_KEY: "re_test", NOTIFICATION_FROM_EMAIL: "c@e.com" },
+      );
+
+      expect(results.map((r) => r.channel)).toEqual(["email"]);
       expect(calls.some((c) => c.url.includes("graph.facebook.com"))).toBe(false);
     });
   });
 
+  it("reports not_configured rather than silently falling back to SMS", async () => {
+    await withFetch(200, "{}", async (calls) => {
+      const results = await sendOrderNotifications(
+        { orderId: "OD-4", patientName: "Ali", total: 500, phone: "+923001234567" },
+        "created",
+        {
+          ...FULL_META,
+          RESEND_API_KEY: "re_test",
+          NOTIFICATION_FROM_EMAIL: "c@e.com",
+          META_WA_ACCESS_TOKEN: "",
+          META_WA_PHONE_NUMBER_ID: "",
+          META_WA_TEMPLATE_ORDER_CONFIRMATION: "",
+        },
+      );
+
+      // No SMS fallback: WhatsApp is the order phone channel, so an unconfigured
+      // provider is reported honestly rather than downgraded to Twilio.
+      expect(results.map((r) => r.channel)).toEqual(["whatsapp"]);
+      expect(results[0]!.status).toBe("not_configured");
+      expect(calls.some((c) => c.url.includes("api.twilio.com"))).toBe(false);
+    });
+  });
+
+  // Guards the two flows that must stay byte-identical after the date fix.
+  it("E. order_status_update and order_payment_confirmed params are unchanged", async () => {
+    await withFetch(200, "{}", async (calls) => {
+      await sendOrderNotifications(
+        {
+          orderId: "OD-2",
+          patientName: "Bilal",
+          paymentStatusLabel: "Order shipped",
+          phone: "+923001234567",
+        },
+        "status",
+        FULL_META,
+        { metaExtras: { orderDate: "05 Oct 2026" } },
+      );
+
+      // `order_status_update` has only 3 slots and no date slot, so supplying
+      // extras must not leak a 4th parameter into it.
+      expect(graphTemplate(calls).name).toBe("order_status_update_notice");
+      expect(graphParams(calls)).toEqual(["Bilal", "OD-2", "Order shipped"]);
+      expect(graphParams(calls)).toHaveLength(3);
+    });
+
+    await withFetch(200, "{}", async (calls) => {
+      await sendOrderNotifications(
+        {
+          orderId: "ORD-77",
+          patientName: "Bilal",
+          total: 2400,
+          paymentStatusLabel: "Payment verified",
+          phone: "+923001234567",
+        },
+        "status",
+        FULL_META,
+        {
+          metaTemplate: "order_payment_confirmed",
+          metaExtras: { orderDate: "05 Oct 2026" },
+        },
+      );
+
+      expect(graphTemplate(calls).name).toBe("order_payment_confirmed");
+      expect(graphParams(calls)).toEqual([
+        "Bilal",
+        "ORD-77",
+        "Rs. 2400",
+        "Payment verified",
+      ]);
+      expect(graphParams(calls)).toHaveLength(4);
+    });
+  });
+
+  it("D. the five proven appointment flows are untouched by the order policy", async () => {
+    await withFetch(200, "{}", async (calls) => {
+      // Booking / status / reschedule senders carry no order `only` policy.
+      await sendAppointmentNotifications(
+        { ...PATIENT, appointmentId: "APT-1", serviceName: "Homeopathy" },
+        FULL_META,
+      );
+      expect(graphTemplate(calls).name).toBe("appointment_confirmed");
+    });
+
+    await withFetch(200, "{}", async (calls) => {
+      await sendStatusChangeNotifications({ ...PATIENT, newStatus: "cancelled" }, FULL_META);
+      expect(graphTemplate(calls).name).toBe("appointment_cancelled_notice");
+    });
+
+    await withFetch(200, "{}", async (calls) => {
+      await sendStatusChangeNotifications({ ...PATIENT, newStatus: "rejected" }, FULL_META);
+      expect(graphTemplate(calls).name).toBe("appointment_cancelled_notice");
+    });
+
+    await withFetch(200, "{}", async (calls) => {
+      await sendRescheduleNotifications(
+        {
+          appointmentId: "APT-4",
+          patientName: "Ayesha",
+          serviceName: "Physiotherapy",
+          date: "2026-09-05",
+          time: "16:00",
+          previousDate: "2026-09-04",
+          previousTime: "09:00",
+          statusUrl: "https://clinic.example/status",
+          phone: "+923001234567",
+        },
+        FULL_META,
+      );
+      expect(graphTemplate(calls).name).toBe("appointment_schedule_changed");
+    });
+  });
+});
+
+describe("support replies stay on SMS + email", () => {
   it("support replies never reach WhatsApp", async () => {
     await withFetch(200, "{}", async (calls) => {
       const results = await sendSupportReplyNotifications(
@@ -1152,9 +1374,11 @@ describe("newly mapped templates", () => {
     expect(result.detail).toContain("META_WA_TEMPLATE_APPOINTMENT_REFUND");
   });
 
-  it("keeps the order payment slot on SMS + email only, like every order slot", async () => {
-    // `setOrderPaymentStatus` passes metaTemplate=order_payment_confirmed, which
-    // must NOT switch orders onto WhatsApp.
+  it("routes the order payment slot to WhatsApp, not SMS", async () => {
+    // `setOrderPaymentStatus` passes metaTemplate=order_payment_confirmed. Orders
+    // now deliver that approved template over Meta WhatsApp; the SMS + email-only
+    // assertion this replaced lives on in "orders use WhatsApp + email, never SMS"
+    // as case C, alongside the order_confirmation / order_status_update cases.
     await withFetch(200, "{}", async (calls) => {
       const results = await sendOrderNotifications(
         {
@@ -1169,8 +1393,8 @@ describe("newly mapped templates", () => {
         { ...FULL_META, RESEND_API_KEY: "re_test", NOTIFICATION_FROM_EMAIL: "c@e.com" },
         { metaTemplate: "order_payment_confirmed" },
       );
-      expect(results.map((r) => r.channel)).toEqual(["email", "sms"]);
-      expect(calls.some((c) => c.url.includes("graph.facebook.com"))).toBe(false);
+      expect(results.map((r) => r.channel)).toEqual(["email", "whatsapp"]);
+      expect(graphTemplate(calls).name).toBe("order_payment_confirmed");
     });
   });
 
@@ -1328,6 +1552,33 @@ describe("Meta failures are contained", () => {
 // ---------------------------------------------------------------------------
 // Twilio behaviour untouched
 // ---------------------------------------------------------------------------
+
+describe("SMS support is retained for orders, only not selected today", () => {
+  // Requirement E: the order sender moved to WhatsApp, but SMS must remain a
+  // one-line switch away rather than deleted. These prove the underlying SMS
+  // path is still selectable through `resolveNotificationChannels`.
+  it("the resolver still honours phoneChannel=sms when a caller asks for it", () => {
+    const cfg = getNotificationConfig({
+      ...FULL_META,
+      RESEND_API_KEY: "re_test",
+      NOTIFICATION_FROM_EMAIL: "c@e.com",
+    });
+    expect(resolveNotificationChannels({ phone: "+923001234567" }, cfg, { phoneChannel: "sms" })).toEqual([
+      "sms",
+    ]);
+  });
+
+  it("the resolver still honours only:[sms] for a caller that wants SMS", () => {
+    const cfg = getNotificationConfig({
+      ...FULL_META,
+      RESEND_API_KEY: "re_test",
+      NOTIFICATION_FROM_EMAIL: "c@e.com",
+    });
+    expect(
+      resolveNotificationChannels({ phone: "+923001234567" }, cfg, { only: ["sms"] }),
+    ).toEqual(["sms"]);
+  });
+});
 
 describe("Twilio remains intact", () => {
   const TWILIO_ENV = {

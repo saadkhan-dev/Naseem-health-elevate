@@ -587,6 +587,15 @@ export async function sendMetaWhatsAppNotification(input: {
 
   try {
     if (!template) {
+      // Diagnostic only. This branch used to return silently, which hid real
+      // template-mapping gaps (e.g. `rejected` not reaching
+      // `appointment_cancelled`). `template` is null here, so there is no key to
+      // name — we log the fact that no mapping applied and nothing else. No
+      // token, recipient number, template parameters, or message body.
+      console.warn(
+        `[WhatsApp Meta] send skipped template=none reason=template mapping missing`,
+      );
+
       return {
         channel,
         status: "not_configured",
