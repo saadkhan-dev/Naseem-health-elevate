@@ -6,13 +6,40 @@
 //   npx wrangler secret put RESEND_API_KEY
 //   npx wrangler secret put GEMINI_API_KEY
 // (also: AZURE_SPEECH_KEY, AZURE_SPEECH_REGION when voice translation is configured)
-// Meta WhatsApp Cloud API webhook (server-only, never VITE_*):
+// Meta WhatsApp Cloud API (server-only, never VITE_*):
 //   npx wrangler secret put META_WA_APP_SECRET
 //   npx wrangler secret put META_WA_VERIFY_TOKEN
 //   npx wrangler secret put META_WA_ACCESS_TOKEN
 //   npx wrangler secret put META_WA_PHONE_NUMBER_ID
 //   npx wrangler secret put META_WA_BUSINESS_ACCOUNT_ID
 // (META_WA_API_VERSION is optional; defaults to v23.0)
+// Outbound Meta sending additionally needs:
+//   npx wrangler secret put WHATSAPP_PROVIDER            (value: meta — omit for twilio)
+//   npx wrangler secret put META_WA_TEMPLATE_APPOINTMENT_CONFIRMATION  (appointment_confirmed)
+//   npx wrangler secret put META_WA_TEMPLATE_APPOINTMENT_RESCHEDULED   (appointment_schedule_changed)
+//   npx wrangler secret put META_WA_TEMPLATE_APPOINTMENT_CANCELLED     (appointment_cancelled_notice)
+//   npx wrangler secret put META_WA_TEMPLATE_APPOINTMENT_REMINDER      (appointment_reminder_notice_category_utility)
+//   npx wrangler secret put META_WA_TEMPLATE_VIDEO_CONSULTATION_READY  (video_consultation_ready_notice)
+//   npx wrangler secret put META_WA_TEMPLATE_PAYMENT_RECEIVED          (payment_received_notice)
+//   npx wrangler secret put META_WA_TEMPLATE_APPOINTMENT_PAYMENT_PENDING  (appointment_payment_pending_notice)
+//   npx wrangler secret put META_WA_TEMPLATE_APPOINTMENT_REFUND        (refund_processed_assalamu_alaikum_1_... — full value in .env.example)
+//   npx wrangler secret put META_WA_TEMPLATE_ORDER_CONFIRMATION        (order_confirmed_notice)
+//   npx wrangler secret put META_WA_TEMPLATE_ORDER_STATUS_UPDATE       (order_status_update_notice)
+//   npx wrangler secret put META_WA_TEMPLATE_ORDER_PAYMENT_CONFIRMED   (order_payment_confirmed)
+//   npx wrangler secret put META_WA_TEMPLATE_ORDER_PAYMENT_PENDING     (order_payment_pending_notice)
+//   npx wrangler secret put META_WA_TEMPLATE_ORDER_REFUND              (order_refund_notice)
+//   npx wrangler secret put META_WA_TEMPLATE_LANGUAGE_CODE   (value: en)
+// The value of each META_WA_TEMPLATE_* secret IS the approved template name sent
+// on the wire, so a re-approved template only needs its secret re-put — no code
+// change and no source deploy. (`wrangler secret put` does publish a new Worker
+// version for that secret.) The secret NAMES are stable internal identifiers.
+// META_WA_TEMPLATE_APPOINTMENT_REFUND is a long underscore-separated string that
+// Meta generated from the message body. Its full approved value is in
+// `.env.example`; copy it character-for-character into the secret. Never shorten,
+// sanitize or re-type it, or Meta rejects the send. `hello_world` is Meta's
+// sample template and is never configured or used.
+// Template values are not really secret, but keep them server-side anyway so the
+// approved template names are never published in the client bundle.
 // VITE_* values (Supabase URL/anon key) are baked into the client build, not set here.
 {
   "$schema": "./node_modules/wrangler/config-schema.json",

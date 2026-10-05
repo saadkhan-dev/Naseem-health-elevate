@@ -484,7 +484,14 @@ export async function setOrderPaymentStatus(
 
   // Best-effort email/SMS to the patient's contact (checkout email, or the
   // email/phone used with the payment proof) telling them their payment/order
-  // status changed. Never throws. No WhatsApp — no approved order template.
+  // status changed. Never throws.
+  //
+  // WhatsApp stays off for orders (`sendOrderNotifications` forces SMS + email),
+  // so the Meta slot below only decides WHICH approved order template would be
+  // used if that policy is ever lifted. A verified payment maps to the approved
+  // `order_payment_confirmed` template; every other status keeps the generic
+  // `order_status_update`, because "pending" is not the same claim as "failed"
+  // and the refunded amount is not recorded. SMS/email content is unchanged.
   const contactEmail = order.email ?? order.payment_payer_email ?? null;
   const contactPhone = order.phone ?? order.payment_payer_phone ?? null;
   if (contactEmail || contactPhone) {
@@ -500,6 +507,8 @@ export async function setOrderPaymentStatus(
         phone: contactPhone ?? undefined,
       },
       "status",
+      undefined,
+      input.status === "payment_verified" ? { metaTemplate: "order_payment_confirmed" } : undefined,
     );
   }
 

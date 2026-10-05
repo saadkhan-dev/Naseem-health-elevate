@@ -29,6 +29,79 @@ export interface NotificationResult {
 /** Which WhatsApp "kind" a send maps to (Connects a send to a Twilio content template SID). */
 export type WhatsAppTemplateId = "appointment" | "status" | "reschedule" | "video";
 
+/**
+ * Internal keys for the approved Meta WhatsApp message templates.
+ *
+ * These are NOT the names sent on the wire. Each key only selects which env var
+ * holds the approved template name; `sendMetaWhatsAppNotification` sends that
+ * env var's *value*, so the approved name can be changed in Meta Business
+ * Manager (or per environment) with no code change:
+ *
+ *   appointment_confirmation            -> META_WA_TEMPLATE_APPOINTMENT_CONFIRMATION
+ *   appointment_rescheduled             -> META_WA_TEMPLATE_APPOINTMENT_RESCHEDULED
+ *   appointment_cancelled               -> META_WA_TEMPLATE_APPOINTMENT_CANCELLED
+ *   appointment_reminder                -> META_WA_TEMPLATE_APPOINTMENT_REMINDER
+ *   video_consultation_room_ready       -> META_WA_TEMPLATE_VIDEO_CONSULTATION_READY
+ *   payment_received                    -> META_WA_TEMPLATE_PAYMENT_RECEIVED
+ *   appointment_payment_pending         -> META_WA_TEMPLATE_APPOINTMENT_PAYMENT_PENDING
+ *   appointment_refund                  -> META_WA_TEMPLATE_APPOINTMENT_REFUND
+ *   order_confirmation                  -> META_WA_TEMPLATE_ORDER_CONFIRMATION
+ *   order_status_update                 -> META_WA_TEMPLATE_ORDER_STATUS_UPDATE
+ *   order_payment_confirmed             -> META_WA_TEMPLATE_ORDER_PAYMENT_CONFIRMED
+ *   order_payment_pending               -> META_WA_TEMPLATE_ORDER_PAYMENT_PENDING
+ *   order_refund                        -> META_WA_TEMPLATE_ORDER_REFUND
+ *
+ * Grouped by business domain, and the domain boundary is enforced by
+ * `metaTemplateParameters` in the server sender: the appointment payment and
+ * appointment refund keys only ever read appointment fields, and the order
+ * payment/refund keys only ever read order fields, so an appointment ID can
+ * never reach an order template (or vice versa).
+ *
+ * `hello_world` is Meta's sample template and is deliberately absent: it is
+ * never part of the clinic notification flow.
+ *
+ * Declared here (a pure string union, no server code) so the shared module can
+ * reference it without importing the server-only Meta sender.
+ *
+ * Never rename a key to match a Meta template name: the keys are internal and
+ * renaming one would touch the event mapping, the sender and Twilio-adjacent
+ * code for no functional gain.
+ */
+export type MetaWhatsAppTemplateId =
+  | "appointment_confirmation"
+  | "appointment_rescheduled"
+  | "appointment_cancelled"
+  | "appointment_reminder"
+  | "video_consultation_room_ready"
+  | "payment_received"
+  | "appointment_payment_pending"
+  | "appointment_refund"
+  | "order_confirmation"
+  | "order_status_update"
+  | "order_payment_confirmed"
+  | "order_payment_pending"
+  | "order_refund";
+
+/**
+ * Which provider handles outbound WhatsApp.
+ *
+ * `twilio` is the historical behaviour and stays the default, so a deployment
+ * with no `WHATSAPP_PROVIDER` set keeps working exactly as before. `meta` routes
+ * WhatsApp through the Meta WhatsApp Cloud API instead.
+ */
+export type WhatsAppProvider = "twilio" | "meta";
+
+/**
+ * Resolve the outbound WhatsApp provider from the raw env value.
+ *
+ * Deliberately conservative: only an explicit `meta` opts into Meta. Anything
+ * else — unset, blank, misspelled, or a future unknown value — resolves to
+ * `twilio`, so a typo can never silently disable WhatsApp in production.
+ */
+export function resolveWhatsAppProvider(value: string | undefined): WhatsAppProvider {
+  return value?.trim().toLowerCase() === "meta" ? "meta" : "twilio";
+}
+
 /** Delivery overrides for the shared senders. */
 export interface NotificationDeliveryOptions {
   /**
@@ -45,10 +118,18 @@ export interface NotificationDeliveryOptions {
    */
   phoneChannel?: "whatsapp" | "sms";
   /**
-   * Dial prefix used to normalize local numbers written without a country code
+   * Dial prefix used to normalize phone numbers written without a country code
    * (defaults to the `PHONE_COUNTRY_CODE` env var, then "+92").
    */
   defaultCountryCode?: string;
+  /**
+   * Override which APPROVED Meta template fills the WhatsApp message.
+   *
+   * Only meaningful when the WhatsApp provider is `meta`; the Twilio
+   * `ContentSid` selection is driven separately by the sender's own template
+   * id, so this never changes Twilio behaviour.
+   */
+  metaTemplate?: MetaWhatsAppTemplateId;
 }
 
 /**
@@ -188,6 +269,39 @@ export interface NotificationEnv {
   TWILIO_WHATSAPP_CONTENT_SID_VIDEO?: string;
   /** Dial prefix used to normalize phone numbers written without a country code. */
   PHONE_COUNTRY_CODE?: string;
+
+  /* --- Meta WhatsApp Cloud API (server-only; used only when provider = meta) --- */
+
+  /**
+   * Outbound WhatsApp provider: "twilio" (default) or "meta". Unset/blank keeps
+   * the historical Twilio behaviour.
+   */
+  WHATSAPP_PROVIDER?: string;
+  META_WA_ACCESS_TOKEN?: string;
+  META_WA_PHONE_NUMBER_ID?: string;
+  META_WA_BUSINESS_ACCOUNT_ID?: string;
+  /** Graph API version override; blank uses the shared default (v23.0). */
+  META_WA_API_VERSION?: string;
+  /** Approved Meta template names, exactly as shown in Meta Business Manager. */
+  META_WA_TEMPLATE_APPOINTMENT_CONFIRMATION?: string;
+  META_WA_TEMPLATE_APPOINTMENT_RESCHEDULED?: string;
+  META_WA_TEMPLATE_APPOINTMENT_CANCELLED?: string;
+  META_WA_TEMPLATE_APPOINTMENT_REMINDER?: string;
+  META_WA_TEMPLATE_VIDEO_CONSULTATION_READY?: string;
+  /* Appointment payment + refund (never used for orders). */
+  META_WA_TEMPLATE_PAYMENT_RECEIVED?: string;
+  META_WA_TEMPLATE_APPOINTMENT_PAYMENT_PENDING?: string;
+  META_WA_TEMPLATE_APPOINTMENT_REFUND?: string;
+  /* Order lifecycle (never used for appointments). */
+  META_WA_TEMPLATE_ORDER_CONFIRMATION?: string;
+  META_WA_TEMPLATE_ORDER_STATUS_UPDATE?: string;
+  META_WA_TEMPLATE_ORDER_PAYMENT_CONFIRMED?: string;
+  META_WA_TEMPLATE_ORDER_PAYMENT_PENDING?: string;
+  META_WA_TEMPLATE_ORDER_REFUND?: string;
+  /** Alias for META_WA_TEMPLATE_LANGUAGE_CODE (lower precedence). */
+  META_WA_TEMPLATE_LANGUAGE?: string;
+  /** Canonical `template.language.code` sent to Meta (e.g. "en", "en_US"). */
+  META_WA_TEMPLATE_LANGUAGE_CODE?: string;
 }
 
 export interface ChannelConfig {
@@ -225,14 +339,28 @@ export function getNotificationConfig(env: NotificationEnv): NotificationConfig 
     ],
   };
 
-  const whatsapp: ChannelConfig = {
-    configured: twilioCredentials && Boolean(env.TWILIO_WHATSAPP_FROM),
-    missing: [
-      ...(!env.TWILIO_ACCOUNT_SID ? ["TWILIO_ACCOUNT_SID"] : []),
-      ...(!env.TWILIO_AUTH_TOKEN ? ["TWILIO_AUTH_TOKEN"] : []),
-      ...(!env.TWILIO_WHATSAPP_FROM ? ["TWILIO_WHATSAPP_FROM"] : []),
-    ],
-  };
+  const whatsapp: ChannelConfig =
+    resolveWhatsAppProvider(env.WHATSAPP_PROVIDER) === "meta"
+      ? {
+          // Meta needs its own credentials; an individual missing template name
+          // is reported per-send instead of here, so one absent template never
+          // marks the whole channel unavailable.
+          configured: Boolean(
+            env.META_WA_ACCESS_TOKEN?.trim() && env.META_WA_PHONE_NUMBER_ID?.trim(),
+          ),
+          missing: [
+            ...(!env.META_WA_ACCESS_TOKEN?.trim() ? ["META_WA_ACCESS_TOKEN"] : []),
+            ...(!env.META_WA_PHONE_NUMBER_ID?.trim() ? ["META_WA_PHONE_NUMBER_ID"] : []),
+          ],
+        }
+      : {
+          configured: twilioCredentials && Boolean(env.TWILIO_WHATSAPP_FROM),
+          missing: [
+            ...(!env.TWILIO_ACCOUNT_SID ? ["TWILIO_ACCOUNT_SID"] : []),
+            ...(!env.TWILIO_AUTH_TOKEN ? ["TWILIO_AUTH_TOKEN"] : []),
+            ...(!env.TWILIO_WHATSAPP_FROM ? ["TWILIO_WHATSAPP_FROM"] : []),
+          ],
+        };
 
   return { email, sms, whatsapp };
 }

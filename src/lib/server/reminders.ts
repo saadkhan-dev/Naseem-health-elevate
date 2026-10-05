@@ -350,10 +350,12 @@ async function deliverReminder(
           joinUrl: videoJoinUrl(siteUrl, vcNo),
         },
         env,
-        { only },
+        // This is a REMINDER, not a "your room is ready" message, so Meta must
+        // use `appointment_reminder`. The Twilio ContentSid is untouched.
+        { only, metaTemplate: "appointment_reminder" },
       );
     }
   }
 
-  return sendAppointmentNotifications(base, env, { only });
+  return sendAppointmentNotifications(base, env, { only, metaTemplate: "appointment_reminder" });
 }

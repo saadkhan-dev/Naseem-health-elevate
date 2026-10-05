@@ -80,8 +80,13 @@ export function metaWebhookMissingConfig(env: MetaWebhookEnv): string[] {
   return missing;
 }
 
-/** Graph API version to call, honouring the override. */
-export function metaGraphApiVersion(env: MetaWebhookEnv): string {
+/**
+ * Graph API version to call, honouring the override.
+ *
+ * Takes only the version field so the outbound sender
+ * (`./whatsapp-meta.ts`) reuses this exact default instead of repeating it.
+ */
+export function metaGraphApiVersion(env: { META_WA_API_VERSION?: string }): string {
   return env.META_WA_API_VERSION?.trim() || DEFAULT_META_GRAPH_API_VERSION;
 }
 

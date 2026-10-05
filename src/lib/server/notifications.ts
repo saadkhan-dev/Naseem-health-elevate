@@ -6,7 +6,12 @@
  * Providers are real integrations (no stubs or fake "sent" results):
  *  - email    -> Resend  (POST https://api.resend.com/emails)
  *  - sms      -> Twilio  (POST https://api.twilio.com/2010-04-01/Accounts/{SID}/Messages.json)
- *  - whatsapp -> Twilio WhatsApp sender (same API, whatsapp:+… destinations)
+ *  - whatsapp -> Twilio  (same API, whatsapp:+… destinations) by default, or
+ *                Meta Cloud API (POST https://graph.facebook.com/{v}/{id}/messages)
+ *                when WHATSAPP_PROVIDER=meta
+ *
+ * SMS, email and the in-app notification tables are completely unaffected by the
+ * WhatsApp provider setting.
  *
  * A channel that has no credentials configured is reported as
  * `status: "not_configured"` with the exact env vars required — it is never
@@ -23,11 +28,13 @@ import {
   getNotificationConfig,
   normalizeE164Phone,
   resolveNotificationChannels,
+  resolveWhatsAppProvider,
   whatsAppContentVariables,
   type AppointmentNotificationDetails,
   type NotificationChannel,
   type NotificationDeliveryOptions,
   type NotificationEnv,
+  type MetaWhatsAppTemplateId,
   type NotificationResult,
   type OrderNotificationDetails,
   type OrderNotificationKind,
@@ -37,6 +44,7 @@ import {
   type VideoReadyNotificationDetails,
   type WhatsAppTemplateId,
 } from "@/lib/notifications";
+import { sendMetaWhatsAppNotification, type MetaTemplateDetails } from "./whatsapp-meta";
 
 /** Read a server env var from process.env (Node) or import.meta.env (Vite/Workers). */
 function readEnv(name: string): string | undefined {
@@ -66,6 +74,31 @@ export function getServerNotificationEnv(): NotificationEnv {
     TWILIO_WHATSAPP_CONTENT_SID_RESCHEDULE: readEnv("TWILIO_WHATSAPP_CONTENT_SID_RESCHEDULE"),
     TWILIO_WHATSAPP_CONTENT_SID_VIDEO: readEnv("TWILIO_WHATSAPP_CONTENT_SID_VIDEO"),
     PHONE_COUNTRY_CODE: readEnv("PHONE_COUNTRY_CODE"),
+    // Outbound WhatsApp provider. Absent/blank keeps the historical Twilio path.
+    WHATSAPP_PROVIDER: readEnv("WHATSAPP_PROVIDER"),
+    // Meta WhatsApp Cloud API (server-only; used only when provider = meta).
+    META_WA_ACCESS_TOKEN: readEnv("META_WA_ACCESS_TOKEN"),
+    META_WA_PHONE_NUMBER_ID: readEnv("META_WA_PHONE_NUMBER_ID"),
+    META_WA_BUSINESS_ACCOUNT_ID: readEnv("META_WA_BUSINESS_ACCOUNT_ID"),
+    META_WA_API_VERSION: readEnv("META_WA_API_VERSION"),
+    META_WA_TEMPLATE_APPOINTMENT_CONFIRMATION: readEnv("META_WA_TEMPLATE_APPOINTMENT_CONFIRMATION"),
+    META_WA_TEMPLATE_APPOINTMENT_RESCHEDULED: readEnv("META_WA_TEMPLATE_APPOINTMENT_RESCHEDULED"),
+    META_WA_TEMPLATE_APPOINTMENT_CANCELLED: readEnv("META_WA_TEMPLATE_APPOINTMENT_CANCELLED"),
+    META_WA_TEMPLATE_APPOINTMENT_REMINDER: readEnv("META_WA_TEMPLATE_APPOINTMENT_REMINDER"),
+    META_WA_TEMPLATE_VIDEO_CONSULTATION_READY: readEnv("META_WA_TEMPLATE_VIDEO_CONSULTATION_READY"),
+    META_WA_TEMPLATE_PAYMENT_RECEIVED: readEnv("META_WA_TEMPLATE_PAYMENT_RECEIVED"),
+    META_WA_TEMPLATE_APPOINTMENT_PAYMENT_PENDING: readEnv(
+      "META_WA_TEMPLATE_APPOINTMENT_PAYMENT_PENDING",
+    ),
+    // Long Meta-generated name; forwarded to Meta verbatim (see .env.example).
+    META_WA_TEMPLATE_APPOINTMENT_REFUND: readEnv("META_WA_TEMPLATE_APPOINTMENT_REFUND"),
+    META_WA_TEMPLATE_ORDER_CONFIRMATION: readEnv("META_WA_TEMPLATE_ORDER_CONFIRMATION"),
+    META_WA_TEMPLATE_ORDER_STATUS_UPDATE: readEnv("META_WA_TEMPLATE_ORDER_STATUS_UPDATE"),
+    META_WA_TEMPLATE_ORDER_PAYMENT_CONFIRMED: readEnv("META_WA_TEMPLATE_ORDER_PAYMENT_CONFIRMED"),
+    META_WA_TEMPLATE_ORDER_PAYMENT_PENDING: readEnv("META_WA_TEMPLATE_ORDER_PAYMENT_PENDING"),
+    META_WA_TEMPLATE_ORDER_REFUND: readEnv("META_WA_TEMPLATE_ORDER_REFUND"),
+    META_WA_TEMPLATE_LANGUAGE: readEnv("META_WA_TEMPLATE_LANGUAGE"),
+    META_WA_TEMPLATE_LANGUAGE_CODE: readEnv("META_WA_TEMPLATE_LANGUAGE_CODE"),
   };
 }
 
@@ -206,6 +239,11 @@ export async function sendAppointmentNotifications(
     details,
     messages: buildAppointmentMessages(details),
     template: "appointment",
+    // Booking created/requested -> the `appointment_confirmation` Meta slot,
+    // which resolves to the approved `appointment_confirmed` template via
+    // META_WA_TEMPLATE_APPOINTMENT_CONFIRMATION. Reminders reuse this sender
+    // but override via `options.metaTemplate` (see reminders.ts).
+    metaTemplate: "appointment_confirmation",
     options,
   });
 }
@@ -225,6 +263,9 @@ export async function sendVideoReadyNotifications(
     details,
     messages: buildVideoReadyMessages(details),
     template: "video",
+    // The consultation room is ready -> the `video_consultation_room_ready` Meta
+    // slot, i.e. the approved `video_consultation_ready_notice` template.
+    metaTemplate: "video_consultation_room_ready",
     options,
   });
 }
@@ -233,6 +274,12 @@ export async function sendVideoReadyNotifications(
  * Notify the patient that their appointment status changed (confirmed /
  * rejected / cancelled / completed). Same best-effort rules as booking
  * notifications.
+ *
+ * Meta: only `cancelled` maps to a Meta template slot at all
+ * (`appointment_cancelled` -> approved `appointment_cancelled_notice`).
+ * There is deliberately NO generic "status" template — for every other status
+ * this resolves to `null`, so Meta reports `not_configured` instead of us
+ * inventing a template name or reusing the wrong one. Email/SMS are unaffected.
  */
 export async function sendStatusChangeNotifications(
   details: StatusChangeNotificationDetails,
@@ -244,6 +291,7 @@ export async function sendStatusChangeNotifications(
     details,
     messages: buildStatusChangeMessages(details),
     template: "status",
+    metaTemplate: details.newStatus === "cancelled" ? "appointment_cancelled" : null,
     options,
   });
 }
@@ -262,6 +310,7 @@ export async function sendRescheduleNotifications(
     details,
     messages: buildRescheduleMessages(details),
     template: "reschedule",
+    metaTemplate: "appointment_rescheduled",
     options,
   });
 }
@@ -315,6 +364,9 @@ export async function sendOrderNotifications(
     env,
     details,
     messages: buildOrderMessages(details, kind),
+    // These Meta slots are mapped but the `only` / `phoneChannel` policy below
+    // still forces SMS + email: WhatsApp is NOT enabled for orders.
+    metaTemplate: kind === "created" ? "order_confirmation" : "order_status_update",
     options: {
       defaultCountryCode: env.PHONE_COUNTRY_CODE ?? "+92",
       ...options,
@@ -340,6 +392,7 @@ async function deliverToChannels({
   details,
   messages,
   template,
+  metaTemplate,
   options,
 }: {
   env: NotificationEnv;
@@ -351,7 +404,14 @@ async function deliverToChannels({
     whatsappText: string;
     whatsappContentVariables: string[];
   };
+  /** Drives the Twilio ContentSid lookup. Never changed for Meta. */
   template?: WhatsAppTemplateId;
+  /**
+   * The APPROVED Meta template for this event, or `null` when no approved
+   * template covers the event. `options.metaTemplate` overrides it (used by
+   * reminders, which reuse the booking/video senders).
+   */
+  metaTemplate?: MetaWhatsAppTemplateId | null;
   options?: NotificationDeliveryOptions;
 }): Promise<NotificationResult[]> {
   const config = getNotificationConfig(env);
@@ -395,6 +455,20 @@ async function deliverToChannels({
     let result: NotificationResult;
     if (channel === "email") {
       result = await sendResendEmail(env, to, messages);
+    } else if (
+      channel === "whatsapp" &&
+      resolveWhatsAppProvider(env.WHATSAPP_PROVIDER) === "meta"
+    ) {
+      // Meta Cloud API. `sendMetaWhatsAppNotification` never throws and reports
+      // `not_configured` / `error` as a result, so a Meta problem cannot break
+      // the surrounding booking, payment or video flow.
+      result = await sendMetaWhatsAppNotification({
+        env,
+        template: options?.metaTemplate ?? metaTemplate ?? null,
+        details: details as MetaTemplateDetails,
+        to: phone!,
+        defaultCountryCode: options?.defaultCountryCode ?? env.PHONE_COUNTRY_CODE ?? "+92",
+      });
     } else {
       // `phone` is normalized E.164 or null; the guard above already rejected
       // missing/invalid numbers, so it is safe to send from here.
