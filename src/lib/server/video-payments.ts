@@ -5,6 +5,7 @@ import {
   buildAdminNotificationDedupKey,
 } from "./patient-notifications";
 import { buildAdminFocusLink } from "@/lib/admin-focus";
+import { getSiteUrl, sendAppointmentNotifications } from "./notifications";
 
 /**
  * Server-side prepaid Video Consultation payment operations.
@@ -27,7 +28,13 @@ function isVideoConsultationName(name: string | null | undefined): boolean {
 interface VideoAppointmentRow {
   id: string;
   patient_id: string | null;
+  appointment_no: string | null;
   patient_name: string | null;
+  /** Contact captured at booking — present for guests too, who have no account. */
+  patient_phone: string | null;
+  patient_email: string | null;
+  date: string;
+  time: string | null;
   status: string;
   payment_status: string;
   payment_amount: number | null;
@@ -41,7 +48,11 @@ async function loadVideoAppointment(
   const { data: row } = await admin
     .from("appointments")
     .select(
-      "id, patient_id, patient_name, status, payment_status, payment_amount, services:service_id (name)",
+      // `appointment_no`, `patient_phone`, `patient_email`, `date` and `time` are
+      // pre-existing columns (they are what the status-change and reminder
+      // readers already select) — added only so the refund notification has a
+      // recipient and a patient-facing ID. No column was created for this.
+      "id, patient_id, appointment_no, patient_name, patient_phone, patient_email, date, time, status, payment_status, payment_amount, services:service_id (name)",
     )
     .eq("id", appointmentId)
     .maybeSingle();
@@ -550,6 +561,45 @@ export async function setVideoPaymentStatus(
         `Your video consultation payment is now "${input.status.replace("payment_", "")}".`,
       link: buildAdminFocusLink("/patient", "appointment", row.id),
     });
+  }
+
+  // A REFUND is the one payment outcome that had no outbound notification at
+  // all: the DB write above only produced an in-app row, and only for a signed-in
+  // patient, so a refunded guest was never told. This reuses the existing
+  // appointment sender (`sendAppointmentNotifications`) — no new sender — and
+  // overrides only the Meta slot with the approved `appointment_refund`
+  // template, so every other template on this path is untouched.
+  //
+  // `payment_amount` is the full refund: nothing on the refund branch ever
+  // rewrites it (only `waived` sets it to 0, and waived is not reachable from
+  // refunded), so no `refund_amount` column is needed.
+  if (input.status === "refunded" && (row.patient_phone || row.patient_email)) {
+    const siteUrl = getSiteUrl();
+    const service = (row.services as { name?: string | null } | null) ?? null;
+    // Best-effort: `sendAppointmentNotifications` never throws, so a Meta or
+    // email failure cannot fail a refund that already succeeded.
+    await sendAppointmentNotifications(
+      {
+        appointmentId: row.appointment_no ?? row.id,
+        patientName: row.patient_name?.trim() || "Patient",
+        serviceName: service?.name ?? "Your appointment",
+        date: row.date,
+        time: (row.time ?? "").slice(0, 5) || "Flexible",
+        statusUrl: siteUrl ? `${siteUrl}/appointment-status` : undefined,
+        phone: row.patient_phone ?? undefined,
+        email: row.patient_email ?? undefined,
+        isVideo: true,
+        amount: row.payment_amount,
+      },
+      undefined,
+      {
+        metaTemplate: "appointment_refund",
+        metaExtras: {
+          refundAmount: `Rs. ${row.payment_amount ?? 0}`,
+          paymentStatus: "Refunded",
+        },
+      },
+    );
   }
 
   return { error: null };
