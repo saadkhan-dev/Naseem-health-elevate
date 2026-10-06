@@ -489,9 +489,11 @@ export async function setOrderPaymentStatus(
   // WhatsApp stays off for orders (`sendOrderNotifications` forces SMS + email),
   // so the Meta slot below only decides WHICH approved order template would be
   // used if that policy is ever lifted. A verified payment maps to the approved
-  // `order_payment_confirmed` template; every other status keeps the generic
-  // `order_status_update`, because "pending" is not the same claim as "failed"
-  // and the refunded amount is not recorded. SMS/email content is unchanged.
+  // `order_payment_confirmed` template and a refund maps to the approved
+  // `order_refund` template (its amount slot cannot be derived from the shared
+  // details, so the full `payment_amount` is passed explicitly); every other
+  // status keeps the generic `order_status_update`, because "pending" is not the
+  // same claim as "failed". SMS/email content is unchanged.
   const contactEmail = order.email ?? order.payment_payer_email ?? null;
   const contactPhone = order.phone ?? order.payment_payer_phone ?? null;
   if (contactEmail || contactPhone) {
@@ -508,7 +510,19 @@ export async function setOrderPaymentStatus(
       },
       "status",
       undefined,
-      input.status === "payment_verified" ? { metaTemplate: "order_payment_confirmed" } : undefined,
+      input.status === "payment_verified"
+        ? { metaTemplate: "order_payment_confirmed" }
+        : input.status === "refunded"
+          ? {
+              metaTemplate: "order_refund",
+              metaExtras: {
+                // Full refund: the order records a single `payment_amount`, so a
+                // refund always returns exactly that amount.
+                refundAmount: order.payment_amount != null ? `Rs. ${order.payment_amount}` : "",
+                paymentStatus: orderStatusLabel(input.status),
+              },
+            }
+          : undefined,
     );
   }
 

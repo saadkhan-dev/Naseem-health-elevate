@@ -736,6 +736,13 @@ function OrderPaymentBlock({
             )}
             Mark failed
           </Button>
+        </div>
+      )}
+      {/* Refund is only offered for a genuinely received payment: the server
+          allows `refunded` only from `payment_verified`, so showing it next to
+          "Verify payment" rendered a button the server always rejected. */}
+      {order.payment_status === "payment_verified" && (
+        <div className="mt-2 flex flex-wrap gap-2">
           <Button
             size="sm"
             variant="outline"
