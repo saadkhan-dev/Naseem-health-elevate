@@ -50,6 +50,12 @@ const REFUND_APPROVED_NAME =
  * WhatsApp Manager. These values are what is sent on the wire; the internal
  * keys (`appointment_confirmation`, `video_consultation_room_ready`, ...) only
  * select which env var is read.
+ *
+ * The six newest slots (`appointment_booked`, `appointment_payment_verified`,
+ * `order_placed`, `order_confirmed`, `order_cancelled`, `order_payment_verified`)
+ * are not yet approved in production, so their fixture names below are test-only
+ * placeholders — what is asserted is that the wire name always equals the env
+ * var's VALUE, never an internal key.
  */
 const FULL_META: MetaWhatsAppEnv = {
   WHATSAPP_PROVIDER: "meta",
@@ -58,34 +64,50 @@ const FULL_META: MetaWhatsAppEnv = {
   META_WA_BUSINESS_ACCOUNT_ID: "444555666",
   META_WA_API_VERSION: undefined,
   META_WA_TEMPLATE_APPOINTMENT_CONFIRMATION: "appointment_confirmed",
+  META_WA_TEMPLATE_APPOINTMENT_BOOKED: "appointment_booked_notice",
   META_WA_TEMPLATE_APPOINTMENT_RESCHEDULED: "appointment_schedule_changed",
   META_WA_TEMPLATE_APPOINTMENT_CANCELLED: "appointment_cancelled_notice",
   META_WA_TEMPLATE_APPOINTMENT_REMINDER: "appointment_reminder_notice_category_utility",
   META_WA_TEMPLATE_VIDEO_CONSULTATION_READY: "video_consultation_ready_notice",
   META_WA_TEMPLATE_PAYMENT_RECEIVED: "payment_received_notice",
   META_WA_TEMPLATE_APPOINTMENT_PAYMENT_PENDING: "appointment_payment_pending_notice",
+  META_WA_TEMPLATE_APPOINTMENT_PAYMENT_VERIFIED: "appointment_payment_verified_notice",
   // The long, Meta-generated name, verbatim. See REFUND_APPROVED_NAME above.
   META_WA_TEMPLATE_APPOINTMENT_REFUND: REFUND_APPROVED_NAME,
   META_WA_TEMPLATE_ORDER_CONFIRMATION: "order_confirmed_notice",
+  META_WA_TEMPLATE_ORDER_PLACED: "order_placed_notice",
   META_WA_TEMPLATE_ORDER_STATUS_UPDATE: "order_status_update_notice",
+  META_WA_TEMPLATE_ORDER_CONFIRMED: "order_approved_notice",
+  META_WA_TEMPLATE_ORDER_CANCELLED: "order_cancelled_notice",
   META_WA_TEMPLATE_ORDER_PAYMENT_CONFIRMED: "order_payment_confirmed",
+  META_WA_TEMPLATE_ORDER_PAYMENT_VERIFIED: "order_payment_verified",
   META_WA_TEMPLATE_ORDER_PAYMENT_PENDING: "order_payment_pending_notice",
   META_WA_TEMPLATE_ORDER_REFUND: "order_refund_notice",
 };
 
-/** The thirteen approved Meta template names, as configured in production. */
+/**
+ * Every template slot and the wire name its env var holds. The thirteen
+ * long-approved production names are real WhatsApp Manager values; the six
+ * newest slots use test-only placeholders until their real names are approved.
+ */
 const ACTIVE_TEMPLATE_NAMES: Record<MetaWhatsAppTemplateId, string> = {
   appointment_confirmation: "appointment_confirmed",
+  appointment_booked: "appointment_booked_notice",
   appointment_rescheduled: "appointment_schedule_changed",
   appointment_cancelled: "appointment_cancelled_notice",
   appointment_reminder: "appointment_reminder_notice_category_utility",
   video_consultation_room_ready: "video_consultation_ready_notice",
   payment_received: "payment_received_notice",
   appointment_payment_pending: "appointment_payment_pending_notice",
+  appointment_payment_verified: "appointment_payment_verified_notice",
   appointment_refund: REFUND_APPROVED_NAME,
   order_confirmation: "order_confirmed_notice",
+  order_placed: "order_placed_notice",
   order_status_update: "order_status_update_notice",
+  order_confirmed: "order_approved_notice",
+  order_cancelled: "order_cancelled_notice",
   order_payment_confirmed: "order_payment_confirmed",
+  order_payment_verified: "order_payment_verified",
   order_payment_pending: "order_payment_pending_notice",
   order_refund: "order_refund_notice",
 };
@@ -95,18 +117,24 @@ const ALL_TEMPLATES = Object.keys(META_TEMPLATE_ARITY) as MetaWhatsAppTemplateId
 /** Slots that read the appointment record, vs slots that read the order record. */
 const APPOINTMENT_SLOTS: MetaWhatsAppTemplateId[] = [
   "appointment_confirmation",
+  "appointment_booked",
   "appointment_rescheduled",
   "appointment_cancelled",
   "appointment_reminder",
   "video_consultation_room_ready",
   "payment_received",
   "appointment_payment_pending",
+  "appointment_payment_verified",
   "appointment_refund",
 ];
 const ORDER_SLOTS: MetaWhatsAppTemplateId[] = [
   "order_confirmation",
+  "order_placed",
   "order_status_update",
+  "order_confirmed",
+  "order_cancelled",
   "order_payment_confirmed",
+  "order_payment_verified",
   "order_payment_pending",
   "order_refund",
 ];
@@ -187,18 +215,24 @@ const PATIENT = {
 // ---------------------------------------------------------------------------
 
 describe("approved Meta template registry", () => {
-  it("exposes exactly the thirteen real clinic templates", () => {
+  it("exposes exactly the nineteen real clinic templates", () => {
     expect(ALL_TEMPLATES.slice().sort()).toEqual(
       [
+        "appointment_booked",
         "appointment_cancelled",
         "appointment_confirmation",
         "appointment_payment_pending",
+        "appointment_payment_verified",
         "appointment_refund",
         "appointment_reminder",
         "appointment_rescheduled",
+        "order_cancelled",
         "order_confirmation",
+        "order_confirmed",
         "order_payment_confirmed",
         "order_payment_pending",
+        "order_payment_verified",
+        "order_placed",
         "order_refund",
         "order_status_update",
         "payment_received",
@@ -211,15 +245,21 @@ describe("approved Meta template registry", () => {
     const names = ALL_TEMPLATES.map(metaTemplateEnvName);
     expect(names.slice().sort()).toEqual(
       [
+        "META_WA_TEMPLATE_APPOINTMENT_BOOKED",
         "META_WA_TEMPLATE_APPOINTMENT_CANCELLED",
         "META_WA_TEMPLATE_APPOINTMENT_CONFIRMATION",
         "META_WA_TEMPLATE_APPOINTMENT_PAYMENT_PENDING",
+        "META_WA_TEMPLATE_APPOINTMENT_PAYMENT_VERIFIED",
         "META_WA_TEMPLATE_APPOINTMENT_REFUND",
         "META_WA_TEMPLATE_APPOINTMENT_REMINDER",
         "META_WA_TEMPLATE_APPOINTMENT_RESCHEDULED",
+        "META_WA_TEMPLATE_ORDER_CANCELLED",
         "META_WA_TEMPLATE_ORDER_CONFIRMATION",
+        "META_WA_TEMPLATE_ORDER_CONFIRMED",
         "META_WA_TEMPLATE_ORDER_PAYMENT_CONFIRMED",
         "META_WA_TEMPLATE_ORDER_PAYMENT_PENDING",
+        "META_WA_TEMPLATE_ORDER_PAYMENT_VERIFIED",
+        "META_WA_TEMPLATE_ORDER_PLACED",
         "META_WA_TEMPLATE_ORDER_REFUND",
         "META_WA_TEMPLATE_ORDER_STATUS_UPDATE",
         "META_WA_TEMPLATE_PAYMENT_RECEIVED",
@@ -322,7 +362,7 @@ describe("approved Meta template registry", () => {
   });
 
   it("never reports a configured template as missing", () => {
-    // All thirteen slots are configured, so nothing should be flagged.
+    // All nineteen slots are configured, so nothing should be flagged.
     for (const template of ALL_TEMPLATES) {
       expect(metaTemplateMissingConfig(FULL_META, template).length).toBe(0);
     }
@@ -336,6 +376,12 @@ describe("approved Meta template registry", () => {
 describe("exact parameter order for every approved template", () => {
   it("appointment_confirmation: name, date, time, appointment ID, service (5)", () => {
     const params = metaTemplateParameters("appointment_confirmation", PATIENT);
+    expect(params).toEqual(["Ali", "2026-09-01", "19:00", "APT-1", "Homeopathy"]);
+    expect(params).toHaveLength(5);
+  });
+
+  it("appointment_booked: name, date, time, appointment ID, service (5)", () => {
+    const params = metaTemplateParameters("appointment_booked", PATIENT);
     expect(params).toEqual(["Ali", "2026-09-01", "19:00", "APT-1", "Homeopathy"]);
     expect(params).toHaveLength(5);
   });
@@ -455,6 +501,16 @@ describe("exact parameter order for every approved template", () => {
     expect(params).toHaveLength(4);
   });
 
+  it("appointment_payment_verified: name, appointment ID, amount, status, service (5)", () => {
+    const params = metaTemplateParameters(
+      "appointment_payment_verified",
+      { ...PATIENT, amount: 2500 },
+      { paymentStatus: "Payment verified" },
+    );
+    expect(params).toEqual(["Ali", "APT-1", "Rs. 2500", "Payment verified", "Homeopathy"]);
+    expect(params).toHaveLength(5);
+  });
+
   it("order_payment_confirmed: name, order ID, amount paid, status (4)", () => {
     const params = metaTemplateParameters("order_payment_confirmed", ORDER, {
       paymentStatus: "Payment verified",
@@ -477,6 +533,49 @@ describe("exact parameter order for every approved template", () => {
       paymentStatus: "Refunded",
     });
     expect(params).toEqual(["Bilal", "ORD-77", "Rs. 900", "Refunded"]);
+    expect(params).toHaveLength(4);
+  });
+
+  it("order_placed: name, order ID, order date, total amount (4)", () => {
+    const params = metaTemplateParameters(
+      "order_placed",
+      { ...ORDER, orderUrl: "https://clinic.example/order" },
+      { orderDate: "2026-09-07" },
+    );
+    expect(params).toEqual(["Bilal", "ORD-77", "2026-09-07", "Rs. 2400"]);
+    expect(params).toHaveLength(4);
+    expect(params).not.toContain("https://clinic.example/order");
+  });
+
+  it("order_confirmed: name, order ID, order date, total amount (4)", () => {
+    const params = metaTemplateParameters("order_confirmed", ORDER, {
+      orderDate: "2026-09-07",
+    });
+    expect(params).toEqual(["Bilal", "ORD-77", "2026-09-07", "Rs. 2400"]);
+    expect(params).toHaveLength(4);
+  });
+
+  it("order_cancelled: name, order ID, order date, cancellation reason (4)", () => {
+    const params = metaTemplateParameters("order_cancelled", ORDER, {
+      orderDate: "2026-09-07",
+      cancellationReason: "Cancelled by admin",
+    });
+    expect(params).toEqual(["Bilal", "ORD-77", "2026-09-07", "Cancelled by admin"]);
+    expect(params).toHaveLength(4);
+    // A missing reason still fills the slot (never undefined), so arity holds.
+    expect(metaTemplateParameters("order_cancelled", ORDER, { orderDate: "2026-09-07" })).toEqual([
+      "Bilal",
+      "ORD-77",
+      "2026-09-07",
+      "",
+    ]);
+  });
+
+  it("order_payment_verified: name, order ID, amount paid, status (4)", () => {
+    const params = metaTemplateParameters("order_payment_verified", ORDER, {
+      paymentStatus: "Payment verified",
+    });
+    expect(params).toEqual(["Bilal", "ORD-77", "Rs. 2400", "Payment verified"]);
     expect(params).toHaveLength(4);
   });
 
@@ -547,11 +646,51 @@ describe("exact parameter order for every approved template", () => {
         },
       ],
       ["payment_received", PATIENT],
+      ["appointment_booked", PATIENT],
+      [
+        "appointment_payment_verified",
+        { ...PATIENT, amount: 2500, statusUrl: "https://clinic.example/status" },
+      ],
       [
         "order_confirmation",
         {
           orderId: "OD-1",
           patientName: "Ali",
+          total: 10,
+          orderUrl: "https://clinic.example/order",
+        },
+      ],
+      [
+        "order_placed",
+        {
+          orderId: "OD-1",
+          patientName: "Ali",
+          total: 10,
+          orderUrl: "https://clinic.example/order",
+        },
+      ],
+      [
+        "order_confirmed",
+        {
+          orderId: "OD-1",
+          patientName: "Ali",
+          total: 10,
+          orderUrl: "https://clinic.example/order",
+        },
+      ],
+      [
+        "order_cancelled",
+        {
+          orderId: "OD-1",
+          patientName: "Ali",
+          orderUrl: "https://clinic.example/order",
+        },
+      ],
+      [
+        "order_payment_verified",
+        {
+          orderId: "OD-2",
+          patientName: "Bilal",
           total: 10,
           orderUrl: "https://clinic.example/order",
         },
@@ -594,8 +733,14 @@ describe("exact parameter order for every approved template", () => {
         { appointmentId: "A", patientName: "B", serviceName: "C", date: "D", time: "T" },
       ],
       ["payment_received", PATIENT],
+      ["appointment_booked", PATIENT],
+      ["appointment_payment_verified", PATIENT],
       ["order_confirmation", { orderId: "O", patientName: "P", total: 1 }],
+      ["order_placed", { orderId: "O", patientName: "P", total: 1 }],
       ["order_status_update", { orderId: "O", patientName: "P", paymentStatusLabel: "s" }],
+      ["order_confirmed", { orderId: "O", patientName: "P", total: 1 }],
+      ["order_cancelled", { orderId: "O", patientName: "P" }],
+      ["order_payment_verified", { orderId: "O", patientName: "P", total: 1 }],
     ];
     for (const [template, details] of cases) {
       expect(metaTemplateParameters(template, details as never)).toHaveLength(
@@ -910,9 +1055,23 @@ describe("Meta phone normalization", () => {
 // ---------------------------------------------------------------------------
 
 describe("event -> approved Meta template", () => {
-  it("booking created -> appointment_confirmation slot / appointment_confirmed wire name", async () => {
+  it("booking created -> appointment_booked slot / appointment_booked_notice wire name", async () => {
     await withFetch(200, "{}", async (calls) => {
       await sendAppointmentNotifications(PATIENT, FULL_META);
+      expect(graphTemplate(calls)).toEqual({
+        name: "appointment_booked_notice",
+        language: "en",
+      });
+      expect(graphParams(calls)).toEqual(["Ali", "2026-09-01", "19:00", "APT-1", "Homeopathy"]);
+      expect(graphParams(calls)).toHaveLength(5);
+    });
+  });
+
+  // Admin APPROVAL is the distinct event that reuses the original
+  // `appointment_confirmation` slot; it is not the booking event anymore.
+  it("status change to confirmed -> appointment_confirmation (approval only)", async () => {
+    await withFetch(200, "{}", async (calls) => {
+      await sendStatusChangeNotifications({ ...PATIENT, newStatus: "confirmed" }, FULL_META);
       expect(graphTemplate(calls)).toEqual({
         name: "appointment_confirmed",
         language: "en",
@@ -944,7 +1103,7 @@ describe("event -> approved Meta template", () => {
   });
 
   it("every other status reports not_configured — no invented template", async () => {
-    for (const status of ["pending", "confirmed", "completed", "arrived", "no_show"] as const) {
+    for (const status of ["pending", "completed", "arrived", "no_show"] as const) {
       await withFetch(200, "{}", async (calls) => {
         const results = await sendStatusChangeNotifications(
           { ...PATIENT, newStatus: status },
@@ -1055,7 +1214,7 @@ describe("event -> approved Meta template", () => {
 // ---------------------------------------------------------------------------
 
 describe("orders use WhatsApp + email, never SMS", () => {
-  // `order_confirmation` -> approved `order_confirmed_notice`, arity 4.
+  // `order_placed` -> approved `order_placed_notice` (test fixture name), arity 4.
   it("A. order created reaches Meta on WhatsApp with 4 params and no SMS", async () => {
     await withFetch(200, "{}", async (calls) => {
       const results = await sendOrderNotifications(
@@ -1076,7 +1235,7 @@ describe("orders use WhatsApp + email, never SMS", () => {
       expect(results.some((r) => r.channel === "sms")).toBe(false);
 
       expect(graphTemplate(calls)).toEqual({
-        name: "order_confirmed_notice",
+        name: "order_placed_notice",
         language: "en",
       });
       // Slot 3 is the order date. No caller-supplied extras here, so it stays
@@ -1091,7 +1250,7 @@ describe("orders use WhatsApp + email, never SMS", () => {
 
   // The order-created caller reads `orders.created_at` back and passes it as
   // `metaExtras.orderDate`. This proves slot 3 is no longer blank in that path.
-  it("order_confirmation fills slot 3 with the caller-supplied order date", async () => {
+  it("order_placed fills slot 3 with the caller-supplied order date", async () => {
     await withFetch(200, "{}", async (calls) => {
       const results = await sendOrderNotifications(
         {
@@ -1109,7 +1268,7 @@ describe("orders use WhatsApp + email, never SMS", () => {
       expect(results.map((r) => r.channel)).toEqual(["email", "whatsapp"]);
       expect(results.some((r) => r.channel === "sms")).toBe(false);
 
-      expect(graphTemplate(calls).name).toBe("order_confirmed_notice");
+      expect(graphTemplate(calls).name).toBe("order_placed_notice");
       const params = graphParams(calls);
       expect(params).toEqual(["Ali", "OD-9", "05 Oct 2026", "Rs. 1200"]);
       // Still exactly 4: the date fills an existing slot, it never adds one.
@@ -1142,9 +1301,9 @@ describe("orders use WhatsApp + email, never SMS", () => {
     });
   });
 
-  // `order_payment_confirmed` is assigned by the order-payments caller; it must
+  // `order_payment_verified` is assigned by the order-payments caller; it must
   // survive the routing change rather than being replaced by the default slot.
-  it("C. order_payment_confirmed override reaches Meta with 4 params and no SMS", async () => {
+  it("C. order_payment_verified override reaches Meta with 4 params and no SMS", async () => {
     await withFetch(200, "{}", async (calls) => {
       const results = await sendOrderNotifications(
         {
@@ -1157,19 +1316,14 @@ describe("orders use WhatsApp + email, never SMS", () => {
         },
         "status",
         { ...FULL_META, RESEND_API_KEY: "re_test", NOTIFICATION_FROM_EMAIL: "c@e.com" },
-        { metaTemplate: "order_payment_confirmed" },
+        { metaTemplate: "order_payment_verified" },
       );
 
       expect(results.map((r) => r.channel)).toEqual(["email", "whatsapp"]);
       expect(results.some((r) => r.channel === "sms")).toBe(false);
 
-      expect(graphTemplate(calls).name).toBe("order_payment_confirmed");
-      expect(graphParams(calls)).toEqual([
-        "Bilal",
-        "ORD-77",
-        "Rs. 2400",
-        "Payment verified",
-      ]);
+      expect(graphTemplate(calls).name).toBe("order_payment_verified");
+      expect(graphParams(calls)).toEqual(["Bilal", "ORD-77", "Rs. 2400", "Payment verified"]);
       expect(graphParams(calls)).toHaveLength(4);
       expect(calls.some((c) => c.url.includes("api.twilio.com"))).toBe(false);
     });
@@ -1199,7 +1353,7 @@ describe("orders use WhatsApp + email, never SMS", () => {
           NOTIFICATION_FROM_EMAIL: "c@e.com",
           META_WA_ACCESS_TOKEN: "",
           META_WA_PHONE_NUMBER_ID: "",
-          META_WA_TEMPLATE_ORDER_CONFIRMATION: "",
+          META_WA_TEMPLATE_ORDER_PLACED: "",
         },
       );
 
@@ -1212,7 +1366,7 @@ describe("orders use WhatsApp + email, never SMS", () => {
   });
 
   // Guards the two flows that must stay byte-identical after the date fix.
-  it("E. order_status_update and order_payment_confirmed params are unchanged", async () => {
+  it("E. order_status_update and order_payment_verified params are unchanged", async () => {
     await withFetch(200, "{}", async (calls) => {
       await sendOrderNotifications(
         {
@@ -1245,18 +1399,13 @@ describe("orders use WhatsApp + email, never SMS", () => {
         "status",
         FULL_META,
         {
-          metaTemplate: "order_payment_confirmed",
+          metaTemplate: "order_payment_verified",
           metaExtras: { orderDate: "05 Oct 2026" },
         },
       );
 
-      expect(graphTemplate(calls).name).toBe("order_payment_confirmed");
-      expect(graphParams(calls)).toEqual([
-        "Bilal",
-        "ORD-77",
-        "Rs. 2400",
-        "Payment verified",
-      ]);
+      expect(graphTemplate(calls).name).toBe("order_payment_verified");
+      expect(graphParams(calls)).toEqual(["Bilal", "ORD-77", "Rs. 2400", "Payment verified"]);
       expect(graphParams(calls)).toHaveLength(4);
     });
   });
@@ -1268,7 +1417,7 @@ describe("orders use WhatsApp + email, never SMS", () => {
         { ...PATIENT, appointmentId: "APT-1", serviceName: "Homeopathy" },
         FULL_META,
       );
-      expect(graphTemplate(calls).name).toBe("appointment_confirmed");
+      expect(graphTemplate(calls).name).toBe("appointment_booked_notice");
     });
 
     await withFetch(200, "{}", async (calls) => {
@@ -1333,6 +1482,12 @@ describe("newly mapped templates", () => {
       ["order_payment_confirmed", "order_payment_confirmed", 4],
       ["order_payment_pending", "order_payment_pending_notice", 4],
       ["order_refund", "order_refund_notice", 4],
+      ["appointment_booked", "appointment_booked_notice", 5],
+      ["appointment_payment_verified", "appointment_payment_verified_notice", 5],
+      ["order_placed", "order_placed_notice", 4],
+      ["order_confirmed", "order_approved_notice", 4],
+      ["order_cancelled", "order_cancelled_notice", 4],
+      ["order_payment_verified", "order_payment_verified", 4],
     ];
     for (const [template, wireName, arity] of cases) {
       const isOrder = ORDER_SLOTS.includes(template);
@@ -1375,10 +1530,11 @@ describe("newly mapped templates", () => {
   });
 
   it("routes the order payment slot to WhatsApp, not SMS", async () => {
-    // `setOrderPaymentStatus` passes metaTemplate=order_payment_confirmed. Orders
-    // now deliver that approved template over Meta WhatsApp; the SMS + email-only
+    // `setOrderPaymentStatus` passes metaTemplate=order_payment_verified. Orders
+    // deliver that approved template over Meta WhatsApp; the SMS + email-only
     // assertion this replaced lives on in "orders use WhatsApp + email, never SMS"
-    // as case C, alongside the order_confirmation / order_status_update cases.
+    // as case C, alongside the order_placed / order_confirmed / order_cancelled
+    // cases.
     await withFetch(200, "{}", async (calls) => {
       const results = await sendOrderNotifications(
         {
@@ -1391,10 +1547,10 @@ describe("newly mapped templates", () => {
         },
         "status",
         { ...FULL_META, RESEND_API_KEY: "re_test", NOTIFICATION_FROM_EMAIL: "c@e.com" },
-        { metaTemplate: "order_payment_confirmed" },
+        { metaTemplate: "order_payment_verified" },
       );
       expect(results.map((r) => r.channel)).toEqual(["email", "whatsapp"]);
-      expect(graphTemplate(calls).name).toBe("order_payment_confirmed");
+      expect(graphTemplate(calls).name).toBe("order_payment_verified");
     });
   });
 
@@ -1449,6 +1605,18 @@ describe("newly mapped templates", () => {
     ];
     for (const [key, value] of expected) {
       expect(contents).toContain(`${key}=${value}\n`);
+    }
+    // The six newest slots are documented but deliberately EMPTY until each
+    // template is approved; their own approved names are pasted in afterwards.
+    for (const key of [
+      "META_WA_TEMPLATE_APPOINTMENT_BOOKED",
+      "META_WA_TEMPLATE_APPOINTMENT_PAYMENT_VERIFIED",
+      "META_WA_TEMPLATE_ORDER_PLACED",
+      "META_WA_TEMPLATE_ORDER_CONFIRMED",
+      "META_WA_TEMPLATE_ORDER_CANCELLED",
+      "META_WA_TEMPLATE_ORDER_PAYMENT_VERIFIED",
+    ]) {
+      expect(contents).toContain(`${key}=\n`);
     }
   });
 
@@ -1563,9 +1731,9 @@ describe("SMS support is retained for orders, only not selected today", () => {
       RESEND_API_KEY: "re_test",
       NOTIFICATION_FROM_EMAIL: "c@e.com",
     });
-    expect(resolveNotificationChannels({ phone: "+923001234567" }, cfg, { phoneChannel: "sms" })).toEqual([
-      "sms",
-    ]);
+    expect(
+      resolveNotificationChannels({ phone: "+923001234567" }, cfg, { phoneChannel: "sms" }),
+    ).toEqual(["sms"]);
   });
 
   it("the resolver still honours only:[sms] for a caller that wants SMS", () => {
@@ -1574,9 +1742,9 @@ describe("SMS support is retained for orders, only not selected today", () => {
       RESEND_API_KEY: "re_test",
       NOTIFICATION_FROM_EMAIL: "c@e.com",
     });
-    expect(
-      resolveNotificationChannels({ phone: "+923001234567" }, cfg, { only: ["sms"] }),
-    ).toEqual(["sms"]);
+    expect(resolveNotificationChannels({ phone: "+923001234567" }, cfg, { only: ["sms"] })).toEqual(
+      ["sms"],
+    );
   });
 });
 

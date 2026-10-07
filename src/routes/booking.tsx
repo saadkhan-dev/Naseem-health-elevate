@@ -379,7 +379,7 @@ function BookingPage() {
                 }}
                 disabled={servicesLoading}
               >
-                <SelectTrigger className="mt-3 h-11 w-full rounded-xl">
+                <SelectTrigger className="mt-3 min-h-11 w-full rounded-xl">
                   <SelectValue placeholder={servicesLoading ? "Loading..." : "Select Service"} />
                 </SelectTrigger>
                 <SelectContent>

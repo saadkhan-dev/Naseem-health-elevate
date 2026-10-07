@@ -282,7 +282,7 @@ export function BookingPanel() {
             ) : (
               <Field label="Select Time">
                 <Select value={time} onValueChange={setTime} disabled={!date || slotsLoading}>
-                  <SelectTrigger className="h-11 w-full rounded-xl border-white/10 bg-white/5 text-white transition-all duration-300 hover:border-emerald-400/40 hover:bg-white/10 focus:ring-emerald-400/50">
+<SelectTrigger className="min-h-11 w-full rounded-xl border-white/10 bg-white/5 text-white transition-all duration-300 hover:border-emerald-400/40 hover:bg-white/10 focus:ring-emerald-400/50">
                     <SelectValue
                       placeholder={
                         !date

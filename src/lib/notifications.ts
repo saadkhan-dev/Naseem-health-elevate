@@ -38,16 +38,22 @@ export type WhatsAppTemplateId = "appointment" | "status" | "reschedule" | "vide
  * Manager (or per environment) with no code change:
  *
  *   appointment_confirmation            -> META_WA_TEMPLATE_APPOINTMENT_CONFIRMATION
+ *   appointment_booked                  -> META_WA_TEMPLATE_APPOINTMENT_BOOKED
  *   appointment_rescheduled             -> META_WA_TEMPLATE_APPOINTMENT_RESCHEDULED
  *   appointment_cancelled               -> META_WA_TEMPLATE_APPOINTMENT_CANCELLED
  *   appointment_reminder                -> META_WA_TEMPLATE_APPOINTMENT_REMINDER
  *   video_consultation_room_ready       -> META_WA_TEMPLATE_VIDEO_CONSULTATION_READY
  *   payment_received                    -> META_WA_TEMPLATE_PAYMENT_RECEIVED
  *   appointment_payment_pending         -> META_WA_TEMPLATE_APPOINTMENT_PAYMENT_PENDING
+ *   appointment_payment_verified        -> META_WA_TEMPLATE_APPOINTMENT_PAYMENT_VERIFIED
  *   appointment_refund                  -> META_WA_TEMPLATE_APPOINTMENT_REFUND
  *   order_confirmation                  -> META_WA_TEMPLATE_ORDER_CONFIRMATION
+ *   order_placed                        -> META_WA_TEMPLATE_ORDER_PLACED
  *   order_status_update                 -> META_WA_TEMPLATE_ORDER_STATUS_UPDATE
+ *   order_confirmed                     -> META_WA_TEMPLATE_ORDER_CONFIRMED
+ *   order_cancelled                     -> META_WA_TEMPLATE_ORDER_CANCELLED
  *   order_payment_confirmed             -> META_WA_TEMPLATE_ORDER_PAYMENT_CONFIRMED
+ *   order_payment_verified              -> META_WA_TEMPLATE_ORDER_PAYMENT_VERIFIED
  *   order_payment_pending               -> META_WA_TEMPLATE_ORDER_PAYMENT_PENDING
  *   order_refund                        -> META_WA_TEMPLATE_ORDER_REFUND
  *
@@ -69,16 +75,22 @@ export type WhatsAppTemplateId = "appointment" | "status" | "reschedule" | "vide
  */
 export type MetaWhatsAppTemplateId =
   | "appointment_confirmation"
+  | "appointment_booked"
   | "appointment_rescheduled"
   | "appointment_cancelled"
   | "appointment_reminder"
   | "video_consultation_room_ready"
   | "payment_received"
   | "appointment_payment_pending"
+  | "appointment_payment_verified"
   | "appointment_refund"
   | "order_confirmation"
+  | "order_placed"
   | "order_status_update"
+  | "order_confirmed"
+  | "order_cancelled"
   | "order_payment_confirmed"
+  | "order_payment_verified"
   | "order_payment_pending"
   | "order_refund";
 
@@ -150,10 +162,12 @@ export interface NotificationDeliveryOptions {
 export interface MetaTemplateExtras {
   /** Human-readable payment status, for payment-pending / refund status slots. */
   paymentStatus?: string;
-  /** Order date, for `order_confirmation`. */
+  /** Order date, for `order_confirmation` / `order_placed` / `order_confirmed` / `order_cancelled`. */
   orderDate?: string;
   /** Refunded amount, for `appointment_refund` / `order_refund`. */
   refundAmount?: string;
+  /** Human-readable reason, for `order_cancelled`. */
+  cancellationReason?: string;
 }
 
 /**
@@ -308,6 +322,7 @@ export interface NotificationEnv {
   META_WA_API_VERSION?: string;
   /** Approved Meta template names, exactly as shown in Meta Business Manager. */
   META_WA_TEMPLATE_APPOINTMENT_CONFIRMATION?: string;
+  META_WA_TEMPLATE_APPOINTMENT_BOOKED?: string;
   META_WA_TEMPLATE_APPOINTMENT_RESCHEDULED?: string;
   META_WA_TEMPLATE_APPOINTMENT_CANCELLED?: string;
   META_WA_TEMPLATE_APPOINTMENT_REMINDER?: string;
@@ -315,11 +330,16 @@ export interface NotificationEnv {
   /* Appointment payment + refund (never used for orders). */
   META_WA_TEMPLATE_PAYMENT_RECEIVED?: string;
   META_WA_TEMPLATE_APPOINTMENT_PAYMENT_PENDING?: string;
+  META_WA_TEMPLATE_APPOINTMENT_PAYMENT_VERIFIED?: string;
   META_WA_TEMPLATE_APPOINTMENT_REFUND?: string;
   /* Order lifecycle (never used for appointments). */
   META_WA_TEMPLATE_ORDER_CONFIRMATION?: string;
+  META_WA_TEMPLATE_ORDER_PLACED?: string;
   META_WA_TEMPLATE_ORDER_STATUS_UPDATE?: string;
+  META_WA_TEMPLATE_ORDER_CONFIRMED?: string;
+  META_WA_TEMPLATE_ORDER_CANCELLED?: string;
   META_WA_TEMPLATE_ORDER_PAYMENT_CONFIRMED?: string;
+  META_WA_TEMPLATE_ORDER_PAYMENT_VERIFIED?: string;
   META_WA_TEMPLATE_ORDER_PAYMENT_PENDING?: string;
   META_WA_TEMPLATE_ORDER_REFUND?: string;
   /** Alias for META_WA_TEMPLATE_LANGUAGE_CODE (lower precedence). */
@@ -698,7 +718,7 @@ export interface OrderNotificationDetails {
 export function orderStatusLabel(value: string): string {
   switch (value) {
     case "payment_verified":
-      return "Payment verified — order confirmed";
+      return "Payment verified";
     case "payment_failed":
       return "Payment not accepted";
     case "refunded":

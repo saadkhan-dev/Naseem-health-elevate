@@ -427,13 +427,14 @@ export async function setOrderPaymentStatus(
   const updates: Record<string, string | number | null> = { payment_status: input.status };
   let newOrderStatus: string | null = null;
 
+  // A payment-verified event no longer confirms the order. Approval is the
+  // admin Approve action (`adminUpdateOrderStatus`), so verifying a payment
+  // records the payment only — the order stays pending until the clinic
+  // approves it. `waived` keeps the legacy auto-confirm because a waiver
+  // authorizes the fulfilment directly.
   if (input.status === "payment_verified") {
     updates.payment_verified_at = new Date().toISOString();
     if (order.payment_amount === null) updates.payment_amount = order.payment_amount ?? 0;
-    if (order.status === "pending_payment" || order.status === "pending") {
-      updates.status = "confirmed";
-      newOrderStatus = "confirmed";
-    }
   }
   if (input.status === "waived") {
     updates.payment_amount = 0;
@@ -450,10 +451,16 @@ export async function setOrderPaymentStatus(
     await admin.from("order_status_history").insert({
       order_id: input.orderId,
       status: newOrderStatus,
-      note:
-        input.status === "waived"
-          ? "Payment waived — order confirmed"
-          : "Payment verified — order confirmed",
+      note: "Payment waived — order confirmed",
+    });
+  } else if (input.status === "payment_verified") {
+    // Payment recorded without changing the order status. A timeline entry is
+    // still written so the patient's "My Orders" detail view shows the
+    // verification even though the order itself stays pending.
+    await admin.from("order_status_history").insert({
+      order_id: input.orderId,
+      status: order.status,
+      note: "Payment verified",
     });
   } else if (input.status === "payment_failed") {
     await admin.from("order_status_history").insert({
@@ -465,7 +472,7 @@ export async function setOrderPaymentStatus(
 
   if (order.patient_id) {
     const labels: Record<string, string> = {
-      payment_verified: "Payment verified — order confirmed",
+      payment_verified: "Payment verified",
       payment_failed: "Payment not accepted",
       refunded: "Payment refunded",
       waived: "Payment waived — order confirmed",
@@ -476,24 +483,26 @@ export async function setOrderPaymentStatus(
       title: labels[input.status] ?? "Payment updated",
       body:
         input.status === "payment_verified"
-          ? `Your payment for order ${order.order_no ?? ""} has been verified and your order is now confirmed.`
+          ? `Your payment for order ${order.order_no ?? ""} has been verified.`
           : `The payment for order ${order.order_no ?? ""} is now "${input.status.replace("payment_", "")}".`,
       link: buildAdminFocusLink("/patient/orders", "order", order.id),
     });
   }
 
-  // Best-effort email/SMS to the patient's contact (checkout email, or the
+  // Best-effort email/WhatsApp to the patient's contact (checkout email, or the
   // email/phone used with the payment proof) telling them their payment/order
   // status changed. Never throws.
   //
-  // WhatsApp stays off for orders (`sendOrderNotifications` forces SMS + email),
-  // so the Meta slot below only decides WHICH approved order template would be
-  // used if that policy is ever lifted. A verified payment maps to the approved
-  // `order_payment_confirmed` template and a refund maps to the approved
-  // `order_refund` template (its amount slot cannot be derived from the shared
-  // details, so the full `payment_amount` is passed explicitly); every other
-  // status keeps the generic `order_status_update`, because "pending" is not the
-  // same claim as "failed". SMS/email content is unchanged.
+  // The Meta slot below decides WHICH approved order template is used over the
+  // order phone channel (WhatsApp when provider=meta, else Twilio). A verified
+  // payment maps to the approved `order_payment_verified` template, a
+  // rejected/submitted-but-not-verified payment to the approved
+  // `order_payment_pending` template, and a refund to the approved `order_refund`
+  // template (its amount slot cannot be derived from the shared details, so the
+  // full `payment_amount` is passed explicitly); every other status keeps the
+  // generic `order_status_update`. A verified payment never implies the ORDER is
+  // confirmed (approval is a separate admin action), so no order-confirmation
+  // template is reused here. SMS/email content is unchanged.
   const contactEmail = order.email ?? order.payment_payer_email ?? null;
   const contactPhone = order.phone ?? order.payment_payer_phone ?? null;
   if (contactEmail || contactPhone) {
@@ -511,18 +520,20 @@ export async function setOrderPaymentStatus(
       "status",
       undefined,
       input.status === "payment_verified"
-        ? { metaTemplate: "order_payment_confirmed" }
-        : input.status === "refunded"
-          ? {
-              metaTemplate: "order_refund",
-              metaExtras: {
-                // Full refund: the order records a single `payment_amount`, so a
-                // refund always returns exactly that amount.
-                refundAmount: order.payment_amount != null ? `Rs. ${order.payment_amount}` : "",
-                paymentStatus: orderStatusLabel(input.status),
-              },
-            }
-          : undefined,
+        ? { metaTemplate: "order_payment_verified" }
+        : input.status === "payment_failed"
+          ? { metaTemplate: "order_payment_pending" }
+          : input.status === "refunded"
+            ? {
+                metaTemplate: "order_refund",
+                metaExtras: {
+                  // Full refund: the order records a single `payment_amount`, so a
+                  // refund always returns exactly that amount.
+                  refundAmount: order.payment_amount != null ? `Rs. ${order.payment_amount}` : "",
+                  paymentStatus: orderStatusLabel(input.status),
+                },
+              }
+            : undefined,
     );
   }
 

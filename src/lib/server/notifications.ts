@@ -82,6 +82,7 @@ export function getServerNotificationEnv(): NotificationEnv {
     META_WA_BUSINESS_ACCOUNT_ID: readEnv("META_WA_BUSINESS_ACCOUNT_ID"),
     META_WA_API_VERSION: readEnv("META_WA_API_VERSION"),
     META_WA_TEMPLATE_APPOINTMENT_CONFIRMATION: readEnv("META_WA_TEMPLATE_APPOINTMENT_CONFIRMATION"),
+    META_WA_TEMPLATE_APPOINTMENT_BOOKED: readEnv("META_WA_TEMPLATE_APPOINTMENT_BOOKED"),
     META_WA_TEMPLATE_APPOINTMENT_RESCHEDULED: readEnv("META_WA_TEMPLATE_APPOINTMENT_RESCHEDULED"),
     META_WA_TEMPLATE_APPOINTMENT_CANCELLED: readEnv("META_WA_TEMPLATE_APPOINTMENT_CANCELLED"),
     META_WA_TEMPLATE_APPOINTMENT_REMINDER: readEnv("META_WA_TEMPLATE_APPOINTMENT_REMINDER"),
@@ -90,11 +91,18 @@ export function getServerNotificationEnv(): NotificationEnv {
     META_WA_TEMPLATE_APPOINTMENT_PAYMENT_PENDING: readEnv(
       "META_WA_TEMPLATE_APPOINTMENT_PAYMENT_PENDING",
     ),
+    META_WA_TEMPLATE_APPOINTMENT_PAYMENT_VERIFIED: readEnv(
+      "META_WA_TEMPLATE_APPOINTMENT_PAYMENT_VERIFIED",
+    ),
     // Long Meta-generated name; forwarded to Meta verbatim (see .env.example).
     META_WA_TEMPLATE_APPOINTMENT_REFUND: readEnv("META_WA_TEMPLATE_APPOINTMENT_REFUND"),
     META_WA_TEMPLATE_ORDER_CONFIRMATION: readEnv("META_WA_TEMPLATE_ORDER_CONFIRMATION"),
+    META_WA_TEMPLATE_ORDER_PLACED: readEnv("META_WA_TEMPLATE_ORDER_PLACED"),
     META_WA_TEMPLATE_ORDER_STATUS_UPDATE: readEnv("META_WA_TEMPLATE_ORDER_STATUS_UPDATE"),
+    META_WA_TEMPLATE_ORDER_CONFIRMED: readEnv("META_WA_TEMPLATE_ORDER_CONFIRMED"),
+    META_WA_TEMPLATE_ORDER_CANCELLED: readEnv("META_WA_TEMPLATE_ORDER_CANCELLED"),
     META_WA_TEMPLATE_ORDER_PAYMENT_CONFIRMED: readEnv("META_WA_TEMPLATE_ORDER_PAYMENT_CONFIRMED"),
+    META_WA_TEMPLATE_ORDER_PAYMENT_VERIFIED: readEnv("META_WA_TEMPLATE_ORDER_PAYMENT_VERIFIED"),
     META_WA_TEMPLATE_ORDER_PAYMENT_PENDING: readEnv("META_WA_TEMPLATE_ORDER_PAYMENT_PENDING"),
     META_WA_TEMPLATE_ORDER_REFUND: readEnv("META_WA_TEMPLATE_ORDER_REFUND"),
     META_WA_TEMPLATE_LANGUAGE: readEnv("META_WA_TEMPLATE_LANGUAGE"),
@@ -239,11 +247,13 @@ export async function sendAppointmentNotifications(
     details,
     messages: buildAppointmentMessages(details),
     template: "appointment",
-    // Booking created/requested -> the `appointment_confirmation` Meta slot,
-    // which resolves to the approved `appointment_confirmed` template via
-    // META_WA_TEMPLATE_APPOINTMENT_CONFIRMATION. Reminders reuse this sender
-    // but override via `options.metaTemplate` (see reminders.ts).
-    metaTemplate: "appointment_confirmation",
+    // Booking created/requested -> the `appointment_booked` Meta slot, which
+    // resolves to the approved booking template via
+    // META_WA_TEMPLATE_APPOINTMENT_BOOKED. Approval uses its own sender
+    // (`sendStatusChangeNotifications`), which now maps `confirmed` to
+    // `appointment_confirmation`. Reminders reuse this sender but override via
+    // `options.metaTemplate` (see reminders.ts).
+    metaTemplate: "appointment_booked",
     options,
   });
 }
@@ -275,13 +285,16 @@ export async function sendVideoReadyNotifications(
  * rejected / cancelled / completed). Same best-effort rules as booking
  * notifications.
  *
- * Meta: only `cancelled` and `rejected` map to a Meta template slot
- * (`appointment_cancelled` -> approved `appointment_cancelled_notice`).
- * Both statuses are the same event from the patient's point of view — the
- * appointment will not happen — so they deliberately share one template.
- * There is deliberately NO generic "status" template — for every other status
- * this resolves to `null`, so Meta reports `not_configured` instead of us
- * inventing a template name or reusing the wrong one. Email/SMS are unaffected.
+ * Meta: `confirmed` maps to `appointment_confirmation` (the approved
+ * `appointment_confirmed` template) — approval is the ONLY event that sends it,
+ * so the clinic never pings the patient at booking time. `cancelled` and
+ * `rejected` both map to `appointment_cancelled` (approved
+ * `appointment_cancelled_notice`): the two statuses are the same event from
+ * the patient's point of view — the appointment will not happen — so they
+ * deliberately share one template. There is deliberately NO generic "status"
+ * template — for every other status this resolves to `null`, so Meta reports
+ * `not_configured` instead of us inventing a template name or reusing the
+ * wrong one. Email/SMS are unaffected.
  */
 export async function sendStatusChangeNotifications(
   details: StatusChangeNotificationDetails,
@@ -296,7 +309,9 @@ export async function sendStatusChangeNotifications(
     metaTemplate:
       details.newStatus === "cancelled" || details.newStatus === "rejected"
         ? "appointment_cancelled"
-        : null,
+        : details.newStatus === "confirmed"
+          ? "appointment_confirmation"
+          : null,
     options,
   });
 }
@@ -380,10 +395,13 @@ export async function sendOrderNotifications(
     env,
     details,
     messages: buildOrderMessages(details, kind),
-    // Reached only when `ORDER_PHONE_CHANNEL` is "whatsapp". A caller may still
-    // override the slot (e.g. order-payments.ts sends
-    // `order_payment_confirmed`); both land in the same approved Meta slot.
-    metaTemplate: kind === "created" ? "order_confirmation" : "order_status_update",
+    // Reached only when `ORDER_PHONE_CHANNEL` is "whatsapp". Placement uses the
+    // `order_placed` slot; ordinary status changes (shipped/delivered/...) use
+    // `order_status_update`. Approve/reject flows override the slot via
+    // `options.metaTemplate` (`order_confirmed` / `order_cancelled`) — see
+    // `adminUpdateOrderStatus` — and order-payments.ts overrides it for
+    // payment events.
+    metaTemplate: kind === "created" ? "order_placed" : "order_status_update",
     options: {
       defaultCountryCode: env.PHONE_COUNTRY_CODE ?? "+92",
       ...options,

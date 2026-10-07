@@ -136,6 +136,8 @@ const META_ENV = {
   META_WA_BUSINESS_ACCOUNT_ID: "444555666",
   META_WA_TEMPLATE_APPOINTMENT_REFUND: "refund_processed_assalamu_alaikum_1",
   META_WA_TEMPLATE_APPOINTMENT_CONFIRMATION: "appointment_confirmed",
+  META_WA_TEMPLATE_APPOINTMENT_PAYMENT_VERIFIED: "appointment_payment_verified_notice",
+  META_WA_TEMPLATE_APPOINTMENT_PAYMENT_PENDING: "appointment_payment_pending_notice",
 } as const;
 
 const SAVED_ENV = new Map<string, string | undefined>();
@@ -295,25 +297,39 @@ describe("video payment refund -> appointment_refund WhatsApp", () => {
   });
 
   // K/L/M. The refund template must ONLY ever be selected for a refund.
-  it("M. never selects appointment_refund for payment_verified", async () => {
+  it("M. sends appointment_payment_verified, never appointment_refund, for payment_verified", async () => {
     const { result, calls } = await runStatusChange(
       verifiedAppt({ payment_status: "payment_submitted" }),
       "payment_verified",
     );
 
     expect(result.error).toBeNull();
-    // This path sends no appointment_refund slot at all.
-    expect(graphCalls(calls)).toHaveLength(0);
+    // Exactly one Meta call, and it is the verified template — not the refund slot.
+    expect(graphCalls(calls)).toHaveLength(1);
+    expect(graphTemplate(calls).name).toBe("appointment_payment_verified_notice");
+    const params = graphParams(calls);
+    expect(params).toEqual([
+      "Ali",
+      "APT-7K4M92",
+      "Rs. 2500",
+      "Payment verified",
+      "Video Consultation",
+    ]);
+    expect(params).toHaveLength(5);
   });
 
-  it("N. never selects appointment_refund for payment_failed", async () => {
+  it("N. sends appointment_payment_pending, never appointment_refund, for payment_failed", async () => {
     const { result, calls } = await runStatusChange(
       verifiedAppt({ payment_status: "payment_submitted" }),
       "payment_failed",
     );
 
     expect(result.error).toBeNull();
-    expect(graphCalls(calls)).toHaveLength(0);
+    expect(graphCalls(calls)).toHaveLength(1);
+    expect(graphTemplate(calls).name).toBe("appointment_payment_pending_notice");
+    const params = graphParams(calls);
+    expect(params).toEqual(["Ali", "APT-7K4M92", "Rs. 2500", "Payment pending"]);
+    expect(params).toHaveLength(4);
   });
 
   it("O. never selects appointment_refund for waived", async () => {

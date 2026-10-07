@@ -4,9 +4,11 @@ import { runWithStartContext } from "@tanstack/start-storage-context";
 /**
  * Focused tests for the Admin order status-change WhatsApp notification.
  *
- * Before this, `adminUpdateOrderStatus` updated `orders.status`, appended an
- * `order_status_history` row and wrote an in-app patient notification, but never
- * called `sendOrderNotifications`, so `order_status_update` never reached Meta.
+ * Approving an order (`confirmed`) uses the dedicated approved
+ * `order_confirmed` template; cancelling/rejecting it uses `order_cancelled`
+ * (carrying the admin note as the cancellation reason). Every other status
+ * (`shipped`, `delivered`, ...) keeps the approved `order_status_update`
+ * template.
  *
  * The server function cannot be called directly (TanStack's `createServerFn`
  * needs a Start context), so each case runs it inside `runWithStartContext` and
@@ -69,6 +71,7 @@ interface Captured {
 async function runUpdate(
   row: Record<string, unknown>,
   status: string,
+  note = "",
 ): Promise<{ calls: Captured[]; thrown: string | null }> {
   orderRow = row;
   dbCalls = [];
@@ -102,7 +105,7 @@ async function runUpdate(
       },
       () =>
         adminUpdateOrderStatus({
-          data: { id: String(row.id ?? ORDER_ID), status, note: "" },
+          data: { id: String(row.id ?? ORDER_ID), status, note },
         } as never),
     );
     return { calls, thrown: null };
@@ -144,6 +147,10 @@ function signedInOrder(overrides: Record<string, unknown> = {}): Record<string, 
     status: "pending",
     name: "Ali",
     order_no: "OD-9",
+    total: 2400,
+    // What `adminUpdateOrderStatus` reads back for the `order_confirmed` /
+    // `order_cancelled` slot 3 (see `orderDateForNotification`).
+    created_at: "2026-10-05T10:00:00Z",
     email: null,
     phone: "+923001234567",
     payment_payer_phone: null,
@@ -158,6 +165,8 @@ const META_ENV = {
   META_WA_PHONE_NUMBER_ID: "111222333",
   META_WA_BUSINESS_ACCOUNT_ID: "444555666",
   META_WA_TEMPLATE_ORDER_STATUS_UPDATE: "order_status_update_notice",
+  META_WA_TEMPLATE_ORDER_CONFIRMED: "order_confirmed_app",
+  META_WA_TEMPLATE_ORDER_CANCELLED: "order_cancelled_app",
 } as const;
 
 const SAVED_ENV = new Map<string, string | undefined>();
@@ -176,29 +185,28 @@ afterAll(() => {
   }
 });
 
-describe("adminUpdateOrderStatus -> order_status_update WhatsApp", () => {
+describe("adminUpdateOrderStatus -> approved order WhatsApp template", () => {
   // A. Confirmed status with a phone on file.
-  it("A. sends order_status_update_notice with the Confirmed label", async () => {
+  it("A. sends order_confirmed_notice with the Confirmed label (4 params)", async () => {
     const { calls } = await runUpdate(signedInOrder(), "confirmed");
 
     // The existing DB behaviour is untouched.
     expect(dbCalls.some((c) => c.startsWith("orders.update:"))).toBe(true);
-    expect(
-      dbCalls.some((c) => c.includes("order_status_history.insert")),
-    ).toBe(true);
+    expect(dbCalls.some((c) => c.includes("order_status_history.insert"))).toBe(true);
 
-    // Exactly one Meta request, and it is the approved status-update template.
+    // Exactly one Meta request, and it is the dedicated order-approved template,
+    // NOT the generic order_status_update template.
     const graph = graphCalls(calls);
     expect(graph).toHaveLength(1);
     expect(graphTemplate(calls)).toEqual({
-      name: "order_status_update_notice",
+      name: "order_confirmed_app",
       language: "en",
     });
 
-    // Slot 3 is the real human-readable status, not the "updated" fallback.
+    // name, order ID, order date (from created_at), total amount.
     const params = graphParams(calls);
-    expect(params).toEqual(["Ali", "OD-9", "Confirmed"]);
-    expect(params).toHaveLength(3);
+    expect(params).toEqual(["Ali", "OD-9", "05 Oct 2026", "Rs. 2400"]);
+    expect(params).toHaveLength(4);
 
     // Orders never use SMS.
     expect(calls.some((c) => c.url.includes("api.twilio.com"))).toBe(false);
@@ -227,8 +235,8 @@ describe("adminUpdateOrderStatus -> order_status_update WhatsApp", () => {
     expect(dbCalls.some((c) => c.includes("patient_notifications.insert"))).toBe(false);
 
     expect(graphCalls(calls)).toHaveLength(1);
-    expect(graphTemplate(calls).name).toBe("order_status_update_notice");
-    expect(graphParams(calls)).toEqual(["Ali", "OD-9", "Confirmed"]);
+    expect(graphTemplate(calls).name).toBe("order_confirmed_app");
+    expect(graphParams(calls)).toEqual(["Ali", "OD-9", "05 Oct 2026", "Rs. 2400"]);
   });
 
   // D. No email and no phone on the order: nothing is sent and nothing throws.
@@ -254,10 +262,7 @@ describe("adminUpdateOrderStatus -> order_status_update WhatsApp", () => {
 
   // E. Same status: the pre-existing early return means zero outbound calls.
   it("E. returns early with zero Meta requests when the status is unchanged", async () => {
-    const { thrown, calls } = await runUpdate(
-      signedInOrder({ status: "confirmed" }),
-      "confirmed",
-    );
+    const { thrown, calls } = await runUpdate(signedInOrder({ status: "confirmed" }), "confirmed");
 
     // The pre-existing early return, unchanged: no status write, no history
     // row, and nothing leaves the building.
@@ -280,7 +285,7 @@ describe("adminUpdateOrderStatus -> order_status_update WhatsApp", () => {
     );
 
     expect(graphCalls(calls)).toHaveLength(1);
-    expect(graphParams(calls)).toEqual(["Ali", "OD-9", "Confirmed"]);
+    expect(graphParams(calls)).toEqual(["Ali", "OD-9", "05 Oct 2026", "Rs. 2400"]);
   });
 
   // `order.order_no ?? order.id` guard: a row missing order_no must still send.
@@ -290,7 +295,33 @@ describe("adminUpdateOrderStatus -> order_status_update WhatsApp", () => {
       "confirmed",
     );
 
-    expect(graphParams(calls)).toEqual(["Ali", ORDER_ID, "Confirmed"]);
-    expect(graphParams(calls)).toHaveLength(3);
+    expect(graphParams(calls)).toEqual(["Ali", ORDER_ID, "05 Oct 2026", "Rs. 2400"]);
+    expect(graphParams(calls)).toHaveLength(4);
+  });
+
+  // Cancelling uses the dedicated `order_cancelled` template, slot 4 being the
+  // admin note (falling back to a neutral phrase when the note is blank).
+  it("cancelled -> order_cancelled with the admin note as the cancellation reason", async () => {
+    const { calls } = await runUpdate(
+      signedInOrder({ status: "pending" }),
+      "cancelled",
+      "Not enough stock",
+    );
+
+    expect(graphCalls(calls)).toHaveLength(1);
+    expect(graphTemplate(calls)).toEqual({
+      name: "order_cancelled_app",
+      language: "en",
+    });
+    const params = graphParams(calls);
+    expect(params).toEqual(["Ali", "OD-9", "05 Oct 2026", "Not enough stock"]);
+    expect(params).toHaveLength(4);
+  });
+
+  it("cancelled with no note falls back to a neutral cancellation reason", async () => {
+    const { calls } = await runUpdate(signedInOrder({ status: "pending" }), "cancelled");
+
+    expect(graphTemplate(calls).name).toBe("order_cancelled_app");
+    expect(graphParams(calls)).toEqual(["Ali", "OD-9", "05 Oct 2026", "Order cancelled"]);
   });
 });

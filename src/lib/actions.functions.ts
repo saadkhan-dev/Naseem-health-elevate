@@ -3694,7 +3694,7 @@ export const placeOrder = createServerFn({ method: "POST" })
             },
             "created",
             undefined,
-            // Fills template slot 3 of `order_confirmation`. Omitted only if the
+            // Fills template slot 3 of `order_placed`. Omitted only if the
             // row could not be read back, which leaves that slot empty exactly
             // as it was before - arity stays 4 either way.
             { metaExtras: { orderDate: orderDateForNotification(createdAt) } },
@@ -4676,7 +4676,7 @@ export const adminUpdateOrderStatus = createServerFn({ method: "POST" })
     const { data: order } = await admin
       .from("orders")
       .select(
-        "id, patient_id, status, name, order_no, email, phone, payment_payer_phone, payment_payer_email",
+        "id, patient_id, status, name, order_no, email, phone, payment_payer_phone, payment_payer_email, total, created_at",
       )
       .eq("id", data.id)
       .maybeSingle();
@@ -4712,7 +4712,10 @@ export const adminUpdateOrderStatus = createServerFn({ method: "POST" })
 
     // Best-effort outbound notification of the status change. This sends
     // WhatsApp via the approved `order_status_update` template whenever a phone
-    // is on file, and never SMS (see ORDER_PHONE_CHANNEL). Guest orders have no
+    // is on file, and never SMS (see ORDER_PHONE_CHANNEL). Approving an order
+    // uses the dedicated `order_confirmed` slot instead; cancelling/rejecting
+    // uses `order_cancelled` (which carries the admin note as the cancellation
+    // reason, falling back to a neutral phrase). Guest orders have no
     // `patient_id` above but are still contacted here when they have a number.
     // An order with neither an email nor a phone is skipped entirely rather than
     // attempting a delivery that cannot succeed.
@@ -4728,8 +4731,29 @@ export const adminUpdateOrderStatus = createServerFn({ method: "POST" })
           paymentStatusLabel: statusLabel,
           email: contactEmail ?? undefined,
           phone: contactPhone ?? undefined,
+          total: order.total != null ? Number(order.total) : undefined,
         },
         "status",
+        undefined,
+        {
+          // Only confirm/cancel carry a dedicated approved template; every other
+          // status keeps `order_status_update` (see the sender default).
+          metaTemplate:
+            data.status === "confirmed"
+              ? "order_confirmed"
+              : data.status === "cancelled"
+                ? "order_cancelled"
+                : undefined,
+          metaExtras:
+            data.status === "confirmed" || data.status === "cancelled"
+              ? {
+                  orderDate: orderDateForNotification(order.created_at ?? null),
+                  ...(data.status === "cancelled"
+                    ? { cancellationReason: data.note?.trim() || "Order cancelled" }
+                    : {}),
+                }
+              : undefined,
+        },
       );
     }
     return { error: null };

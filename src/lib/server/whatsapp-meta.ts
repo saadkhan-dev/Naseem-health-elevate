@@ -82,16 +82,22 @@ export interface MetaWhatsAppEnv {
   META_WA_BUSINESS_ACCOUNT_ID?: string;
   META_WA_API_VERSION?: string;
   META_WA_TEMPLATE_APPOINTMENT_CONFIRMATION?: string;
+  META_WA_TEMPLATE_APPOINTMENT_BOOKED?: string;
   META_WA_TEMPLATE_APPOINTMENT_RESCHEDULED?: string;
   META_WA_TEMPLATE_APPOINTMENT_CANCELLED?: string;
   META_WA_TEMPLATE_APPOINTMENT_REMINDER?: string;
   META_WA_TEMPLATE_VIDEO_CONSULTATION_READY?: string;
   META_WA_TEMPLATE_PAYMENT_RECEIVED?: string;
   META_WA_TEMPLATE_APPOINTMENT_PAYMENT_PENDING?: string;
+  META_WA_TEMPLATE_APPOINTMENT_PAYMENT_VERIFIED?: string;
   META_WA_TEMPLATE_APPOINTMENT_REFUND?: string;
   META_WA_TEMPLATE_ORDER_CONFIRMATION?: string;
+  META_WA_TEMPLATE_ORDER_PLACED?: string;
   META_WA_TEMPLATE_ORDER_STATUS_UPDATE?: string;
+  META_WA_TEMPLATE_ORDER_CONFIRMED?: string;
+  META_WA_TEMPLATE_ORDER_CANCELLED?: string;
   META_WA_TEMPLATE_ORDER_PAYMENT_CONFIRMED?: string;
+  META_WA_TEMPLATE_ORDER_PAYMENT_VERIFIED?: string;
   META_WA_TEMPLATE_ORDER_PAYMENT_PENDING?: string;
   META_WA_TEMPLATE_ORDER_REFUND?: string;
   /** Alias for META_WA_TEMPLATE_LANGUAGE_CODE (lower precedence). */
@@ -116,7 +122,7 @@ export interface MetaTemplateExtras {
   /** Human-readable payment status, for `payment_received` and every
    * `*_payment_pending` / `*_refund` status slot. */
   paymentStatus?: string;
-  /** Order date, for `order_confirmation`. */
+  /** Order date, for `order_confirmation` / `order_placed` / `order_confirmed` / `order_cancelled`. */
   orderDate?: string;
   /**
    * Refunded amount, for `appointment_refund` / `order_refund`.
@@ -126,6 +132,8 @@ export interface MetaTemplateExtras {
    * only sent when the caller states it explicitly. Left out otherwise.
    */
   refundAmount?: string;
+  /** Human-readable reason, for `order_cancelled`. */
+  cancellationReason?: string;
 }
 
 /**
@@ -138,17 +146,23 @@ export interface MetaTemplateExtras {
  * Currently configured production values (language `en`):
  *
  *   META_WA_TEMPLATE_APPOINTMENT_CONFIRMATION = appointment_confirmed
+ *   META_WA_TEMPLATE_APPOINTMENT_BOOKED       = <approved "appointment_booked" name>
  *   META_WA_TEMPLATE_APPOINTMENT_RESCHEDULED  = appointment_schedule_changed
  *   META_WA_TEMPLATE_APPOINTMENT_CANCELLED    = appointment_cancelled_notice
  *   META_WA_TEMPLATE_APPOINTMENT_REMINDER     = appointment_reminder_notice_category_utility
  *   META_WA_TEMPLATE_VIDEO_CONSULTATION_READY = video_consultation_ready_notice
  *   META_WA_TEMPLATE_PAYMENT_RECEIVED         = payment_received_notice
  *   META_WA_TEMPLATE_APPOINTMENT_PAYMENT_PENDING = appointment_payment_pending_notice
+ *   META_WA_TEMPLATE_APPOINTMENT_PAYMENT_VERIFIED = <approved "appointment_payment_verified" name>
  *   META_WA_TEMPLATE_APPOINTMENT_REFUND       = refund_processed_assalamu_alaikum_1_…  (long
  *      Meta-generated name; copy it verbatim from WhatsApp Manager — see the note below)
  *   META_WA_TEMPLATE_ORDER_CONFIRMATION       = order_confirmed_notice
+ *   META_WA_TEMPLATE_ORDER_PLACED             = <approved "order_placed" name>
  *   META_WA_TEMPLATE_ORDER_STATUS_UPDATE      = order_status_update_notice
+ *   META_WA_TEMPLATE_ORDER_CONFIRMED          = <approved "order_confirmed" name>
+ *   META_WA_TEMPLATE_ORDER_CANCELLED          = <approved "order_cancelled" name>
  *   META_WA_TEMPLATE_ORDER_PAYMENT_CONFIRMED  = order_payment_confirmed
+ *   META_WA_TEMPLATE_ORDER_PAYMENT_VERIFIED   = <approved "order_payment_verified" name>
  *   META_WA_TEMPLATE_ORDER_PAYMENT_PENDING    = order_payment_pending_notice
  *   META_WA_TEMPLATE_ORDER_REFUND             = order_refund_notice
  *
@@ -160,16 +174,22 @@ export interface MetaTemplateExtras {
  */
 const META_TEMPLATE_ENV: Record<MetaWhatsAppTemplateId, keyof MetaWhatsAppEnv> = {
   appointment_confirmation: "META_WA_TEMPLATE_APPOINTMENT_CONFIRMATION",
+  appointment_booked: "META_WA_TEMPLATE_APPOINTMENT_BOOKED",
   appointment_rescheduled: "META_WA_TEMPLATE_APPOINTMENT_RESCHEDULED",
   appointment_cancelled: "META_WA_TEMPLATE_APPOINTMENT_CANCELLED",
   appointment_reminder: "META_WA_TEMPLATE_APPOINTMENT_REMINDER",
   video_consultation_room_ready: "META_WA_TEMPLATE_VIDEO_CONSULTATION_READY",
   payment_received: "META_WA_TEMPLATE_PAYMENT_RECEIVED",
   appointment_payment_pending: "META_WA_TEMPLATE_APPOINTMENT_PAYMENT_PENDING",
+  appointment_payment_verified: "META_WA_TEMPLATE_APPOINTMENT_PAYMENT_VERIFIED",
   appointment_refund: "META_WA_TEMPLATE_APPOINTMENT_REFUND",
   order_confirmation: "META_WA_TEMPLATE_ORDER_CONFIRMATION",
+  order_placed: "META_WA_TEMPLATE_ORDER_PLACED",
   order_status_update: "META_WA_TEMPLATE_ORDER_STATUS_UPDATE",
+  order_confirmed: "META_WA_TEMPLATE_ORDER_CONFIRMED",
+  order_cancelled: "META_WA_TEMPLATE_ORDER_CANCELLED",
   order_payment_confirmed: "META_WA_TEMPLATE_ORDER_PAYMENT_CONFIRMED",
+  order_payment_verified: "META_WA_TEMPLATE_ORDER_PAYMENT_VERIFIED",
   order_payment_pending: "META_WA_TEMPLATE_ORDER_PAYMENT_PENDING",
   order_refund: "META_WA_TEMPLATE_ORDER_REFUND",
 };
@@ -183,16 +203,22 @@ const META_TEMPLATE_ENV: Record<MetaWhatsAppTemplateId, keyof MetaWhatsAppEnv> =
  */
 export const META_TEMPLATE_ARITY: Record<MetaWhatsAppTemplateId, number> = {
   appointment_confirmation: 5,
+  appointment_booked: 5,
   appointment_rescheduled: 5,
   appointment_cancelled: 5,
   appointment_reminder: 5,
   video_consultation_room_ready: 4,
   payment_received: 5,
   appointment_payment_pending: 4,
+  appointment_payment_verified: 5,
   appointment_refund: 4,
   order_confirmation: 4,
+  order_placed: 4,
   order_status_update: 3,
+  order_confirmed: 4,
+  order_cancelled: 4,
   order_payment_confirmed: 4,
+  order_payment_verified: 4,
   order_payment_pending: 4,
   order_refund: 4,
 };
@@ -283,6 +309,8 @@ export function metaRecipientDigits(e164: string): string {
  *
  *   appointment_confirmation        (appointment_confirmed)
  *     1 name  2 date  3 time  4 appointment ID  5 service
+ *   appointment_booked              (appointment_booked)
+ *     1 name  2 date  3 time  4 appointment ID  5 service
  *   appointment_rescheduled         (appointment_schedule_changed)
  *     1 name  2 new date  3 new time  4 appointment ID  5 service
  *   appointment_cancelled           (appointment_cancelled_notice)
@@ -295,13 +323,23 @@ export function metaRecipientDigits(e164: string): string {
  *     1 name  2 appointment ID  3 amount  4 payment status  5 service
  *   appointment_payment_pending     (appointment_payment_pending_notice)
  *     1 name  2 appointment ID  3 amount due  4 payment status
+ *   appointment_payment_verified    (appointment_payment_verified)
+ *     1 name  2 appointment ID  3 amount  4 payment status  5 service
  *   appointment_refund              (refund_processed_assalamu_alaikum_1_...)
  *     1 name  2 appointment ID  3 refund amount  4 refund status
  *   order_confirmation              (order_confirmed_notice)
  *     1 name  2 order ID  3 order date  4 total amount
+ *   order_placed                    (order_placed)
+ *     1 name  2 order ID  3 order date  4 total amount
  *   order_status_update             (order_status_update_notice)
  *     1 name  2 order ID  3 order status
+ *   order_confirmed                 (order_confirmed)
+ *     1 name  2 order ID  3 order date  4 total amount
+ *   order_cancelled                 (order_cancelled)
+ *     1 name  2 order ID  3 order date  4 cancellation reason
  *   order_payment_confirmed         (order_payment_confirmed)
+ *     1 name  2 order ID  3 amount paid  4 payment status
+ *   order_payment_verified          (order_payment_verified)
  *     1 name  2 order ID  3 amount paid  4 payment status
  *   order_payment_pending           (order_payment_pending_notice)
  *     1 name  2 order ID  3 amount due  4 payment status
@@ -330,6 +368,10 @@ export function metaTemplateParameters(
 ): string[] {
   switch (template) {
     case "appointment_confirmation": {
+      const d = details as AppointmentNotificationDetails;
+      return metaBodyValues([d.patientName, d.date, d.time, d.appointmentId, d.serviceName]);
+    }
+    case "appointment_booked": {
       const d = details as AppointmentNotificationDetails;
       return metaBodyValues([d.patientName, d.date, d.time, d.appointmentId, d.serviceName]);
     }
@@ -393,7 +435,36 @@ export function metaTemplateParameters(
         extras.paymentStatus ?? "",
       ]);
     }
+    case "appointment_payment_verified": {
+      const d = details as AppointmentNotificationDetails;
+      // 5 slots: name, appointment ID, verified amount, payment status, service.
+      return metaBodyValues([
+        d.patientName,
+        d.appointmentId,
+        d.amount != null ? `Rs. ${d.amount}` : "",
+        extras.paymentStatus ?? "",
+        d.serviceName,
+      ]);
+    }
     case "order_confirmation": {
+      const d = details as OrderNotificationDetails;
+      return metaBodyValues([
+        d.patientName,
+        d.orderId,
+        extras.orderDate ?? "",
+        d.total != null ? `Rs. ${d.total}` : "",
+      ]);
+    }
+    case "order_placed": {
+      const d = details as OrderNotificationDetails;
+      return metaBodyValues([
+        d.patientName,
+        d.orderId,
+        extras.orderDate ?? "",
+        d.total != null ? `Rs. ${d.total}` : "",
+      ]);
+    }
+    case "order_confirmed": {
       const d = details as OrderNotificationDetails;
       return metaBodyValues([
         d.patientName,
@@ -406,7 +477,25 @@ export function metaTemplateParameters(
       const d = details as OrderNotificationDetails;
       return metaBodyValues([d.patientName, d.orderId, d.paymentStatusLabel ?? "updated"]);
     }
+    case "order_cancelled": {
+      const d = details as OrderNotificationDetails;
+      return metaBodyValues([
+        d.patientName,
+        d.orderId,
+        extras.orderDate ?? "",
+        extras.cancellationReason ?? "",
+      ]);
+    }
     case "order_payment_confirmed": {
+      const d = details as OrderNotificationDetails;
+      return metaBodyValues([
+        d.patientName,
+        d.orderId,
+        d.total != null ? `Rs. ${d.total}` : "",
+        extras.paymentStatus ?? d.paymentStatusLabel ?? "",
+      ]);
+    }
+    case "order_payment_verified": {
       const d = details as OrderNotificationDetails;
       return metaBodyValues([
         d.patientName,

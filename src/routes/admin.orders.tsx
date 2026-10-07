@@ -647,7 +647,7 @@ function OrderPaymentBlock({
   }
 
   return (
-    <div className="mt-2 rounded-lg border border-sky-100 bg-sky-50/60 px-3 py-2">
+    <div className="mt-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-foreground">
         <span className="inline-flex items-center gap-1">
           <Banknote className="h-3.5 w-3.5 text-primary" />

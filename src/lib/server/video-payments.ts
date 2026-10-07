@@ -602,5 +602,42 @@ export async function setVideoPaymentStatus(
     );
   }
 
+  // A verified video payment gets its own outbound notice (`appointment_payment_verified`),
+  // and a rejected one the pending template (`appointment_payment_pending`). Both follow
+  // the same lens as the refund above: best-effort, reusing the appointment sender, and
+  // only when the patient has a contact on file. No slot is ever sent twice for one event —
+  // one status produces exactly one Meta slot.
+  if (
+    (input.status === "payment_verified" || input.status === "payment_failed") &&
+    (row.patient_phone || row.patient_email)
+  ) {
+    const siteUrl = getSiteUrl();
+    const service = (row.services as { name?: string | null } | null) ?? null;
+    await sendAppointmentNotifications(
+      {
+        appointmentId: row.appointment_no ?? row.id,
+        patientName: row.patient_name?.trim() || "Patient",
+        serviceName: service?.name ?? "Your appointment",
+        date: row.date,
+        time: (row.time ?? "").slice(0, 5) || "Flexible",
+        statusUrl: siteUrl ? `${siteUrl}/appointment-status` : undefined,
+        phone: row.patient_phone ?? undefined,
+        email: row.patient_email ?? undefined,
+        isVideo: true,
+        amount: row.payment_amount,
+      },
+      undefined,
+      input.status === "payment_verified"
+        ? {
+            metaTemplate: "appointment_payment_verified",
+            metaExtras: { paymentStatus: "Payment verified" },
+          }
+        : {
+            metaTemplate: "appointment_payment_pending",
+            metaExtras: { paymentStatus: "Payment pending" },
+          },
+    );
+  }
+
   return { error: null };
 }

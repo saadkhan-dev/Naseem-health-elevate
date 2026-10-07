@@ -127,6 +127,7 @@ const META_ENV = {
   META_WA_BUSINESS_ACCOUNT_ID: "444555666",
   META_WA_TEMPLATE_ORDER_REFUND: "order_refund_notice",
   META_WA_TEMPLATE_ORDER_PAYMENT_CONFIRMED: "order_payment_confirmed",
+  META_WA_TEMPLATE_ORDER_PAYMENT_VERIFIED: "order_payment_verified",
 } as const;
 
 const SAVED_ENV = new Map<string, string | undefined>();
@@ -212,8 +213,9 @@ describe("order payment refund -> order_refund WhatsApp", () => {
     expect(graphParams(calls)).toEqual(["Ali", "OD-9", "Rs. 2400", "Payment refunded"]);
   });
 
-  // F. A verified order keeps its `order_payment_confirmed` behaviour.
-  it("F. keeps order_payment_confirmed for payment_verified unchanged", async () => {
+  // F. A verified payment uses the `order_payment_verified` slot and must NOT
+  //     imply the ORDER is confirmed (approval is a separate admin action).
+  it("F. sends order_payment_verified for payment_verified and keeps the order pending", async () => {
     const { result, calls } = await runStatusChange(
       verifiedOrder({
         payment_status: "payment_submitted",
@@ -224,13 +226,13 @@ describe("order payment refund -> order_refund WhatsApp", () => {
     );
 
     expect(result.error).toBeNull();
-    expect(graphTemplate(calls)).toEqual({ name: "order_payment_confirmed", language: "en" });
-    expect(graphParams(calls)).toEqual([
-      "Ali",
-      "OD-9",
-      "Rs. 2400",
-      "Payment verified — order confirmed",
-    ]);
+    // The order status is untouched: verifying payment never auto-confirms.
+    const update = dbCalls.find((c) => c.startsWith("orders.update:"));
+    expect(update).toBeDefined();
+    expect(update).not.toContain('"status"');
+
+    expect(graphTemplate(calls)).toEqual({ name: "order_payment_verified", language: "en" });
+    expect(graphParams(calls)).toEqual(["Ali", "OD-9", "Rs. 2400", "Payment verified"]);
     expect(graphParams(calls)).toHaveLength(4);
   });
 
